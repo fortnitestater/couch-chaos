@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#120e2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Couch Chaos — Controller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="padBody">
+  <div id="joinScr" class="screen">
+    <h1 class="logo">COUCH<span>CHAOS</span></h1>
+    <label>Room code (on the TV)<input id="roomIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <label>Your name<input id="nameIn" maxlength="12" autocomplete="nickname"></label>
+    <button id="joinBtn" class="big">Join the party</button>
+    <div id="joinErr" class="err"></div>
+  </div>
+
+  <div id="ctrlScr" class="screen hidden">
+    <div class="topbar">
+      <span id="meDot" class="dot"></span><span id="meName"></span>
+      <button id="tiltBtn" class="chip hidden">Tilt: off</button>
+      <button id="centerBtn" class="chip hidden">⟲ Center</button>
+      <button id="flipBtn" class="chip hidden">⇄</button>
+      <span id="status" class="status"></span>
+    </div>
+    <div id="stage"></div>
+  </div>
+  <div id="toast"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="shared.js"></script>
+  <script src="play.js"></script>
+</body>
+</html>
