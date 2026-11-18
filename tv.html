@@ -7,43 +7,74 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="tv.css">
 </head>
 <body class="tv">
+  <canvas id="snow"></canvas>
+
   <div id="start" class="overlay">
     <h1 class="logo">COUCH<span>CHAOS</span></h1>
-    <button id="startBtn" class="big">📺 Start the party</button>
-    <p class="muted">Tip: press F to go fullscreen on the TV.</p>
+    <div class="edition">❄️ WINTER EDITION ❄️</div>
+    <button id="startBtn" class="big">▶ Start</button>
+    <p class="muted">Click, or press any key · F = fullscreen</p>
   </div>
 
-  <div id="lobby" class="hidden">
-    <header>
-      <h1 class="logo">COUCH<span>CHAOS</span></h1>
-      <div class="headHint">The 👑 VIP picks the game on their controller · or press 1–5 here · F = fullscreen</div>
+  <div id="home" class="hidden">
+    <header class="topbar-tv">
+      <div class="brand"><span class="logo sm">COUCH<span>CHAOS</span></span><span class="ed">❄️ Winter Edition</span></div>
+      <div class="topRight">
+        <div id="avatars" class="avatars"></div>
+        <div class="codePill">Room <b id="codeSmall">····</b></div>
+        <div id="clockTv" class="clockTv"></div>
+      </div>
     </header>
-    <div class="lobbyGrid">
-      <section class="joinCard">
-        <div class="step">Scan with a phone, or on a PC go to</div>
-        <div id="joinUrl" class="url"></div>
+
+    <section class="heroRow">
+      <div id="hero" class="hero">
+        <div class="heroArt"><span id="heroEmoji"></span></div>
+        <div class="heroInfo">
+          <div id="heroCat" class="heroCat"></div>
+          <h1 id="heroTitle"></h1>
+          <p id="heroDesc"></p>
+          <div class="badges"><span id="heroCtrl" class="badge"></span><span id="heroPlayers" class="badge"></span><span id="heroMins" class="badge"></span></div>
+          <div class="heroBtns"><button id="heroPlay" class="btnPlay">▶ Play</button><button id="heroParty" class="btnGhost">🎉 Party Mode</button></div>
+        </div>
+      </div>
+      <aside class="joinBox">
+        <div class="joinTitle">📱 Join with your phone or PC</div>
         <div id="qr"></div>
-        <div class="codeLbl">ROOM CODE</div>
-        <div id="code" class="code">····</div>
+        <div class="code" id="code">····</div>
+        <div id="joinUrl" class="url"></div>
         <div id="netStatus" class="netStatus">Opening room…</div>
-      </section>
-      <section class="right">
-        <h2>Players <small id="pcount"></small></h2>
-        <div id="plist" class="plist"></div>
-        <h2>Games <small>bots join if you're playing alone</small></h2>
-        <div id="glist" class="glist"></div>
-      </section>
+      </aside>
+    </section>
+
+    <div id="rows" class="rows"></div>
+    <div class="hintBar">🎮 The 👑 VIP uses their phone as a remote · ⬅️➡️⬆️⬇️ + OK · or use the keyboard / mouse here</div>
+  </div>
+
+  <div id="intro" class="hidden">
+    <div class="introCard">
+      <div id="introArt" class="introArt"><span id="introEmoji"></span></div>
+      <div class="introBody">
+        <div id="introCat" class="heroCat"></div>
+        <h1 id="introTitle"></h1>
+        <div id="introCtrl" class="badge"></div>
+        <ol id="introHow" class="how"></ol>
+        <div id="introReady" class="readyRow"></div>
+        <div class="introFoot"><span id="introTimer"></span> · Tap <b>READY</b> on your phone</div>
+      </div>
     </div>
   </div>
 
   <canvas id="cv" class="hidden"></canvas>
 
   <div id="results" class="overlay hidden">
+    <div id="resKicker" class="kicker"></div>
     <h2 id="resTitle"></h2>
+    <div id="podium" class="podium"></div>
     <ol id="resList"></ol>
-    <div class="muted">Back to the lobby in a moment…</div>
+    <div id="resFoot" class="muted"></div>
   </div>
   <div id="banner"></div>
 
@@ -51,7 +82,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="shared.js"></script>
   <script src="sfx.js"></script>
-  <script src="games.js"></script>
+  <script src="engine.js"></script>
+  <script src="games-classic.js"></script>
+  <script src="games-winter.js"></script>
+  <script src="games-table.js"></script>
+  <script src="games-party.js"></script>
+  <script src="games-action.js"></script>
+  <script src="catalog.js"></script>
   <script src="tv.js"></script>
 </body>
 </html>

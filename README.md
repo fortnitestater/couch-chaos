@@ -2,21 +2,25 @@
 
 A free family party game: the **TV is the screen** and every **phone or PC is a controller**.
 
-## Games
-| # | Game | Controls |
-|---|------|----------|
-| 1 | ✈️ **Sky Brawl** – fighter-plane dogfight, power-ups (triple shot, homing missiles, shield, mega plane, turbo) and random chaos events (meteor shower, reverse controls, bullet frenzy, tiny planes) | Tilt phone like a steering wheel / drag / ← → · FIRE · BOOST |
-| 2 | 🫧 **Sumo Blobs** – push everyone into the lava, shrinking arena, ice round, mega-bounce round | Tilt / drag / WASD · HEAVY · DASH |
-| 3 | 🃏 **Wild Eights** – crazy-eights card game, your hand is secret on your phone. 8 wild, 2 = +2 (stackable), J skip, Q reverse, **A = CHAOS: every hand passes to the next player** | Tap cards · PC: ← → Enter, D draw, P pass |
-| 4 | ⚡ **Reflex Rush** – tap on GO!… fakes like GOAT / GO? / G0! cost points | Big button / Space |
-| 5 | 🚀 **Shake Race** – shake the phone to fly your rocket, lightning zaps the leader | Shake / tap / alternate ← → |
+## Games (33) — ❄️ Winter Edition
+Most games only need taps on the phone. Motion games also work with on-screen sticks or a PC keyboard.
 
-Trophies (3/2/1) build up across games in the lobby. If you're alone, bots join so you can practise.
+| Row | Games |
+|-----|-------|
+| ❄️ Winter | Snowball Fight · Ski Slalom · Ice Hockey · Snow Curling · Iceberg Sumo · Frozen Lake · Sled Dash |
+| 🃏 Cards & Table | Wild Eights · Bingo · Dice Duel · Four in a Row · Memory Match · Word Rescue · Higher or Lower |
+| 💣 Bombs & Party | Bomb Squad · Hot Potato Bomb · Odd Elf Out · Most Likely To · Doodle Dash · Lowest Unique · RPS Royale |
+| 🧠 Brain | Trivia Blitz · Color Clash · Count It! · Copy Cat · Quick Math |
+| ⚡ Action | Sky Brawl · Light Trails · Paint Wars · Coin Rush · Target Blast · Reflex Rush · Stop the Meter |
+
+**🎉 Party Mode** plays 5 random games (one from each row) and crowns a party champion. **🎲 Surprise Me** picks a game that fits your player count.
+Every game starts with a how-to-play screen; everyone taps READY on their phone.
 
 ## How to play
 1. Open the site on the TV (smart-TV browser, or a laptop/PC plugged into the TV) → **This is the TV** → **Start the party**. Press **F** for fullscreen.
 2. Everyone scans the QR code, or opens `…/play.html` and types the 4-letter room code.
-3. The 👑 VIP (first to join) picks the game on their controller (or press 1–5 on the TV keyboard). **Esc** on the TV = back to lobby.
+3. The 👑 VIP (first to join) gets a remote on their phone (◀ ▶ ▲ ▼ + OK) to browse the TV menu — or use the TV keyboard/mouse. **Esc** = back to the menu.
+4. Returning players just open the link again — they rejoin automatically.
 
 Phones: motion needs **HTTPS** (every host below gives you that). On iPhone, tap "Allow" for motion when joining.
 If tilt steers the wrong way, tap **⇄** on the controller; **⟲ Center** sets "straight".
@@ -44,5 +48,5 @@ python -m http.server 8000
 then open http://localhost:8000. Phones can't use tilt over plain http, so use the hosted version for that.
 
 ## Files
-`tv.html/tv.js` TV host · `play.html/play.js` controller · `games.js` all games · `sfx.js` synth sounds · `style.css` · `shared.js`.
-Adding a game = write a class with `start/update/draw` (+ optional `onButton/onAct/onPump/onJoin`) in `games.js` and add it to `GAMES`.
+`tv.html/tv.js/tv.css` TV console · `play.html/play.js` controller · `engine.js` shared engine (ArenaGame, QuizGame, particles, characters) · `games-*.js` the games · `catalog.js` the game list · `sfx.js` synth sounds.
+Adding a game = write a class with `start/update/draw` (+ optional `onButton/onAct/onPump/onJoin`), or extend `ArenaGame` / `QuizGame`, then add it to `catalog.js`.

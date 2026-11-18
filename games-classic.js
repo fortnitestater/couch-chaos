@@ -1,60 +1,4 @@
-/* Couch Chaos — the games (run on the TV). Each game gets a ctx from tv.js:
-   ctx.roster(min), ctx.setLayout(player|'all', layout), ctx.send(p,msg), ctx.banner(text,ms,color),
-   ctx.sfx, ctx.shake(px), ctx.finish([{p, stat}...] best first) */
-
-const TAU = Math.PI * 2;
-const rnd = (a, b) => a + Math.random() * (b - a);
-const clamp = (v, a = -1, b = 1) => (v < a ? a : v > b ? b : v);
-const pick = a => a[(Math.random() * a.length) | 0];
-const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
-function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
-function txt(g, s, x, y, size, color = '#fff', align = 'center', font = 'Bungee') {
-  g.font = font === 'Nunito' ? `900 ${size}px Nunito, sans-serif` : `${size}px Bungee, Impact, sans-serif`;
-  g.textAlign = align; g.textBaseline = 'middle'; g.lineJoin = 'round';
-  g.lineWidth = Math.max(3, size / 6); g.strokeStyle = 'rgba(14,10,36,.8)'; g.strokeText(s, x, y);
-  g.fillStyle = color; g.fillText(s, x, y);
-}
-function board(g, rows, x = 20, y = 20, title) {
-  const h = 34, top = title ? 34 : 0;
-  g.fillStyle = 'rgba(14,10,36,.5)'; rr(g, x, y, 270, rows.length * h + 16 + top, 16); g.fill();
-  if (title) txt(g, title, x + 135, y + 24, 18, '#b3acdf');
-  rows.forEach((r, i) => {
-    const yy = y + top + 8 + h * i + h / 2;
-    g.fillStyle = r.color; g.beginPath(); g.arc(x + 22, yy, 10, 0, TAU); g.fill();
-    txt(g, r.name, x + 42, yy, 20, '#fff', 'left', 'Nunito');
-    txt(g, String(r.val), x + 254, yy, 22, '#ffd43b', 'right');
-  });
-}
-
-class Particles {
-  constructor() { this.l = []; }
-  burst(x, y, n, color, spd = 200, life = 0.8, size = 6) {
-    for (let i = 0; i < n; i++) { const a = Math.random() * TAU, s = Math.random() * spd; this.l.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: life * rnd(0.6, 1), max: life, size: size * rnd(0.5, 1.3), color }); }
-  }
-  puff(x, y, color, size = 8, life = 0.6, vx = 0, vy = 0) { this.l.push({ x, y, vx, vy, life, max: life, size, color, grow: true }); }
-  confetti(n = 120) {
-    const cols = ['#ff4d6d', '#ffd43b', '#4dabff', '#51cf66', '#cc5de8', '#ff922b'];
-    for (let i = 0; i < n; i++) this.l.push({ x: rnd(0, 1600), y: rnd(-200, 0), vx: rnd(-60, 60), vy: rnd(150, 380), life: 4, max: 4, size: rnd(5, 10), color: pick(cols), conf: true, rot: rnd(0, 6) });
-  }
-  update(dt) {
-    const k = Math.pow(0.08, dt);
-    for (const p of this.l) {
-      p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
-      if (p.conf) { p.rot += dt * 8; } else { p.vx *= k; p.vy *= k; }
-    }
-    this.l = this.l.filter(p => p.life > 0);
-  }
-  draw(g) {
-    for (const p of this.l) {
-      const t = p.life / p.max;
-      g.globalAlpha = Math.min(1, t * 1.5); g.fillStyle = p.color;
-      if (p.conf) { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); g.restore(); continue; }
-      g.beginPath(); g.arc(p.x, p.y, p.grow ? p.size * (2 - t) : p.size * t + 1, 0, TAU); g.fill();
-    }
-    g.globalAlpha = 1;
-  }
-}
+/* Couch Chaos — classic games. Needs engine.js */
 
 /* =====================================================================
    ✈️ SKY BRAWL — top-down dogfight
@@ -353,7 +297,7 @@ class Sumo {
     for (const b of alive) {
       if (Math.hypot(b.x - 800, b.y - 480) > this.R + b.r * 0.2) {
         b.alive = false; b.fall = 1; this.out.push(b);
-        this.fx.burst(b.x, b.y, 30, '#ff922b', 300, 0.9, 9); this.c.sfx.splash(); this.c.shake(10);
+        this.fx.burst(b.x, b.y, 30, '#a5d8ff', 300, 0.9, 9); this.fx.burst(b.x, b.y, 14, '#fff', 200, 0.7, 6); this.c.sfx.splash(); this.c.shake(10);
         this.c.send(b.p, { t: 'buzz', ms: 500 });
       }
     }
@@ -380,16 +324,16 @@ class Sumo {
   }
   draw(g) {
     const gr = g.createRadialGradient(800, 480, 100, 800, 480, 900);
-    gr.addColorStop(0, '#ff6a00'); gr.addColorStop(1, '#5c0a00');
+    gr.addColorStop(0, '#1971c2'); gr.addColorStop(1, '#061a33');
     g.fillStyle = gr; g.fillRect(0, 0, 1600, 900);
-    for (const b of this.bubbles) { const k = Math.sin((b.t / 3) * Math.PI); g.fillStyle = `rgba(255,214,102,${0.5 * k})`; g.beginPath(); g.arc(b.x, b.y, b.r * k, 0, TAU); g.fill(); }
+    for (const b of this.bubbles) { const k = Math.sin((b.t / 3) * Math.PI); g.strokeStyle = `rgba(200,235,255,${0.35 * k})`; g.lineWidth = 3; g.beginPath(); g.ellipse(b.x, b.y, b.r * 3 * k, b.r * k, 0, 0, TAU); g.stroke(); }
     // arena
     if (this.R > 0) {
       g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.arc(808, 498, this.R, 0, TAU); g.fill();
       const ag = g.createRadialGradient(800, 470, 20, 800, 480, this.R);
-      ag.addColorStop(0, this.mod === 'ice' ? '#e7f5ff' : '#f8f0e3'); ag.addColorStop(1, this.mod === 'ice' ? '#74c0fc' : '#c8b79e');
+      ag.addColorStop(0, '#ffffff'); ag.addColorStop(0.7, this.mod === 'ice' ? '#d0ebff' : '#e7f5ff'); ag.addColorStop(1, this.mod === 'ice' ? '#4dabf7' : '#a5d8ff');
       g.fillStyle = ag; g.beginPath(); g.arc(800, 480, this.R, 0, TAU); g.fill();
-      g.lineWidth = 10; g.strokeStyle = this.mod === 'bouncy' ? '#cc5de8' : '#5c3d2e'; g.stroke();
+      g.lineWidth = 10; g.strokeStyle = this.mod === 'bouncy' ? '#cc5de8' : '#74c0fc'; g.stroke();
       g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.12)'; g.beginPath(); g.arc(800, 480, this.R * 0.55, 0, TAU); g.stroke();
     }
     const ordered = [...this.blobs].sort((a, b) => (a.alive - b.alive) || a.y - b.y);
@@ -724,7 +668,7 @@ class ShakeRace {
     this.ps = this.c.roster(2);
     this.st = new Map(this.ps.map(p => [p, { prog: 0, heat: 0, last: 0, rate: rnd(5.5, 7.5) }]));
     this.c.setLayout('all', { name: 'shake', hint: 'Faster shake = faster rocket. Watch out for lightning!' });
-    this.c.banner('🚀 SHAKE RACE!');
+    this.c.banner('🛷 SLED DASH!');
   }
   onPump(p) {
     const s = this.st && this.st.get(p);
@@ -747,14 +691,14 @@ class ShakeRace {
     if (this.phase === 'count') {
       this.t -= dt;
       if (Math.ceil(this.t) < this.lastTick && this.t > 0) { this.lastTick = Math.ceil(this.t); this.c.sfx.tick(); }
-      if (this.t <= 0) { this.phase = 'race'; this.c.sfx.go(); this.c.banner('SHAKE!!!', 900, '#ff4d6d'); }
+      if (this.t <= 0) { this.phase = 'race'; this.c.sfx.go(); this.c.banner('MUSH!!!', 900, '#4dabff'); }
       return;
     }
     this.el += dt;
     for (const [p, s] of this.st) {
       s.heat = Math.max(0, s.heat - dt * 0.8);
       if (p.bot && !this.fin.includes(p)) { s.botAcc = (s.botAcc || 0) + dt * s.rate * rnd(0.6, 1.4); while (s.botAcc >= 1) { s.botAcc--; this.add(p, 1.5); } }
-      if (!this.fin.includes(p) && s.heat > 0.05 && Math.random() < 0.7) { const i = this.ps.indexOf(p); this.fx.puff(150 + s.prog * 13 - 40, this.laneY(i) + rnd(-6, 6), Math.random() < 0.5 ? '#ff922b' : '#ffd43b', 6 + s.heat * 10, 0.4, -200, 0); }
+      if (!this.fin.includes(p) && s.heat > 0.05 && Math.random() < 0.7) { const i = this.ps.indexOf(p); this.fx.puff(150 + s.prog * 13 - 40, this.laneY(i) + rnd(-6, 6), 'rgba(255,255,255,.9)', 6 + s.heat * 10, 0.5, -220, rnd(-30, 30)); }
     }
     // lightning strikes the leader
     this.zapT -= dt;
@@ -768,7 +712,7 @@ class ShakeRace {
           const x = 150 + s.prog * 13, y = this.laneY(this.ps.indexOf(lead));
           this.bolt = { x, y, t: 0.35 }; this.fx.burst(x, y, 25, '#fff59d', 300, 0.6, 6);
           this.c.sfx.zap(); this.c.shake(10); this.c.send(lead, { t: 'buzz', ms: 300 });
-          this.c.banner(`⚡ ZAP ${lead.name}!`, 1200, '#fff59d');
+          this.c.banner(`❄️ AVALANCHE on ${lead.name}!`, 1300, '#a5d8ff');
         }
       }
     }
@@ -781,20 +725,21 @@ class ShakeRace {
     this.c.finish([...this.fin, ...rest].map((p, i) => ({ p, stat: i < this.fin.length ? 'finished!' : `${Math.round(this.st.get(p).prog)}%` })));
   }
   draw(g) {
-    g.fillStyle = '#0b0820'; g.fillRect(0, 0, 1600, 900);
-    g.fillStyle = '#fff'; for (const s of this.stars) { g.globalAlpha = s.s / 3; g.fillRect(s.x, s.y, s.s, s.s); } g.globalAlpha = 1;
+    const sky = g.createLinearGradient(0, 0, 0, 900); sky.addColorStop(0, '#9fd3ff'); sky.addColorStop(1, '#f1f8ff'); g.fillStyle = sky; g.fillRect(0, 0, 1600, 900);
+    g.fillStyle = '#d6ecff'; g.beginPath(); g.moveTo(0, 170); for (let x = 0; x <= 1600; x += 100) g.lineTo(x, 130 + Math.sin(x * 0.013) * 40 - (x % 300 === 0 ? 50 : 0)); g.lineTo(1600, 900); g.lineTo(0, 900); g.fill();
+    g.fillStyle = '#fff'; for (const s of this.stars) { g.globalAlpha = 0.8; g.beginPath(); g.arc(s.x, (s.y + performance.now() / 20 * s.s) % 900, s.s * 1.4, 0, TAU); g.fill(); } g.globalAlpha = 1;
     // finish line
     for (let y = 120; y < 860; y += 20) for (let k = 0; k < 2; k++) { g.fillStyle = ((y / 20 + k) % 2) ? '#fff' : '#111'; g.fillRect(1450 + k * 20, y, 20, 20); }
     this.ps.forEach((p, i) => {
       const s = this.st.get(p), y = this.laneY(i), x = 150 + s.prog * 13;
       g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 2; g.setLineDash([10, 14]); g.beginPath(); g.moveTo(100, y + 40); g.lineTo(1450, y + 40); g.stroke(); g.setLineDash([]);
       g.save(); g.translate(x + rnd(-1, 1) * s.heat * 4, y + rnd(-1, 1) * s.heat * 4);
-      g.fillStyle = '#ff922b'; g.beginPath(); g.moveTo(-34, -10); g.lineTo(-34 - 20 - s.heat * 40, 0); g.lineTo(-34, 10); g.fill();
-      g.fillStyle = p.color; g.beginPath(); g.moveTo(40, 0); g.quadraticCurveTo(20, -22, -34, -18); g.lineTo(-34, 18); g.quadraticCurveTo(20, 22, 40, 0); g.fill();
-      g.lineWidth = 3; g.strokeStyle = '#1a1438'; g.stroke();
-      g.fillStyle = '#d0ebff'; g.beginPath(); g.arc(8, 0, 8, 0, TAU); g.fill(); g.stroke();
-      g.fillStyle = p.color; g.beginPath(); g.moveTo(-20, -18); g.lineTo(-36, -32); g.lineTo(-34, -14); g.fill(); g.beginPath(); g.moveTo(-20, 18); g.lineTo(-36, 32); g.lineTo(-34, 14); g.fill();
+      g.strokeStyle = '#7a4a1e'; g.lineWidth = 6; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(-50, 30); g.lineTo(46, 30); g.quadraticCurveTo(62, 30, 60, 14); g.stroke();
+      g.fillStyle = '#c0703a'; rr(g, -46, 8, 86, 16, 6); g.fill();
       g.restore();
+      drawBlob(g, x + 2, y - 12, 26, p.color, 0, { shadow: false, happy: s.heat > 0.3 });
+      g.fillStyle = p.color; g.fillRect(x - 22, y - 36, 44, 8);
       txt(g, p.name, 90, y, 22, p.color, 'right', 'Nunito');
       const place = this.fin.indexOf(p);
       txt(g, place >= 0 ? `#${place + 1}` : `${Math.round(s.prog)}%`, 1530, y, 26, place >= 0 ? '#ffd43b' : '#fff');
@@ -805,15 +750,8 @@ class ShakeRace {
       g.lineTo(this.bolt.x, this.bolt.y); g.stroke();
     }
     this.fx.draw(g);
-    txt(g, this.phase === 'count' ? 'GET READY TO SHAKE' : '🚀 SHAKE RACE', 800, 60, 40);
+    txt(g, this.phase === 'count' ? 'GET READY TO SHAKE' : '🛷 SLED DASH', 800, 60, 40);
     if (this.phase === 'count') txt(g, String(Math.max(1, Math.ceil(this.t))), 800, 470, 200, '#ffd43b');
   }
 }
 
-const GAMES = [
-  { id: 'sky', name: 'Sky Brawl', emoji: '✈️', desc: 'Fighter-plane dogfight. Tilt to steer, blast everyone out of the sky.', make: c => new SkyBrawl(c) },
-  { id: 'sumo', name: 'Sumo Blobs', emoji: '🫧', desc: 'Shove your family into the lava. The arena keeps shrinking!', make: c => new Sumo(c) },
-  { id: 'cards', name: 'Wild Eights', emoji: '🃏', desc: 'Crazy card game — your hand is secret on your phone. Aces pass EVERY hand!', make: c => new WildEights(c) },
-  { id: 'reflex', name: 'Reflex Rush', emoji: '⚡', desc: 'Tap the moment GO! appears… but fakes will trick you.', make: c => new Reflex(c) },
-  { id: 'shake', name: 'Shake Race', emoji: '🚀', desc: 'Shake your phone (or mash keys) to fly your rocket. Lightning hits the leader!', make: c => new ShakeRace(c) },
-];
