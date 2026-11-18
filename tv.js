@@ -14,19 +14,37 @@
   function openRoom(preferred) {
     S.code = preferred || makeCode();
     $('#netStatus').textContent = 'Opening room…';
-    peer = new Peer(PREFIX + S.code);
-    peer.on('open', () => { claimTries = 0; try { sessionStorage.setItem('cc_room', S.code); } catch (e) {} showJoinInfo(); $('#netStatus').textContent = '🟢 Room open'; });
+    const me = peer = new Peer(PREFIX + S.code, PEER_OPTS);
+    peer.on('open', () => { if (peer !== me) return; claimTries = 0; try { sessionStorage.setItem('cc_room', S.code); } catch (e) {} showJoinInfo(); $('#netStatus').textContent = '🟢 Room open'; });
     peer.on('error', e => {
       console.warn('peer error', e.type);
-      if (e.type === 'unavailable-id') { peer.destroy(); if (preferred && claimTries++ < 4) setTimeout(() => openRoom(preferred), 2500); else openRoom(); }
-      else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) { $('#netStatus').textContent = '🟠 Reconnecting…'; setTimeout(() => { if (peer && peer.disconnected && !peer.destroyed) peer.reconnect(); }, 2000); }
+      if (peer !== me) return;
+      if (e.type === 'unavailable-id') { peer._reopening = true; peer.destroy(); if (preferred && claimTries++ < 4) setTimeout(() => openRoom(preferred), 2500); else openRoom(); }
+      else if (e.type !== 'peer-unavailable') $('#netStatus').textContent = '🟠 Reconnecting…'; // the watchdog below fixes it
     });
-    peer.on('disconnected', () => setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 1000));
+    peer.on('disconnected', () => { if (peer === me) $('#netStatus').textContent = '🟠 Reconnecting…'; });
     peer.on('connection', conn => {
       conn.on('data', m => { try { onMsg(conn, m); } catch (err) { console.error(err); } });
       conn.on('close', () => onClose(conn)); conn.on('error', () => onClose(conn));
     });
   }
+  // Watchdog: keep the room alive. Lost the signalling server -> reconnect; peer destroyed -> reopen the SAME code
+  // so phones (which keep retrying that code) find the TV again by themselves.
+  setInterval(() => {
+    if (!peer || S.state === 'boot') return;
+    if (peer.destroyed) { if (!peer._reopening) { peer._reopening = true; openRoom(S.code); } }
+    else if (peer.disconnected) { try { peer.reconnect(); } catch (e) {} }
+    else if (peer.open) $('#netStatus').textContent = '🟢 Room open';
+  }, 3000);
+  // Heartbeat: ping every phone; a phone that answered before but went silent is dropped so it can rejoin cleanly
+  setInterval(() => {
+    const now = Date.now();
+    for (const p of S.players) {
+      if (!p.connected || !p.conn) continue;
+      send(p, { t: 'ping' });
+      if (p.pongAt && now - p.lastSeen > 12000) { const c = p.conn; onClose(c); try { c.close(); } catch (e) {} }
+    }
+  }, 2000);
   const joinUrl = () => new URL('play.html?room=' + S.code, location.href).href;
   function showJoinInfo() {
     $('#code').textContent = S.code; $('#codeSmall').textContent = S.code;
@@ -42,6 +60,7 @@
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join') return onJoin(conn, m);
     const p = S.players.find(q => q.conn === conn); if (!p) return;
+    p.lastSeen = Date.now(); if (m.t === 'pong') { p.pongAt = p.lastSeen; return; }
     const isVip = p === vip();
     switch (m.t) {
       case 'in': {
@@ -61,14 +80,15 @@
   function onJoin(conn, m) {
     const name = String(m.name || 'Player').slice(0, 12).trim() || 'Player';
     let p = S.players.find(q => q.cid === m.cid);
-    if (p) { if (p.conn && p.conn !== conn) { try { p.conn.close(); } catch (e) {} } p.conn = conn; p.connected = true; p.name = name; }
+    if (p) { if (p.conn && p.conn !== conn) { const old = p.conn; p.conn = null; try { old.close(); } catch (e) {} } p.conn = conn; p.connected = true; p.name = name; }
     else {
       if (humans().length >= 8) { try { conn.send({ t: 'full' }); } catch (e) {} return; }
       if (S.players.length >= 8) S.players.splice(S.players.findIndex(q => !q.connected), 1);
       const used = new Set(S.players.map(q => q.color)), idx = COLORS.findIndex(c => !used.has(c));
-      p = { cid: m.cid, name, color: COLORS[idx], avatar: AVATARS[idx], conn, connected: true, trophies: 0, input: { x: 0, y: 0, a: false, b: false }, layout: null };
+      p = { cid: m.cid, name, lastSeen: Date.now(), color: COLORS[idx], avatar: AVATARS[idx], conn, connected: true, trophies: 0, input: { x: 0, y: 0, a: false, b: false }, layout: null };
       S.players.push(p); SFX.join(); toastTV(`${p.avatar} ${p.name} joined!`);
     }
+    p.lastSeen = Date.now();
     send(p, { t: 'welcome', name: p.name, color: p.color, avatar: p.avatar, code: S.code });
     if (S.state === 'home') { renderPlayers(); sendLobby(); }
     else if (S.state === 'intro') { sendIntro(p); renderReady(); }

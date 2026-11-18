@@ -286,10 +286,18 @@
   }
 
   // ---------- connection ----------
+  let lastSeen = 0, tries = 0, joinTries = 0, gotPing = false;
+  function netBanner(on, text) {
+    let b = document.getElementById('netBanner');
+    if (!b) { b = document.createElement('div'); b.id = 'netBanner'; b.onclick = () => { tries = 0; hardReset(); connect(); }; document.body.appendChild(b); }
+    b.innerHTML = text || ''; b.classList.toggle('show', !!on);
+  }
   function onData(m) {
     if (!m || typeof m !== 'object') return;
+    lastSeen = Date.now();
+    if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong' }); } catch (e) {} return; }
     if (m.t === 'welcome') {
-      joined = true; me = m;
+      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false);
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meName').textContent = `${m.avatar} ${m.name}`;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
@@ -301,29 +309,54 @@
     else if (m.t === 'toast') toast(m.text);
     else if (m.t === 'full') joinErr('That room is full (8 players).');
   }
-  function scheduleRetry() { clearTimeout(retryT); setStatus('🟠 Reconnecting…'); retryT = setTimeout(connect, 2000); }
+  // Retry with backoff. Every 3rd failure throws away the whole peer and starts fresh (fixes "stuck" states).
+  function scheduleRetry() {
+    if (retryT) return;
+    tries++;
+    const wait = Math.min(1000 * tries, 5000);
+    setStatus('🟠 Reconnecting…');
+    netBanner(true, tries > 3 ? '📡 Still trying to reach the TV… <b>tap to retry now</b><br><small>Is the TV page still open?</small>' : '📡 Reconnecting to the TV…');
+    retryT = setTimeout(() => { retryT = null; if (tries % 3 === 0) hardReset(); connect(); }, wait);
+  }
+  function hardReset() { const c = conn; conn = null; try { c && c.close(); } catch (e) {} if (peer) { try { peer.destroy(); } catch (e) {} } peer = null; }
+  function failJoin(msg) {
+    // first join: retry quietly a few times before showing an error (the TV may be reconnecting itself)
+    if (++joinTries < 2) { $('#joinBtn').textContent = 'Still trying…'; clearTimeout(retryT); retryT = setTimeout(() => { retryT = null; hardReset(); connect(); }, 800); return; }
+    joinTries = 0; hardReset(); joinErr(msg);
+  }
+  const lost = msg => joined ? scheduleRetry() : failJoin(msg);
   function dial() {
-    if (conn) { try { conn.close(); } catch (e) {} }
+    if (conn) { const old = conn; conn = null; try { old.close(); } catch (e) {} }
     const c = peer.connect(PREFIX + code, { reliable: true, serialization: 'json' }); conn = c;
-    c.on('open', () => c.send({ t: 'join', cid, name }));
-    c.on('data', onData);
-    c.on('close', () => { if (conn === c) { conn = null; if (joined) scheduleRetry(); } });
-    c.on('error', () => { if (conn === c && joined) scheduleRetry(); });
-    setTimeout(() => { if (conn === c && !c.open) { if (joined) scheduleRetry(); else joinErr('Could not reach the TV. Check the code and try again.'); } }, 9000);
+    c.on('open', () => { if (conn !== c) return; lastSeen = Date.now(); c.send({ t: 'join', cid, name }); });
+    c.on('data', d => { if (conn === c) onData(d); });
+    c.on('close', () => { if (conn === c) { conn = null; lost('Lost the TV. Try again.'); } });
+    c.on('error', () => { if (conn === c) { conn = null; lost('Could not reach the TV. Try again.'); } });
+    setTimeout(() => { if (conn === c && !c.open) { conn = null; try { c.close(); } catch (e) {} lost('Could not reach the TV. Check the code and try again.'); } }, joined ? 10000 : 8000);
   }
   function connect() {
+    if (conn && conn.open) return;
     if (peer && !peer.destroyed && peer.open) return dial();
-    if (peer && !peer.destroyed && peer.disconnected) { try { peer.reconnect(); } catch (e) {} return; }
-    if (peer && !peer.destroyed) return;
-    peer = new Peer();
-    peer.on('open', dial);
-    peer.on('disconnected', () => { if (joined) scheduleRetry(); });
-    peer.on('error', e => {
-      if (e.type === 'peer-unavailable') { if (joined) scheduleRetry(); else joinErr(`Room ${code} not found. Is the TV on?`); }
-      else if (joined) scheduleRetry();
-      else { joinErr('Network problem — try again.'); try { peer.destroy(); } catch (_) {} peer = null; }
+    if (peer && !peer.destroyed && peer.disconnected) { try { peer.reconnect(); } catch (e) { hardReset(); return connect(); } return; }
+    if (peer && !peer.destroyed) return; // still opening
+    const p = peer = new Peer(PEER_OPTS);
+    p.on('open', () => { if (peer === p && !(conn && conn.open)) dial(); });
+    // lost the signalling server only: the link to the TV usually still works, so just reconnect quietly
+    p.on('disconnected', () => { if (peer === p && !p.destroyed) setTimeout(() => { try { if (peer === p && p.disconnected && !p.destroyed) p.reconnect(); } catch (e) {} }, 1000); });
+    p.on('error', e => {
+      if (peer !== p) return;
+      if (e.type === 'peer-unavailable') { conn = null; lost(`Room ${code} not found. Is the TV on?`); }
+      else if (conn && conn.open) { /* signalling hiccup, game link is fine */ }
+      else { hardReset(); lost('Network problem. Check your Wi-Fi and try again.'); }
     });
   }
+  // Heartbeat: the TV pings every 2s. Silence for 7s means the link is dead even if the browser hasn't noticed.
+  setInterval(() => {
+    if (!joined || retryT) return;
+    if (!conn || !conn.open) return scheduleRetry();
+    if (gotPing && Date.now() - lastSeen > 7000) { const c = conn; conn = null; try { c.close(); } catch (e) {} scheduleRetry(); }
+  }, 2000);
+  addEventListener('online', () => { if (joined && !(conn && conn.open)) { tries = 0; hardReset(); connect(); } });
   async function doJoin() {
     code = $('#roomIn').value.trim().toUpperCase(); name = $('#nameIn').value.trim().slice(0, 12);
     if (code.length !== 4) return joinErr('Enter the 4-letter code shown on the TV');
@@ -335,7 +368,11 @@
   $('#joinBtn').onclick = doJoin;
   // returning player with the room link: join straight away
   if ($('#roomIn').value.length === 4 && store.get('cc_name')) doJoin();
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && joined && (!conn || !conn.open)) connect(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !joined) return;
+    // back from a locked screen / other app: links are often dead, check right away
+    if (!conn || !conn.open || (gotPing && Date.now() - lastSeen > 5000)) { clearTimeout(retryT); retryT = null; tries = 0; hardReset(); connect(); }
+  });
   addEventListener('orientationchange', () => { neutral = null; });
   // iPhone: motion permission needs a tap — ask on the first tap anywhere
   if (!motionOn) document.addEventListener('pointerdown', function once() { askMotion(); document.removeEventListener('pointerdown', once); });
