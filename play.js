@@ -24,22 +24,24 @@
   const light = c => /^#(ffd43b|fcc419|f1f3f5|fff|ffffff|94d82d|ffe066|e9ecef)$/i.test(c);
 
   // ---------- motion ----------
-  let motionSeen = false, grav = null, neutral = null, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
+  let motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
   async function askMotion() {
     try {
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { const r = await DeviceMotionEvent.requestPermission(); if (r !== 'granted') return; }
       if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); }
-    } catch (e) { /* touch + keys still work */ }
+    } catch (e) { if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); } /* no permission API problem: just listen */ }
   }
   if (!(typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) askMotion();
   function onMotion(e) {
     const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
     if (!motionSeen) { motionSeen = true; updateTiltUI(); }
-    let ax = a.x, ay = a.y; if (isIOS) { ax = -ax; ay = -ay; }
+    let ax = a.x, ay = a.y, az = a.z || 0; if (isIOS) { ax = -ax; ay = -ay; az = -az; }
     const ang = (((screen.orientation && screen.orientation.angle) ?? (window.orientation || 0)) % 360 + 360) % 360;
     let ux, uy;
     if (ang === 90) { ux = -ay; uy = ax; } else if (ang === 180) { ux = -ax; uy = -ay; } else if (ang === 270) { ux = ay; uy = -ax; } else { ux = ax; uy = ay; }
-    grav = { x: ux, y: uy }; if (!neutral) neutral = { ...grav };
+    // low-pass filter so hand jitter doesn't make the plane twitch
+    if (!grav) grav = { x: ux, y: uy, z: az }; else { const k = 0.25; grav.x += (ux - grav.x) * k; grav.y += (uy - grav.y) * k; grav.z += (az - grav.z) * k; }
+    if (!neutral || recenterSoon) { neutral = { ...grav }; recenterSoon = false; }
     const l = e.acceleration, mag = l && l.x != null ? Math.hypot(l.x, l.y, l.z) : Math.abs(Math.hypot(a.x, a.y, a.z) - 9.81), now = performance.now();
     if (layout && layout.name === 'shake' && mag > 13 && now - lastShake > 110) { lastShake = now; pump(); }
   }
@@ -53,6 +55,26 @@
   $('#tiltBtn').onclick = () => { tiltOn = !tiltOn; store.set('cc_tilt', tiltOn ? '1' : '0'); neutral = grav ? { ...grav } : null; updateTiltUI(); };
   $('#centerBtn').onclick = () => { neutral = grav ? { ...grav } : null; toast('Centered!'); };
   $('#flipBtn').onclick = () => { flip = -flip; store.set('cc_flip', flip < 0 ? '1' : '0'); toast('Tilt direction flipped'); };
+  // Angle-based steering, whichever way you hold the phone:
+  //  - held up like a steering wheel / yoke -> turn it like a wheel
+  //  - held flat -> tip the left or right edge down
+  // Measured from the pose captured when the game starts (or when you tap Center).
+  const DEG = 180 / Math.PI, LOCK = 28, DEAD = 3;
+  const asinG = v => Math.asin(clamp(v / 9.81)) * DEG;
+  const wrapDeg = d => ((d + 540) % 360) - 180;
+  function shape(deg) { const a = Math.abs(deg); if (a < DEAD) return 0; return Math.sign(deg) * Math.min(1, (a - DEAD) / (LOCK - DEAD)); }
+  function tiltAngles() {
+    const g = grav, n = neutral, upright = Math.hypot(n.x, n.y) > 5.5;
+    let sx, sy;
+    if (upright) { // wheel: rotation in the screen plane
+      sx = -wrapDeg((Math.atan2(g.x, g.y) - Math.atan2(n.x, n.y)) * DEG);
+      sy = -(asinG(g.z) - asinG(n.z));
+    } else { // flat: tip the edges
+      sx = -(asinG(g.x) - asinG(n.x));
+      sy = asinG(g.y) - asinG(n.y);
+    }
+    return { x: shape(sx * flip), y: shape(sy) };
+  }
 
   // ---------- input state ----------
   const keys = { left: false, right: false, up: false, down: false, a: false, b: false }, btn = { a: false, b: false }, stick = { active: false, x: 0, y: 0 };
@@ -62,8 +84,7 @@
     if (keys.left) x -= 1; if (keys.right) x += 1; if (keys.up) y -= 1; if (keys.down) y += 1;
     if (stick.active) { x = stick.x; y = stick.y; }
     else if (!x && !y && tiltOn && tiltApplies() && grav && neutral) {
-      x = clamp(-(grav.x - neutral.x) / 3.5 * flip); y = layout.stick === 'xy' ? clamp((grav.y - neutral.y) / 3.5) : 0;
-      if (Math.abs(x) < 0.08) x = 0; if (Math.abs(y) < 0.1) y = 0;
+      const t = tiltAngles(); x = t.x; y = layout.stick === 'xy' ? t.y : 0;
     }
     if (layout && layout.stick === 'x') y = 0;
     return { x, y, a: keys.a || btn.a, b: keys.b || btn.b };
@@ -76,7 +97,15 @@
     s.x = +s.x.toFixed(2); s.y = +s.y.toFixed(2);
     try { conn.send({ t: 'in', ...s }); } catch (e) {}
     lastSent = s;
-    const kn = document.getElementById('kn'); if (kn) kn.style.transform = `translate(${s.x * (layout.stick === 'x' ? 75 : 40)}px, ${s.y * 40}px)`;
+    drawYoke(s);
+  }
+  function drawYoke(s) {
+    const yk = document.getElementById('yoke'); if (!yk) return;
+    yk.style.transform = `translateY(${s.y * 26}px) rotate(${s.x * 55}deg)`;
+    const L = document.getElementById('yL'), R = document.getElementById('yR');
+    if (L) L.style.opacity = s.x < -0.05 ? 0.35 + Math.min(1, -s.x) * 0.65 : 0.15;
+    if (R) R.style.opacity = s.x > 0.05 ? 0.35 + Math.min(1, s.x) * 0.65 : 0.15;
+    const m = document.getElementById('yMeter'); if (m) m.style.left = (50 + s.x * 50) + '%';
   }
   setInterval(() => flush(false), 33); setInterval(() => flush(true), 1000);
   function resetInput() { Object.keys(keys).forEach(k => keys[k] = false); btn.a = btn.b = false; stick.active = false; stick.x = stick.y = 0; flush(true); }
@@ -101,6 +130,7 @@
   // ---------- layouts ----------
   function render(L) {
     layout = L; resetInput(); pumps = 0;
+    if (L.name === 'pad' && L.stick) recenterSoon = true;
     if (L.name !== 'cards') lastHand = null;
     const R = { lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
     if (R[L.name]) R[L.name](L);
@@ -193,15 +223,27 @@
   function renderPad(L) {
     const xOnly = L.stick === 'x', noStick = !L.stick;
     stage.innerHTML = `<div class="pad ${noStick ? 'nostick' : ''}">
-      ${noStick ? '' : `<div class="stickZone" id="sz"><div class="tiltBadge hidden" id="tiltBadge">📱 Tilt is ON</div><div class="stickBase ${xOnly ? 'x' : ''}"><div class="knob" id="kn"></div></div><div class="szHint">${esc(L.hint || '')}</div></div>`}
+      ${noStick ? '' : `<div class="stickZone yokeZone" id="sz"><div class="tiltBadge hidden" id="tiltBadge">📱 Turn your phone like a steering wheel</div>
+        <div class="yArrow l" id="yL">◀</div><div class="yArrow r" id="yR">▶</div>
+        <div class="yokeWrap"><svg id="yoke" class="yoke" viewBox="0 0 240 150" aria-hidden="true">
+          <rect x="108" y="88" width="24" height="62" rx="8" fill="#495057"/>
+          <path d="M20 40 Q20 20 40 20 L70 20 Q84 20 90 34 L100 58 L140 58 L150 34 Q156 20 170 20 L200 20 Q220 20 220 40 L220 80 Q220 104 196 104 L44 104 Q20 104 20 80 Z" fill="#343a40" stroke="#868e96" stroke-width="4"/>
+          <rect x="14" y="28" width="38" height="70" rx="16" fill="var(--c,#4dabff)"/><rect x="188" y="28" width="38" height="70" rx="16" fill="var(--c,#4dabff)"/>
+          <circle cx="120" cy="82" r="20" fill="#212529" stroke="#adb5bd" stroke-width="4"/><circle cx="120" cy="82" r="6" fill="#ffd43b"/>
+          <rect x="30" y="34" width="6" height="58" rx="3" fill="rgba(255,255,255,.35)"/><rect x="204" y="34" width="6" height="58" rx="3" fill="rgba(255,255,255,.35)"/>
+        </svg></div>
+        <div class="yBar"><i id="yMeter"></i></div>
+        <div class="szHint">${esc(L.hint || '')}<br><small>${xOnly ? 'No tilt? Touch and hold the left or right side.' : 'No tilt? Drag the yoke.'}</small></div></div>`}
       <div class="btns ${noStick ? 'solo' : ''}">${L.b ? `<button class="pbtn pb" data-b="b">${esc(L.b)}</button>` : ''}${L.a ? `<button class="pbtn pa" data-b="a">${esc(L.a)}</button>` : ''}</div>
       <div class="keys">PC: ${noStick ? '' : xOnly ? '← → · ' : 'WASD/arrows · '}${L.a ? 'Space = ' + esc(L.a) : ''}${L.b ? ' · Shift = ' + esc(L.b) : ''}</div></div>`;
     if (noStick && L.hint) stage.querySelector('.btns').insertAdjacentHTML('beforebegin', `<div class="szHint" style="position:static;padding:12px">${esc(L.hint)}</div>`);
     stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
     if (noStick) return;
     const sz = $('#sz'); let ox = 0, oy = 0, pid = null;
-    sz.addEventListener('pointerdown', e => { pid = e.pointerId; try { sz.setPointerCapture(pid); } catch (_) {} ox = e.clientX; oy = e.clientY; stick.active = true; stick.x = stick.y = 0; flush(); });
-    sz.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; let dx = (e.clientX - ox) / 60, dy = (e.clientY - oy) / 60; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } stick.x = dx; stick.y = xOnly ? 0 : dy; flush(); });
+    // x-only games: where you touch = how hard you turn (left side = left, right side = right, middle = straight)
+    const absX = e => { const r = sz.getBoundingClientRect(), v = (e.clientX - (r.left + r.width / 2)) / (r.width * 0.32), a = Math.abs(v); return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, 0.35 + (a - 0.18) * 0.8); };
+    sz.addEventListener('pointerdown', e => { pid = e.pointerId; try { sz.setPointerCapture(pid); } catch (_) {} ox = e.clientX; oy = e.clientY; stick.active = true; stick.x = xOnly ? absX(e) : 0; stick.y = 0; flush(); });
+    sz.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; if (xOnly) { stick.x = absX(e); stick.y = 0; flush(); return; } let dx = (e.clientX - ox) / 60, dy = (e.clientY - oy) / 60; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } stick.x = dx; stick.y = dy; flush(); });
     const end = e => { if (e.pointerId !== pid) return; pid = null; stick.active = false; stick.x = stick.y = 0; flush(); };
     sz.addEventListener('pointerup', end); sz.addEventListener('pointercancel', end);
   }
@@ -296,5 +338,5 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && joined && (!conn || !conn.open)) connect(); });
   addEventListener('orientationchange', () => { neutral = null; });
   // iPhone: motion permission needs a tap — ask on the first tap anywhere
-  if (isIOS) document.addEventListener('pointerdown', function once() { askMotion(); document.removeEventListener('pointerdown', once); });
+  if (!motionOn) document.addEventListener('pointerdown', function once() { askMotion(); document.removeEventListener('pointerdown', once); });
 })();

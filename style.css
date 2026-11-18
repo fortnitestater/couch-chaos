@@ -225,3 +225,15 @@ body.padBody { background: radial-gradient(ellipse at 50% -20%, #1f4e8c 0, trans
 .die { display: grid; padding: 0; }
 .edition-home { font-family: 'Bungee', Impact, sans-serif; color: #a5d8ff; letter-spacing: .3em; margin-top: 14px; }
 body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transparent 55%), radial-gradient(ellipse at 90% 0%, #3b1f7a 0, transparent 50%), linear-gradient(#0a1024, #05070f); }
+
+/* ---------- yoke steering ---------- */
+.yokeZone { flex-direction: column; gap: 8px; overflow: hidden; }
+.yokeWrap { width: min(78%, 340px); pointer-events: none; }
+.yoke { width: 100%; height: auto; display: block; transform-origin: 50% 55%; transition: transform .06s linear; filter: drop-shadow(0 10px 12px rgba(0,0,0,.45)); }
+.yArrow { position: absolute; top: 45%; transform: translateY(-50%); font-size: 54px; color: #ffd43b; opacity: .15; pointer-events: none; transition: opacity .08s; text-shadow: 0 0 18px rgba(255,212,59,.7); }
+.yArrow.l { left: 6px; } .yArrow.r { right: 6px; }
+.yBar { position: relative; width: min(70%, 300px); height: 10px; border-radius: 5px; background: linear-gradient(90deg, rgba(255,212,59,.5), rgba(255,255,255,.08) 45%, rgba(255,255,255,.08) 55%, rgba(255,212,59,.5)); pointer-events: none; }
+.yBar::after { content: ''; position: absolute; left: 50%; top: -4px; width: 2px; height: 18px; background: rgba(255,255,255,.4); }
+.yBar i { position: absolute; top: 50%; left: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #ffd43b; transition: left .06s linear; }
+.yokeZone .szHint { position: static; }
+.yokeZone .szHint small { opacity: .8; font-size: 12px; }

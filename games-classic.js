@@ -66,8 +66,8 @@ class SkyBrawl {
       if (!pl.alive) { pl.respawn -= dt; if (pl.respawn <= 0) this.spawn(pl); continue; }
       const inp = pl.p.bot ? this.bot(pl) : pl.p.input;
       let turn = clamp(inp.x || 0); if (this.event === 'reverse') turn = -turn;
-      pl.bank += (turn - pl.bank) * Math.min(1, dt * 8);
-      pl.ang += turn * 3.3 * dt;
+      pl.bank += (turn - pl.bank) * Math.min(1, dt * 7);
+      pl.ang += pl.bank * 2.8 * dt; // smoothed turning = easier to aim
       const boost = inp.b && pl.energy > 0.02;
       pl.energy = boost ? Math.max(0, pl.energy - dt * 0.7) : Math.min(1, pl.energy + dt * 0.22);
       const tgt = (boost ? 560 : 310) * (pl.pow === 'speed' ? 1.45 : 1);
