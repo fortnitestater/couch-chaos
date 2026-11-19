@@ -90,3 +90,32 @@ body.tv { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transparen
 .pod.p3 .block { height: 8vh; background: linear-gradient(#ffc078, #d9480f); }
 #resList li { grid-template-columns: 6vh 1fr auto auto; }
 .introBody .badge { align-self: flex-start; }
+
+/* ---------- crazy animations ---------- */
+#wipe { position: fixed; inset: 0; z-index: 50; pointer-events: none; overflow: hidden; display: none; }
+#wipe.go { display: block; }
+#wipe i { position: absolute; top: -50%; bottom: -50%; width: 70vw; left: -80vw; transform: skewX(-18deg); background: var(--a1); }
+#wipe i:nth-child(2) { background: var(--a2); animation-delay: .07s !important; }
+#wipe i:nth-child(3) { background: #ffd43b; width: 8vw; animation-delay: .14s !important; }
+#wipe.go i { animation: wipeBar .95s cubic-bezier(.7,0,.3,1) forwards; }
+@keyframes wipeBar { 0% { left: -80vw; } 45%, 55% { left: 15vw; width: 90vw; } 100% { left: 130vw; } }
+#wipe b { position: absolute; left: 50%; top: 50%; font-size: 30vh; transform: translate(-50%, -50%) scale(0); }
+#wipe.go b { animation: wipeEmoji .95s cubic-bezier(.3,1.6,.5,1) forwards; }
+@keyframes wipeEmoji { 0% { transform: translate(-50%,-50%) scale(0) rotate(-90deg); } 40%, 60% { transform: translate(-50%,-50%) scale(1.1) rotate(8deg); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(2.4) rotate(30deg); opacity: 0; } }
+.introArt { position: relative; overflow: hidden; }
+.introArt .rays { position: absolute; width: 220%; aspect-ratio: 1; left: -60%; top: 50%; margin-top: -110%; background: repeating-conic-gradient(rgba(255,255,255,.22) 0 10deg, transparent 10deg 20deg); animation: spin 14s linear infinite; }
+.introArt span { position: relative; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tile .te { animation: tileBob 3.2s ease-in-out infinite; }
+.tile:nth-child(2n) .te { animation-delay: -1.1s; } .tile:nth-child(3n) .te { animation-delay: -2.1s; }
+@keyframes tileBob { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-1vh); } }
+.tile.focus .te { animation: tileParty .6s ease-in-out infinite alternate; }
+@keyframes tileParty { from { transform: rotate(-14deg) scale(1.05); } to { transform: rotate(6deg) scale(1.18); } }
+.tile::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%); transform: translateX(-120%); }
+.tile.focus::after { animation: shine 1.6s ease-in-out infinite; }
+@keyframes shine { 60%, 100% { transform: translateX(120%); } }
+#results .cf { position: absolute; top: -3vh; width: 1.1vh; height: 1.8vh; border-radius: 2px; animation: cfFall linear forwards; z-index: 0; }
+@keyframes cfFall { to { transform: translateY(110vh) rotate(var(--r)); } }
+.pod .pav { animation: podBounce 1.2s ease-in-out infinite; }
+.pod.p1 .pav { animation-duration: .8s; }
+@keyframes podBounce { 50% { transform: translateY(-1.4vh) rotate(6deg); } }

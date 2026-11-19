@@ -24,7 +24,7 @@
   const light = c => /^#(ffd43b|fcc419|f1f3f5|fff|ffffff|94d82d|ffe066|e9ecef)$/i.test(c);
 
   // ---------- motion ----------
-  let motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
+  let lastSwing = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
   async function askMotion() {
     try {
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { const r = await DeviceMotionEvent.requestPermission(); if (r !== 'granted') return; }
@@ -44,8 +44,14 @@
     if (!neutral || recenterSoon) { neutral = { ...grav }; recenterSoon = false; }
     const l = e.acceleration, mag = l && l.x != null ? Math.hypot(l.x, l.y, l.z) : Math.abs(Math.hypot(a.x, a.y, a.z) - 9.81), now = performance.now();
     if (layout && layout.name === 'shake' && mag > 13 && now - lastShake > 110) { lastShake = now; pump(); }
+    if (layout && layout.name === 'swing') {
+      // a swing = a fast twist of the wrist and/or a hard jolt. Fires the instant it crosses the line (timing matters!)
+      const r = e.rotationRate, rot = r ? Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0) : 0;
+      const strength = Math.max(rot / 420, mag / 14);
+      if (strength > 1 && now - lastSwing > 420) swing(clamp(0.5 + (strength - 1) * 0.5, 0.5, 1), 'motion');
+    }
   }
-  const tiltApplies = () => motionSeen && layout && layout.name === 'pad' && layout.stick;
+  const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || (layout.name === 'swing' && layout.aim));
   function updateTiltUI() {
     const show = tiltApplies();
     $('#tiltBtn').classList.toggle('hidden', !show); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
@@ -91,13 +97,14 @@
   }
   let lastSent = { x: 0, y: 0, a: false, b: false };
   function flush(force) {
-    if (!conn || !conn.open || !layout || !['pad', 'button'].includes(layout.name)) return;
+    if (!conn || !conn.open || !layout || !['pad', 'button', 'swing'].includes(layout.name)) return;
     const s = readInput();
     if (!force && Math.abs(s.x - lastSent.x) < 0.03 && Math.abs(s.y - lastSent.y) < 0.03 && s.a === lastSent.a && s.b === lastSent.b) return;
     s.x = +s.x.toFixed(2); s.y = +s.y.toFixed(2);
     try { conn.send({ t: 'in', ...s }); } catch (e) {}
     lastSent = s;
     drawYoke(s);
+    const ad = document.getElementById('aimDot'); if (ad) ad.style.left = (50 + s.x * 46) + '%';
   }
   function drawYoke(s) {
     const yk = document.getElementById('yoke'); if (!yk) return;
@@ -118,6 +125,7 @@
   addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || !layout) return;
     if (layout.name === 'shake') { if (!e.repeat && e.code !== lastShakeKey) { lastShakeKey = e.code; pump(); } e.preventDefault(); return; }
+    if (layout.name === 'swing' && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); if (!e.repeat) swing(0.7, 'key'); return; }
     if (layout.name === 'cards') return cardKey(e);
     if (layout.name === 'lobby' && layout.vip) { const m = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'ok', Space: 'ok', Escape: 'back' }[e.code]; if (m) { e.preventDefault(); sendMsg({ t: 'nav', d: m }); } return; }
     if (layout.name === 'intro' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); readyUp(); return; }
@@ -130,9 +138,9 @@
   // ---------- layouts ----------
   function render(L) {
     layout = L; resetInput(); pumps = 0;
-    if (L.name === 'pad' && L.stick) recenterSoon = true;
+    if ((L.name === 'pad' && L.stick) || (L.name === 'swing' && L.aim)) recenterSoon = true;
     if (L.name !== 'cards') lastHand = null;
-    const R = { lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
+    const R = { swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -246,6 +254,41 @@
     sz.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; if (xOnly) { stick.x = absX(e); stick.y = 0; flush(); return; } let dx = (e.clientX - ox) / 60, dy = (e.clientY - oy) / 60; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } stick.x = dx; stick.y = dy; flush(); });
     const end = e => { if (e.pointerId !== pid) return; pid = null; stick.active = false; stick.x = stick.y = 0; flush(); };
     sz.addEventListener('pointerup', end); sz.addEventListener('pointercancel', end);
+  }
+  // ---------- swing (motion sports) ----------
+  const SPORT = { tennis: ['🎾', 'a tennis racket'], bowling: ['🎳', 'a bowling arm'], bat: ['⚾', 'a baseball bat'] };
+  function swing(power, how) {
+    if (!layout || layout.name !== 'swing') return;
+    lastSwing = performance.now();
+    sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how });
+    navigator.vibrate?.(power > 0.8 ? [30, 20, 60] : 35);
+    const ic = document.getElementById('swIcon'); if (ic) { ic.classList.remove('hit'); void ic.offsetWidth; ic.classList.add('hit'); }
+    const pw = document.getElementById('swPow'); if (pw) { pw.style.transition = 'none'; pw.style.width = Math.round(power * 100) + '%'; void pw.offsetWidth; pw.style.transition = 'width 1.2s ease-in'; pw.style.width = '0%'; }
+    const z = document.getElementById('swz'); if (z) { z.classList.remove('flash'); void z.offsetWidth; z.classList.add('flash'); }
+    const lb = document.getElementById('swPowTxt'); if (lb) lb.textContent = power > 0.85 ? 'MONSTER SWING! 💥' : power > 0.65 ? 'Nice swing!' : 'Swing!';
+  }
+  function renderSwing(L) {
+    const [icon, noun] = SPORT[L.sport] || ['🏏', 'a bat'];
+    stage.innerHTML = `<div class="swingPad">
+      ${L.aim ? `<div class="aimBar" id="aimBar"><div class="aimTrack"><i id="aimDot"></i></div><small>⬅ tilt or drag here to aim ➡</small></div>` : ''}
+      <div class="swingZone" id="swz">
+        <div class="swRings"><i></i><i></i><i></i></div>
+        <div class="swIcon" id="swIcon">${icon}</div>
+        <div class="swLabel">${esc(L.label || 'SWING!')}</div>
+        <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motionSeen ? 'Swing your phone like ' + noun + '!' : 'Tap here to swing'}</div>
+        <div class="swHint">${esc(L.hint || '')}<br><small>${motionSeen ? 'No room to swing? Just tap here.' : ''} PC: Space</small></div>
+      </div></div>`;
+    const z = $('#swz');
+    z.addEventListener('pointerdown', e => { if (e.target.closest('#aimBar')) return; swing(0.7, 'tap'); });
+    if (L.aim) {
+      const bar = $('#aimBar'); let pid = null;
+      const setX = e => { const r = bar.getBoundingClientRect(); stick.x = clamp(((e.clientX - r.left) / r.width - 0.5) * 2.2); stick.y = 0; flush(); };
+      bar.addEventListener('pointerdown', e => { pid = e.pointerId; try { bar.setPointerCapture(pid); } catch (_) {} stick.active = true; setX(e); });
+      bar.addEventListener('pointermove', e => { if (e.pointerId === pid) setX(e); });
+      // keep the aim where you left it (don't spring back to the middle)
+      const end = e => { if (e.pointerId !== pid) return; pid = null; };
+      bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
+    }
   }
   function renderButton(L) {
     stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p><p class="muted" style="font-size:13px">PC: Space</p></div>`;
@@ -363,7 +406,7 @@
     if (!name) { $('#nameIn').value = FUNNY[(Math.random() * FUNNY.length) | 0]; name = $('#nameIn').value; }
     store.set('cc_name', name);
     $('#joinBtn').disabled = true; $('#joinBtn').textContent = 'Connecting…'; $('#joinErr').textContent = '';
-    await askMotion(); connect();
+    await askMotion(); await ICE_READY; connect();
   }
   $('#joinBtn').onclick = doJoin;
   // returning player with the room link: join straight away

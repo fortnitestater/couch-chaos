@@ -106,7 +106,7 @@
 
   // ---------- home screen ----------
   const QUICK = [
-    { id: '_party', name: 'Party Mode', emoji: '🎉', art: ['#ffd43b', '#ff4d6d'], desc: '5 random games in a row from every category. Trophies decide the champion!', how: [], ctrl: 'tap', players: '1-8', mins: 15, cat: 'quick' },
+    { id: '_party', name: 'Party Mode', emoji: '🎉', art: ['#ffd43b', '#ff4d6d'], desc: '6 random games in a row, one from every category. Trophies decide the champion!', how: [], ctrl: 'tap', players: '1-8', mins: 15, cat: 'quick' },
     { id: '_random', name: 'Surprise Me', emoji: '🎲', art: ['#63e6be', '#7048e8'], desc: 'Let fate pick a game that fits how many of you are playing.', how: [], ctrl: 'tap', players: '1-8', mins: 3, cat: 'quick' },
   ];
   let rowsData = [], focus = { r: 0, c: 0 }, heroDef = null, idleT = 0, heroCycle = 0;
@@ -167,7 +167,7 @@
     if (!humans().length) return banner('Join first! Scan the code 📱', 1600, '#ff4d6d');
     const fit = fitting(), list = [];
     for (const c of shuffle(CATEGORIES.slice())) { const opts = fit.filter(gm => gm.cat === c.id && !list.includes(gm)); if (opts.length) list.push(pick(opts)); }
-    S.party = { list: list.slice(0, 5), i: 0, pts: new Map(humans().map(p => [p, 0])) };
+    S.party = { list: list.slice(0, 6), i: 0, pts: new Map(humans().map(p => [p, 0])) };
     banner('🎉 PARTY MODE!', 1600); SFX.win();
     setTimeout(() => startIntro(S.party.list[0]), 1200);
   }
@@ -215,8 +215,23 @@
   function sendIntro(p) { const d = S.def; p.layout = { name: 'intro', emoji: d.emoji, title: d.name, how: d.how, ctrl: CTRL_LABEL[d.ctrl], ready: S.ready.has(p) }; send(p, { t: 'layout', layout: p.layout }); }
   function renderReady() { $('#introReady').innerHTML = humans().map(p => `<span class="rchip ${S.ready.has(p) ? 'ok' : ''}" style="--c:${p.color}">${S.ready.has(p) ? '✓ ' : ''}${p.avatar} ${esc(p.name)}</span>`).join(''); }
   function launchSoon(s) { if (launchT) return; launchT = setTimeout(() => { launchT = null; launch(); }, s * 1000); }
+  // big diagonal colour wipe between screens
+  function wipe(c1, c2) {
+    let w = document.getElementById('wipe');
+    if (!w) { w = document.createElement('div'); w.id = 'wipe'; w.innerHTML = '<i></i><i></i><i></i><b></b>'; document.body.appendChild(w); }
+    w.style.setProperty('--a1', c1); w.style.setProperty('--a2', c2);
+    w.querySelector('b').textContent = S.def ? S.def.emoji : '';
+    w.classList.remove('go'); void w.offsetWidth; w.classList.add('go');
+  }
+  function confettiDom(n = 70) {
+    const box = document.getElementById('results'); if (!box) return;
+    box.querySelectorAll('.cf').forEach(e => e.remove());
+    const cols = ['#ff4d6d', '#ffd43b', '#4dabff', '#51cf66', '#cc5de8', '#ff922b'];
+    for (let i = 0; i < n; i++) { const e = document.createElement('i'); e.className = 'cf'; e.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${Math.random() * 1.6}s;animation-duration:${2.4 + Math.random() * 2}s;--r:${Math.random() * 720 - 360}deg`; box.appendChild(e); }
+  }
   function launch() {
     if (S.state !== 'intro') return;
+    wipe(S.def.art[0], S.def.art[1]); SFX.whoosh();
     S.state = 'game'; show('game');
     try { S.game = S.def.make(makeCtx()); S.game.start(); }
     catch (e) { console.error(e); banner('Oops — that game crashed', 2000, '#ff4d6d'); toHome(); }
@@ -256,7 +271,7 @@
     $('#resList').innerHTML = results.slice(3).map((r, i) => `<li style="--c:${r.p.color}"><span class="pl">#${i + 4}</span><span>${r.p.avatar || ''} ${esc(r.p.name)}</span><span class="st">${esc(r.stat || '')}</span><span class="aw"></span></li>`).join('');
     const nxt = S.party && S.party.list[S.party.i + 1];
     $('#resFoot').textContent = nxt ? `Next up: ${nxt.emoji} ${nxt.name}…` : S.party ? 'And the party champion is…' : 'Back to the menu in a moment · VIP: OK to skip';
-    show('results'); SFX.win();
+    show('results'); SFX.win(); confettiDom();
     clearTimeout(timer); timer = setTimeout(afterResults, 7000);
   }
   function renderPodium(top) {
@@ -347,7 +362,7 @@
     $('#start').classList.add('hidden');
     S.state = 'home'; show('home'); buildRows(); renderPlayers();
     let prev = null; try { prev = sessionStorage.getItem('cc_room'); } catch (e) {}
-    openRoom(prev);
+    ICE_READY.then(() => openRoom(prev));
   }
   $('#startBtn').onclick = boot;
   $('#start').onclick = boot;

@@ -1,5 +1,6 @@
 /* Couch Chaos — game catalog. ctrl: 'tap' (phone buttons only), 'move' (stick / tilt / keys), 'shake', 'talk' (play out loud) */
 const CATEGORIES = [
+  { id: 'sports', name: '🎾 Motion Sports' },
   { id: 'winter', name: '❄️ Winter Games' },
   { id: 'table', name: '🃏 Cards & Table' },
   { id: 'party', name: '💣 Bombs & Party' },
@@ -7,6 +8,13 @@ const CATEGORIES = [
   { id: 'action', name: '⚡ Action' },
 ];
 const GAMES = [
+  // 🎾 motion sports (swing the phone)
+  { id: 'tennis', cat: 'sports', name: 'Smash Tennis', emoji: '🎾', art: ['#d8f5a2', '#2b8a3e'], ctrl: 'swing', players: '1-8', mins: 3,
+    desc: 'Red vs Blue in a roaring 3D stadium. Swing your phone like a racket — perfect timing fires a flaming SMASH!', how: ['Your player runs to the ball for you', 'Swing when the ring closes on you', 'Early = hit left, late = hit right. First to 5!'], make: c => new SmashTennis(c) },
+  { id: 'bowling', cat: 'sports', name: 'Strike Bowling', emoji: '🎳', art: ['#e599f7', '#5f3dc4'], ctrl: 'swing', players: '1-8', mins: 4,
+    desc: 'Neon bowling alley. Tilt to aim, swing your arm to roll, watch the pins explode in slow-mo.', how: ['Tilt (or drag) to aim the ball', 'Swing your phone like a bowling arm', 'Strike = 20, spare = 15'], make: c => new StrikeBowling(c) },
+  { id: 'derby', cat: 'sports', name: 'Home Run Derby', emoji: '⚾', art: ['#ffe066', '#e8590c'], ctrl: 'swing', players: '1-8', mins: 2,
+    desc: 'Everyone bats at the same pitch! Time your swing to blast it out of the stadium.', how: ['Watch the pitcher throw', 'Swing as the ring closes on the plate', 'Farthest total distance wins'], make: c => new HomeRunDerby(c) },
   // ❄️ winter
   { id: 'snowball', cat: 'winter', name: 'Snowball Fight', emoji: '☃️', art: ['#74c0fc', '#1864ab'], ctrl: 'move', players: '2-8', mins: 2,
     desc: 'Pelt your family with snowballs and hide behind snow forts.', how: ['Move with the stick, tilt or WASD', 'THROW fires where you aim', 'Most hits in 75 seconds wins'], make: c => new SnowballFight(c) },
@@ -79,4 +87,4 @@ const GAMES = [
   { id: 'meter', cat: 'action', name: 'Stop the Meter', emoji: '⏱️', art: ['#91a7ff', '#364fc7'], ctrl: 'tap', players: '1-8', mins: 1,
     desc: 'Stop the swinging needle right in the gold zone.', how: ['Watch the needle', 'Tap STOP in the gold zone', 'Perfect = 150 points'], make: c => new StopMeter(c) },
 ];
-const CTRL_LABEL = { tap: '👆 Tap only', move: '🕹️ Move / tilt', shake: '📳 Shake', talk: '🗣️ Talk & vote' };
+const CTRL_LABEL = { swing: '📱 Swing motion', tap: '👆 Tap only', move: '🕹️ Move / tilt', shake: '📳 Shake', talk: '🗣️ Talk & vote' };

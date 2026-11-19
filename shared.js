@@ -21,3 +21,13 @@ const PEER_OPTS = {
     ].concat(typeof window !== 'undefined' && window.CC_TURN ? [window.CC_TURN] : []),
   },
 };
+
+// Fetch relay credentials (if turn-config.js has a link) before the first connection. Never blocks more than 3s.
+const ICE_READY = (async () => {
+  const url = typeof window !== 'undefined' && window.CC_TURN_URL; if (!url) return;
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 3000);
+    const list = await (await fetch(url, { signal: ctl.signal })).json(); clearTimeout(t);
+    if (Array.isArray(list) && list.length) PEER_OPTS.config.iceServers.push(...list);
+  } catch (e) { console.warn('relay config failed', e); }
+})();

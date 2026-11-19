@@ -240,5 +240,32 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 
 /* ---------- connection banner ---------- */
 #netBanner { position: fixed; left: 50%; top: 56px; transform: translate(-50%, -160%); z-index: 50; background: #ff922b; color: #1a0f00; font-weight: 800; padding: 10px 18px; border-radius: 14px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.4); transition: transform .25s; max-width: 92vw; font-size: 15px; cursor: pointer; }
-#netBanner.show { transform: translate(-50%, 0); }
+#netBanner.show { transform: translate(-50%, 0); visibility: visible; }
+#netBanner:not(.show) { visibility: hidden; transition: transform .25s, visibility 0s .25s; }
 #netBanner small { font-weight: 600; opacity: .8; }
+
+/* ---------- swing (motion sports) ---------- */
+.swingPad { height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+.aimBar { background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.15); border-radius: 18px; padding: 14px 16px 8px; text-align: center; touch-action: none; }
+.aimTrack { position: relative; height: 16px; border-radius: 8px; background: linear-gradient(90deg, #ff4d6d33, #ffd43b 50%, #ff4d6d33); }
+.aimTrack i { position: absolute; top: 50%; left: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: var(--c, #fff); box-shadow: 0 0 0 4px #fff, 0 0 18px var(--c, #fff); transition: left .05s linear; }
+.aimBar small { color: var(--muted); display: block; margin-top: 10px; font-size: 12px; }
+.swingZone { position: relative; flex: 1; border-radius: 28px; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; touch-action: none; user-select: none;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--c, #4dabff) 45%, transparent), transparent 70%), linear-gradient(160deg, #1b1046, #070512); border: 3px solid color-mix(in srgb, var(--c, #4dabff) 60%, transparent); }
+.swingZone.flash { animation: swFlash .35s ease-out; }
+@keyframes swFlash { 0% { box-shadow: inset 0 0 0 999px rgba(255,255,255,.35); } 100% { box-shadow: inset 0 0 0 999px rgba(255,255,255,0); } }
+.swRings { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.swRings i { position: absolute; width: 160px; height: 160px; border-radius: 50%; border: 3px solid var(--c, #4dabff); opacity: 0; animation: swRing 2.4s infinite ease-out; }
+.swRings i:nth-child(2) { animation-delay: .8s; } .swRings i:nth-child(3) { animation-delay: 1.6s; }
+@keyframes swRing { 0% { transform: scale(.4); opacity: .8; } 100% { transform: scale(2.6); opacity: 0; } }
+.swIcon { font-size: min(26vw, 22vh); line-height: 1; filter: drop-shadow(0 10px 18px rgba(0,0,0,.5)); animation: swIdle 1.6s ease-in-out infinite; position: relative; }
+@keyframes swIdle { 0%, 100% { transform: rotate(-14deg) translateY(0); } 50% { transform: rotate(10deg) translateY(-8px); } }
+.swIcon.hit { animation: swHit .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes swHit { 0% { transform: rotate(-70deg) scale(.8); } 50% { transform: rotate(60deg) scale(1.35); } 100% { transform: rotate(0) scale(1); } }
+.swLabel { font-family: 'Bungee', Impact, sans-serif; font-size: 34px; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,.4), 0 0 24px var(--c, #4dabff); position: relative; }
+.swPowBar { width: 70%; max-width: 320px; height: 12px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; position: relative; }
+.swPowBar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #51cf66, #ffd43b, #ff4d6d); }
+.swPowTxt { font-weight: 900; color: #ffd43b; position: relative; }
+.swHint { color: var(--muted); font-size: 14px; text-align: center; padding: 0 12px; position: relative; }
+.swHint small { font-size: 12px; opacity: .85; }
+@media (orientation: landscape) { .swingPad { flex-direction: row; } .aimBar { width: 38%; display: flex; flex-direction: column; justify-content: center; } }

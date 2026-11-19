@@ -2,18 +2,19 @@
 
 A free family party game: the **TV is the screen** and every **phone or PC is a controller**.
 
-## Games (33) — ❄️ Winter Edition
+## Games (36) — ❄️ Winter Edition
 Most games only need taps on the phone. Motion games also work with on-screen sticks or a PC keyboard.
 
 | Row | Games |
 |-----|-------|
+| 🎾 Motion Sports | Smash Tennis · Strike Bowling · Home Run Derby (3D, swing your phone like a racket/arm/bat) |
 | ❄️ Winter | Snowball Fight · Ski Slalom · Ice Hockey · Snow Curling · Iceberg Sumo · Frozen Lake · Sled Dash |
 | 🃏 Cards & Table | Wild Eights · Bingo · Dice Duel · Four in a Row · Memory Match · Word Rescue · Higher or Lower |
 | 💣 Bombs & Party | Bomb Squad · Hot Potato Bomb · Odd Elf Out · Most Likely To · Doodle Dash · Lowest Unique · RPS Royale |
 | 🧠 Brain | Trivia Blitz · Color Clash · Count It! · Copy Cat · Quick Math |
 | ⚡ Action | Sky Brawl · Light Trails · Paint Wars · Coin Rush · Target Blast · Reflex Rush · Stop the Meter |
 
-**🎉 Party Mode** plays 5 random games (one from each row) and crowns a party champion. **🎲 Surprise Me** picks a game that fits your player count.
+**🎉 Party Mode** plays 6 random games (one from each row) and crowns a party champion. **🎲 Surprise Me** picks a game that fits your player count.
 Every game starts with a how-to-play screen; everyone taps READY on their phone.
 
 ## How to play
@@ -21,6 +22,8 @@ Every game starts with a how-to-play screen; everyone taps READY on their phone.
 2. Everyone scans the QR code, or opens `…/play.html` and types the 4-letter room code.
 3. The 👑 VIP (first to join) gets a remote on their phone (◀ ▶ ▲ ▼ + OK) to browse the TV menu — or use the TV keyboard/mouse. **Esc** = back to the menu.
 4. Returning players just open the link again — they rejoin automatically.
+
+Players on mobile data or another network? Add a free relay link in `turn-config.js` (instructions inside).
 
 Phones: motion needs **HTTPS** (every host below gives you that). On iPhone, tap "Allow" for motion when joining.
 If tilt steers the wrong way, tap **⇄** on the controller; **⟲ Center** sets "straight".
