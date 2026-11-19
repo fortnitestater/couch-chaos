@@ -9,15 +9,15 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
 };
 
-// WebRTC servers. STUN finds a direct route; TURN relays traffic when Wi-Fi/mobile networks block direct links.
+// WebRTC servers: STUN only. (The free public TURN relays were tested dead and one stalled connecting
+// for ~8s, so they're left out.) To add your own TURN server, set window.CC_TURN = {urls, username, credential}
+// in a <script> before shared.js on tv.html and play.html.
 const PEER_OPTS = {
   debug: 0,
   config: {
     iceServers: [
-      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
-      { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
-    ],
-    sdpSemantics: 'unified-plan',
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+    ].concat(typeof window !== 'undefined' && window.CC_TURN ? [window.CC_TURN] : []),
   },
 };

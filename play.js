@@ -321,7 +321,7 @@
   function hardReset() { const c = conn; conn = null; try { c && c.close(); } catch (e) {} if (peer) { try { peer.destroy(); } catch (e) {} } peer = null; }
   function failJoin(msg) {
     // first join: retry quietly a few times before showing an error (the TV may be reconnecting itself)
-    if (++joinTries < 2) { $('#joinBtn').textContent = 'Still trying…'; clearTimeout(retryT); retryT = setTimeout(() => { retryT = null; hardReset(); connect(); }, 800); return; }
+    if (++joinTries < 3) { $('#joinBtn').textContent = 'Still trying… (' + (joinTries + 1) + '/3)'; clearTimeout(retryT); retryT = setTimeout(() => { retryT = null; hardReset(); connect(); }, 800); return; }
     joinTries = 0; hardReset(); joinErr(msg);
   }
   const lost = msg => joined ? scheduleRetry() : failJoin(msg);
@@ -332,7 +332,7 @@
     c.on('data', d => { if (conn === c) onData(d); });
     c.on('close', () => { if (conn === c) { conn = null; lost('Lost the TV. Try again.'); } });
     c.on('error', () => { if (conn === c) { conn = null; lost('Could not reach the TV. Try again.'); } });
-    setTimeout(() => { if (conn === c && !c.open) { conn = null; try { c.close(); } catch (e) {} lost('Could not reach the TV. Check the code and try again.'); } }, joined ? 10000 : 8000);
+    setTimeout(() => { if (conn === c && !c.open) { conn = null; try { c.close(); } catch (e) {} lost('Could not reach the TV. Check the 4-letter code, and put this phone on the same Wi-Fi as the TV (not mobile data), then tap Join again.'); } }, 15000);
   }
   function connect() {
     if (conn && conn.open) return;
