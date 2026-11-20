@@ -273,3 +273,16 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .swingPad.motion .aimBar { pointer-events: none; }
 .swingPad.motion .swingZone { pointer-events: auto; }
 .swingZone .chip { position: relative; margin-top: 6px; }
+
+/* ---------- motion permission gate (iPhone) ---------- */
+#motionGate { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 60; }
+#motionGate.big { inset: 0; background: rgba(5,3,20,.88); display: grid; place-items: center; padding: 20px; backdrop-filter: blur(6px); }
+.mgCard { background: linear-gradient(160deg, #2b1b6b, #120a2e); border: 2px solid var(--c, #4dabff); border-radius: 22px; padding: 16px 18px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.5); max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+#motionGate:not(.big) .mgCard { flex-direction: row; align-items: center; text-align: left; flex-wrap: wrap; }
+#motionGate:not(.big) .mgCard p, #motionGate:not(.big) .mgEm { display: none; }
+.mgEm { font-size: 54px; animation: swIdle 1.6s ease-in-out infinite; }
+.mgCard b { font-size: 20px; color: #fff; }
+.mgCard p { color: #c5d4f0; font-size: 15px; margin: 0; }
+.mgBtn { background: linear-gradient(#ffe066, #fcc419); color: #1a0f00; font-family: 'Bungee', Impact, sans-serif; font-size: 20px; padding: 14px 18px; border-radius: 16px; box-shadow: 0 6px 0 #b08900; flex: 1; }
+.mgBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b08900; }
+.mgSkip { background: none; color: #8ea2c8; text-decoration: underline; font-size: 14px; padding: 6px; }

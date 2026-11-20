@@ -25,13 +25,42 @@
 
   // ---------- motion ----------
   let lastSwing = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
-  async function askMotion() {
+  // iPhone/iPad (Safari) only shows the motion popup when requestPermission() is called straight from a real
+  // button tap ('click'). Anything else (auto-join, pointerdown, timers) is silently refused.
+  const needPerm = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
+  let permState = needPerm ? 'unknown' : 'granted';
+  function listenMotion() { if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); } }
+  let askP = null;
+  function askMotion() { return askP || (askP = askMotionOnce().finally(() => { askP = null; })); }
+  async function askMotionOnce() {
+    if (!needPerm) { listenMotion(); return; }
+    if (permState === 'granted') { listenMotion(); return; }
     try {
-      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { const r = await DeviceMotionEvent.requestPermission(); if (r !== 'granted') return; }
-      if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); }
-    } catch (e) { if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); } /* no permission API problem: just listen */ }
+      const r = await DeviceMotionEvent.requestPermission();
+      permState = r === 'granted' ? 'granted' : 'denied';
+      if (permState === 'granted') { listenMotion(); try { DeviceOrientationEvent.requestPermission && DeviceOrientationEvent.requestPermission().catch(() => {}); } catch (_) {} }
+    } catch (e) { /* not called from a tap: stays 'unknown' so the Enable button keeps showing */ }
+    motionGate();
   }
-  if (!(typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) askMotion();
+  // the gate: a big "Enable motion" card for phones that need permission
+  function motionGate() {
+    let el = document.getElementById('motionGate');
+    const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const show = needPerm && touch && permState !== 'granted' && joined;
+    if (!show) { if (el) el.remove(); return; }
+    const big = layout && (layout.name === 'swing' || layout.name === 'shake' || (layout.name === 'pad' && layout.stick));
+    if (!el) { el = document.createElement('div'); el.id = 'motionGate'; document.body.appendChild(el); }
+    el.className = big ? 'big' : '';
+    el.innerHTML = permState === 'denied'
+      ? `<div class="mgCard"><div class="mgEm">🚫📱</div><b>Motion was blocked</b><p>iPhone remembers "Don't Allow" until Safari restarts. Swipe Safari closed in the app switcher, open the game link again, then tap <b>Allow</b>.</p><button class="mgBtn" id="mgTry">Try again</button><button class="mgSkip" id="mgSkip">Play with touch instead</button></div>`
+      : `<div class="mgCard"><div class="mgEm">📱✨</div><b>Turn on motion controls</b><p>Needed to swing, steer and shake. Tap the button, then tap <b>Allow</b>.</p><button class="mgBtn" id="mgGo">Enable motion</button><button class="mgSkip" id="mgSkip">${big ? 'Play with touch instead' : 'Later'}</button></div>`;
+    const go = el.querySelector('#mgGo, #mgTry');
+    // call requestPermission synchronously inside the click — no awaits before it
+    go.onclick = () => { askMotion().then(() => { if (permState === 'granted') { toast('Motion on! 🎉'); if (layout && layout.name === 'swing') setTimeout(() => render(layout), 300); } }); };
+    const sk = el.querySelector('#mgSkip'); if (sk) sk.onclick = () => { el.remove(); motionGate.skipped = true; };
+    if (motionGate.skipped && !big) el.remove();
+  }
+  if (!needPerm) askMotion();
   function onMotion(e) {
     const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
     if (!motionSeen) { motionSeen = true; updateTiltUI(); if (layout && layout.name === 'swing') setTimeout(() => render(layout), 0); }
@@ -139,6 +168,7 @@
   function render(L) {
     layout = L; resetInput(); pumps = 0;
     if ((L.name === 'pad' && L.stick) || L.name === 'swing') recenterSoon = true;
+    if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
     const R = { swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
     if (R[L.name]) R[L.name](L);
@@ -344,7 +374,7 @@
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong' }); } catch (e) {} return; }
     if (m.t === 'welcome') {
-      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false);
+      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); setTimeout(motionGate, 50);
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meName').textContent = `${m.avatar} ${m.name}`;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
@@ -422,5 +452,6 @@
   });
   addEventListener('orientationchange', () => { neutral = null; });
   // iPhone: motion permission needs a tap — ask on the first tap anywhere
-  if (!motionOn) document.addEventListener('pointerdown', function once() { askMotion(); document.removeEventListener('pointerdown', once); });
+  // any real tap ('click' / 'touchend' count as a user gesture on iPhone) also asks, until it's granted
+  if (needPerm) { const tryAsk = () => { if (permState === 'unknown') askMotion(); if (permState !== 'unknown') { document.removeEventListener('click', tryAsk, true); document.removeEventListener('touchend', tryAsk, true); } }; document.addEventListener('click', tryAsk, true); document.addEventListener('touchend', tryAsk, true); }
 })();
