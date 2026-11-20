@@ -34,7 +34,7 @@
   if (!(typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) askMotion();
   function onMotion(e) {
     const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
-    if (!motionSeen) { motionSeen = true; updateTiltUI(); }
+    if (!motionSeen) { motionSeen = true; updateTiltUI(); if (layout && layout.name === 'swing') setTimeout(() => render(layout), 0); }
     let ax = a.x, ay = a.y, az = a.z || 0; if (isIOS) { ax = -ax; ay = -ay; az = -az; }
     const ang = (((screen.orientation && screen.orientation.angle) ?? (window.orientation || 0)) % 360 + 360) % 360;
     let ux, uy;
@@ -51,7 +51,7 @@
       if (strength > 1 && now - lastSwing > 420) swing(clamp(0.5 + (strength - 1) * 0.5, 0.5, 1), 'motion');
     }
   }
-  const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || (layout.name === 'swing' && layout.aim));
+  const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || layout.name === 'swing');
   function updateTiltUI() {
     const show = tiltApplies();
     $('#tiltBtn').classList.toggle('hidden', !show); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
@@ -138,7 +138,7 @@
   // ---------- layouts ----------
   function render(L) {
     layout = L; resetInput(); pumps = 0;
-    if ((L.name === 'pad' && L.stick) || (L.name === 'swing' && L.aim)) recenterSoon = true;
+    if ((L.name === 'pad' && L.stick) || L.name === 'swing') recenterSoon = true;
     if (L.name !== 'cards') lastHand = null;
     const R = { swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
     if (R[L.name]) R[L.name](L);
@@ -267,28 +267,32 @@
     const z = document.getElementById('swz'); if (z) { z.classList.remove('flash'); void z.offsetWidth; z.classList.add('flash'); }
     const lb = document.getElementById('swPowTxt'); if (lb) lb.textContent = power > 0.85 ? 'MONSTER SWING! 💥' : power > 0.65 ? 'Nice swing!' : 'Swing!';
   }
+  // Motion sports are played with MOTION ONLY: tilt the phone to aim, swing it to hit.
+  // Tap / drag only appear as a fallback when the device has no motion (PC, or motion blocked).
   function renderSwing(L) {
-    const [icon, noun] = SPORT[L.sport] || ['🏏', 'a bat'];
-    stage.innerHTML = `<div class="swingPad">
-      ${L.aim ? `<div class="aimBar" id="aimBar"><div class="aimTrack"><i id="aimDot"></i></div><small>⬅ tilt or drag here to aim ➡</small></div>` : ''}
+    const [icon, noun] = SPORT[L.sport] || ['🏏', 'a bat'], motion = motionSeen && tiltOn;
+    stage.innerHTML = `<div class="swingPad ${motion ? 'motion' : ''}">
+      <div class="aimBar" id="aimBar"><div class="aimTrack"><i id="aimDot"></i></div><small>${motion ? '📱 TILT your phone left / right to aim 🎯' : '⬅ drag here to aim ➡'}</small></div>
       <div class="swingZone" id="swz">
         <div class="swRings"><i></i><i></i><i></i></div>
         <div class="swIcon" id="swIcon">${icon}</div>
-        <div class="swLabel">${esc(L.label || 'SWING!')}</div>
-        <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motionSeen ? 'Swing your phone like ' + noun + '!' : 'Tap here to swing'}</div>
-        <div class="swHint">${esc(L.hint || '')}<br><small>${motionSeen ? 'No room to swing? Just tap here.' : ''} PC: Space</small></div>
+        <div class="swLabel">${motion ? 'SWING IT!' : esc(L.label || 'SWING!')}</div>
+        <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motion ? 'Hold it like ' + noun + ' and SWING!' : 'Motion is off'}</div>
+        <div class="swHint">${motion ? 'Hold the phone tight · tilt to aim · swing to hit' : esc(L.hint || '')}</div>
+        ${motion ? '<button class="chip" id="swCenter">⟲ Re-center aim</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
       </div></div>`;
-    const z = $('#swz');
-    z.addEventListener('pointerdown', e => { if (e.target.closest('#aimBar')) return; swing(0.7, 'tap'); });
-    if (L.aim) {
-      const bar = $('#aimBar'); let pid = null;
-      const setX = e => { const r = bar.getBoundingClientRect(); stick.x = clamp(((e.clientX - r.left) / r.width - 0.5) * 2.2); stick.y = 0; flush(); };
-      bar.addEventListener('pointerdown', e => { pid = e.pointerId; try { bar.setPointerCapture(pid); } catch (_) {} stick.active = true; setX(e); });
-      bar.addEventListener('pointermove', e => { if (e.pointerId === pid) setX(e); });
-      // keep the aim where you left it (don't spring back to the middle)
-      const end = e => { if (e.pointerId !== pid) return; pid = null; };
-      bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
+    if (motion) {
+      $('#swCenter').onclick = e => { e.stopPropagation(); neutral = grav ? { ...grav } : null; toast('Aim centered'); };
+      return;
     }
+    $('#swMotion').onclick = async e => { e.stopPropagation(); if (!tiltOn) { tiltOn = true; store.set('cc_tilt', '1'); } await askMotion(); setTimeout(() => { if (motionSeen) render(layout); else toast('This device has no motion sensor — tap to swing instead'); }, 600); };
+    $('#swz').addEventListener('pointerdown', e => { if (e.target.closest('#aimBar, button')) return; swing(0.7, 'tap'); });
+    const bar = $('#aimBar'); let pid = null;
+    const setX = e => { const r = bar.getBoundingClientRect(); stick.x = clamp(((e.clientX - r.left) / r.width - 0.5) * 2.2); stick.y = 0; flush(); };
+    bar.addEventListener('pointerdown', e => { pid = e.pointerId; try { bar.setPointerCapture(pid); } catch (_) {} stick.active = true; setX(e); });
+    bar.addEventListener('pointermove', e => { if (e.pointerId === pid) setX(e); });
+    const end = e => { if (e.pointerId !== pid) return; pid = null; };
+    bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
   }
   function renderButton(L) {
     stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p><p class="muted" style="font-size:13px">PC: Space</p></div>`;

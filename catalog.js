@@ -10,11 +10,11 @@ const CATEGORIES = [
 const GAMES = [
   // 🎾 motion sports (swing the phone)
   { id: 'tennis', cat: 'sports', name: 'Smash Tennis', emoji: '🎾', art: ['#d8f5a2', '#2b8a3e'], ctrl: 'swing', players: '1-8', mins: 3,
-    desc: 'Red vs Blue in a roaring 3D stadium. Swing your phone like a racket — perfect timing fires a flaming SMASH!', how: ['Your player runs to the ball for you', 'Swing when the ring closes on you', 'Early = hit left, late = hit right. First to 5!'], make: c => new SmashTennis(c) },
+    desc: 'Real 3D tennis in a roaring stadium. Hold your phone like a racket: tilt to aim, swing to hit. Perfect timing = flaming SMASH!', how: ['Hold the phone like a racket', 'TILT left/right to move your 🎯 target', 'SWING when the ring closes on you. First to 5!'], make: c => new SmashTennis(c) },
   { id: 'bowling', cat: 'sports', name: 'Strike Bowling', emoji: '🎳', art: ['#e599f7', '#5f3dc4'], ctrl: 'swing', players: '1-8', mins: 4,
-    desc: 'Neon bowling alley. Tilt to aim, swing your arm to roll, watch the pins explode in slow-mo.', how: ['Tilt (or drag) to aim the ball', 'Swing your phone like a bowling arm', 'Strike = 20, spare = 15'], make: c => new StrikeBowling(c) },
+    desc: 'Real 3D neon bowling alley. Tilt to line up the ball, swing your arm to roll, pins fly in slow-mo.', how: ['TILT the phone to slide the ball + 🎯 line', 'SWING your arm like a real bowl', 'Strike = 20, spare = 15'], make: c => new StrikeBowling(c) },
   { id: 'derby', cat: 'sports', name: 'Home Run Derby', emoji: '⚾', art: ['#ffe066', '#e8590c'], ctrl: 'swing', players: '1-8', mins: 2,
-    desc: 'Everyone bats at the same pitch! Time your swing to blast it out of the stadium.', how: ['Watch the pitcher throw', 'Swing as the ring closes on the plate', 'Farthest total distance wins'], make: c => new HomeRunDerby(c) },
+    desc: 'Everyone bats at the same pitch! Time your swing to blast it out of the stadium.', how: ['TILT to aim at left / right field 🎯', 'SWING the phone as the ring closes on the plate', 'Farthest total distance wins'], make: c => new HomeRunDerby(c) },
   // ❄️ winter
   { id: 'snowball', cat: 'winter', name: 'Snowball Fight', emoji: '☃️', art: ['#74c0fc', '#1864ab'], ctrl: 'move', players: '2-8', mins: 2,
     desc: 'Pelt your family with snowballs and hide behind snow forts.', how: ['Move with the stick, tilt or WASD', 'THROW fires where you aim', 'Most hits in 75 seconds wins'], make: c => new SnowballFight(c) },
