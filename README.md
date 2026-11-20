@@ -23,6 +23,8 @@ Every game starts with a how-to-play screen; everyone taps READY on their phone.
 3. The 👑 VIP (first to join) gets a remote on their phone (◀ ▶ ▲ ▼ + OK) to browse the TV menu — or use the TV keyboard/mouse. **Esc** = back to the menu.
 4. Returning players just open the link again — they rejoin automatically.
 
+**📷 AI camera (no phones needed):** in the lobby, tap *Use this phone as the AI camera* and stand that phone by the TV facing the room. It tracks up to 4 people with body-pose AI (MediaPipe, runs in the browser): swing an arm to hit, point to aim, lean to steer, hand up = button, wave = shake. Camera players join the motion games; the camera phone gets a small TV remote.
+
 Players on mobile data or another network? Add a free relay link in `turn-config.js` (instructions inside).
 
 Phones: motion needs **HTTPS** (every host below gives you that). On iPhone, tap "Allow" for motion when joining.

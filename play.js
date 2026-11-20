@@ -73,7 +73,7 @@
   function motionGate() {
     let el = document.getElementById('motionGate');
     const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    const show = needPerm && touch && permState !== 'granted' && joined;
+    const show = needPerm && touch && permState !== 'granted' && joined && !camMode;
     if (!show) { if (el) el.remove(); return; }
     const big = layout && (layout.name === 'swing' || layout.name === 'shake' || (layout.name === 'pad' && layout.stick));
     if (!el) { el = document.createElement('div'); el.id = 'motionGate'; document.body.appendChild(el); }
@@ -224,7 +224,7 @@
     } else { const el = document.getElementById('calib'); if (el) el.remove(); sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); }
   }
   // start once motion is actually working (after the Enable-motion tap on iPhone)
-  function maybeCalib() { if (joined && !calDone && !calRun && motionSeen && (!needPerm || permState === 'granted')) startCalib(); }
+  function maybeCalib() { if (camMode) return; if (joined && !calDone && !calRun && motionSeen && (!needPerm || permState === 'granted')) startCalib(); }
   setInterval(maybeCalib, 400);
 
   // ---------- input state ----------
@@ -281,7 +281,17 @@
   addEventListener('blur', resetInput);
 
   // ---------- layouts ----------
+  let camMode = false;
+  function startCam() {
+    if (!window.CCCam) return toast('AI camera not available');
+    camMode = true; calDone = true; if (calRun) endCalib(false); const mg = document.getElementById('motionGate'); if (mg) mg.remove();
+    sendMsg({ t: 'camOn' }); CCCam.start(m => sendMsg(m), stage, toast);
+  }
+  addEventListener('cc-cam-stop', () => { camMode = false; sendMsg({ t: 'camOff' }); stage.innerHTML = '<div class="center"><p>Back to being a player…</p></div>'; });
+  const camBtnHtml = () => `<button class="camBtn" id="camB">📷 Use this phone as the AI camera<small>Body tracking for up to 4 players — no phones needed</small></button>`;
+  function bindCamBtn() { const b = document.getElementById('camB'); if (b) b.onclick = startCam; }
   function render(L) {
+    if (camMode) return; // the camera phone ignores game screens
     layout = L; resetInput(); pumps = 0;
     if ((L.name === 'pad' && L.stick) || L.name === 'swing') recenterSoon = true;
     if (L.name === 'swing') orRecenter = true;
@@ -297,8 +307,8 @@
   let showList = false;
   function renderLobby(L) {
     if (!L.vip) {
-      stage.innerHTML = `<div class="center"><div class="bigEm">${esc(me ? me.avatar : '🎉')}</div><h2>You're in, ${esc(me ? me.name : '')}!</h2>${L.trophies ? `<p>🏆 ${L.trophies} trophies</p>` : ''}<p class="muted">👑 <b>${esc(L.vipName || 'The VIP')}</b> is picking a game on the TV…</p></div>`;
-      return;
+      stage.innerHTML = `<div class="center"><div class="bigEm">${esc(me ? me.avatar : '🎉')}</div><h2>You're in, ${esc(me ? me.name : '')}!</h2>${L.trophies ? `<p>🏆 ${L.trophies} trophies</p>` : ''}<p class="muted">👑 <b>${esc(L.vipName || 'The VIP')}</b> is picking a game on the TV…</p>${camBtnHtml()}</div>`;
+      bindCamBtn(); return;
     }
     const list = showList ? L.cats.map(c => `<div class="catH">${esc(c.name)}</div>` + L.games.filter(gm => gm.cat === c.id).map(gm => `<button class="gbtn" data-g="${esc(gm.id)}"><span class="ge">${gm.emoji}</span><span><b>${esc(gm.name)}</b></span></button>`).join('')).join('') : '';
     stage.innerHTML = `<div class="remote">
@@ -307,7 +317,8 @@
       <div class="dpad"><span></span><button data-d="up">▲</button><span></span><button data-d="left">◀</button><button class="ok" data-d="ok">OK</button><button data-d="right">▶</button><span></span><button data-d="down">▼</button><span></span></div>
       <div class="qbtns"><button id="partyB">🎉 Party Mode</button><button id="randB" class="alt">🎲 Surprise Me</button></div>
       <button class="linkBtn" id="listT">${showList ? 'Hide game list' : 'Or pick from a list'}</button>
-      <div class="gbtns">${list}</div></div>`;
+      <div class="gbtns">${list}</div>${camBtnHtml()}</div>`;
+    bindCamBtn();
     stage.querySelectorAll('.dpad button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); sendMsg({ t: 'nav', d: b.dataset.d }); navigator.vibrate?.(10); }));
     $('#partyB').onclick = () => sendMsg({ t: 'party' }); $('#randB').onclick = () => sendMsg({ t: 'random' });
     $('#listT').onclick = () => { showList = !showList; renderLobby(L); };
@@ -491,7 +502,7 @@
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong' }); } catch (e) {} return; }
     if (m.t === 'welcome') {
-      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) });
+      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) });
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meName').textContent = `${m.avatar} ${m.name}`;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);

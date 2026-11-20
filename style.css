@@ -307,3 +307,19 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .clMeter { width: 100%; height: 16px; border-radius: 8px; background: rgba(255,255,255,.1); overflow: hidden; }
 .clMeter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #4dabff, #51cf66); transition: width .08s linear; }
 .clDone { font-size: 90px; animation: swHit .6s cubic-bezier(.2,1.6,.4,1); }
+
+/* ---------- AI camera ---------- */
+.camBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 16px; background: linear-gradient(135deg, #3b1f7a, #1c3d7a); border: 2px solid #a5d8ff55; color: #fff; font-weight: 900; font-size: 16px; display: flex; flex-direction: column; gap: 2px; }
+.camBtn small { color: #a5d8ff; font-weight: 700; font-size: 12px; }
+.camWrap { height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+.camView { position: relative; flex: 1; min-height: 0; border-radius: 18px; overflow: hidden; background: #000; }
+.camView video, .camView canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.camHud { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 14px; color: #c5d4f0; }
+.camHud b { font-family: 'Bungee', Impact, sans-serif; color: #ffd43b; font-weight: 400; }
+.camTips { font-size: 13px; color: #a5b4d8; line-height: 1.35; }
+.camBtns { display: flex; gap: 8px; justify-content: center; }
+
+.camRemote { display: flex; gap: 6px; justify-content: center; }
+.camRemote button { width: 46px; height: 42px; border-radius: 12px; background: rgba(255,255,255,.1); color: #fff; font-size: 18px; font-weight: 900; }
+.camRemote button.ok { background: #ffd43b; color: #1a0f00; width: 58px; font-family: 'Bungee', Impact, sans-serif; font-size: 15px; }
+.camRemote button.bk { background: rgba(255,77,109,.3); }

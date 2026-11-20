@@ -463,7 +463,7 @@ class SmashTennis extends Sport3D {
     clock(g, this.T);
     this.overlays(g);
     if (this.winTeam != null && this.phase === 'point') txt(g, `${this.winTeam === 0 ? '🔴 RED' : '🔵 BLUE'} WINS!`, 800, 600, 96, this.winTeam === 0 ? '#ff4d6d' : '#4dabff');
-    if (this.phase === 'cd') { this.cd.draw(g); txt(g, 'Tilt / drag your phone to move your 🎯 target', 800, 700, 34, '#fff', 'center', 'Nunito'); }
+    if (this.phase === 'cd') { this.cd.draw(g); txt(g, 'Turn your phone — or point your arm 📷 — to move your 🎯 target', 800, 700, 34, '#fff', 'center', 'Nunito'); }
   }
 }
 
@@ -800,6 +800,6 @@ class HomeRunDerby extends Sport3D {
     strip(g, rankBy(this.ps, p => this.dist.get(p), () => '').map(r => ({ name: r.p.name, color: r.p.color, val: this.dist.get(r.p) + 'm' })));
     txt(g, `PITCH ${Math.min(this.n, this.N)}/${this.N}`, 1500, 110, 22, '#adb5bd');
     this.overlays(g);
-    if (this.phase === 'cd') { this.cd.draw(g); txt(g, 'Tilt / drag your phone to move your 🎯 in the outfield', 800, 700, 34, '#fff', 'center', 'Nunito'); }
+    if (this.phase === 'cd') { this.cd.draw(g); txt(g, 'Turn your phone — or point your arm 📷 — to aim your 🎯', 800, 700, 34, '#fff', 'center', 'Nunito'); }
   }
 }

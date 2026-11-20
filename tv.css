@@ -119,3 +119,6 @@ body.tv { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transparen
 .pod .pav { animation: podBounce 1.2s ease-in-out infinite; }
 .pod.p1 .pav { animation-duration: .8s; }
 @keyframes podBounce { 50% { transform: translateY(-1.4vh) rotate(6deg); } }
+
+/* AI camera picture-in-picture */
+#camView { position: fixed; right: 1.5vw; bottom: 4.5vh; width: 22vw; aspect-ratio: 4/3; height: auto; z-index: 6; border-radius: 1.6vh; border: 2px solid rgba(165,216,255,.4); box-shadow: 0 1vh 4vh rgba(0,0,0,.5); }

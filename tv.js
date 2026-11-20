@@ -53,15 +53,18 @@
     if (window.QRCode) new QRCode(q, { text: joinUrl(), width: 256, height: 256, colorDark: '#0a1024', colorLight: '#ffffff' });
   }
   function send(p, m) { if (p && !p.bot && p.conn && p.conn.open) { try { p.conn.send(m); } catch (e) {} } }
-  const humans = () => S.players.filter(p => p.connected);
-  const vip = () => humans()[0] || null;
+  // players = connected phones + people seen by the AI camera (the camera phone itself is not a player)
+  const humans = () => S.players.filter(p => p.connected && !p.isCam);
+  const vip = () => humans().find(p => !p.cam) || null;
+  const CAM_OK = ['swing', 'move', 'shake']; // body-tracked players join motion games only
+  const camFits = () => !S.def || CAM_OK.includes(S.def.ctrl);
 
   function onMsg(conn, m) {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join') return onJoin(conn, m);
     const p = S.players.find(q => q.conn === conn); if (!p) return;
     p.lastSeen = Date.now(); if (m.t === 'pong') { p.pongAt = p.lastSeen; return; }
-    const isVip = p === vip();
+    const isVip = p === vip() || (p.isCam && !vip());
     switch (m.t) {
       case 'in': {
         const prev = p.input; p.input = { x: +m.x || 0, y: +m.y || 0, a: !!m.a, b: !!m.b };
@@ -70,7 +73,12 @@
       }
       case 'act': if (S.state === 'game' && S.game && S.game.onAct) S.game.onAct(p, m); break;
       case 'pump': if (S.state === 'game' && S.game && S.game.onPump) S.game.onPump(p, +m.n || 1); break;
-      case 'ready': if (S.state === 'intro') { S.ready.add(p); renderReady(); if (humans().every(h => S.ready.has(h))) launchSoon(0.8); } break;
+      case 'ready': if (S.state === 'intro') { S.ready.add(p); renderReady(); if (humans().filter(h => !h.cam).every(h => S.ready.has(h))) launchSoon(0.8); } break;
+      case 'camOn': p.isCam = true; p.input = { x: 0, y: 0, a: false, b: false }; banner('📷 AI camera is ON — step into view!', 2200, '#a5d8ff'); renderPlayers(); if (S.state === 'home') sendLobby(); break;
+      case 'camOff': p.isCam = false; camDrop(); renderPlayers(); if (S.state === 'home') sendLobby(); break;
+      case 'cam': if (p.isCam && Array.isArray(m.ppl)) camFrame(m.ppl); break;
+      case 'camSwing': { const cp = S.cam && S.cam[m.s]; if (cp && cp.connected && S.state === 'game' && S.game && S.game.onAct && S.game.ps && S.game.ps.includes(cp)) S.game.onAct(cp, { a: 'swing', p: +m.p || 0.6 }); if (cp) cp.swingFx = performance.now(); break; }
+      case 'camPump': { const cp = S.cam && S.cam[m.s]; if (cp && S.state === 'game' && S.game && S.game.onPump) S.game.onPump(cp, 1); break; }
       case 'pick': if (isVip && S.state === 'home') { const d = GAMES.find(x => x.id === m.g); if (d) { focusGame(d.id); startIntro(d); } } break;
       case 'party': if (isVip && S.state === 'home') startParty(); break;
       case 'random': if (isVip && S.state === 'home') surprise(); break;
@@ -100,8 +108,54 @@
       else send(p, { t: 'layout', layout: { name: 'msg', emoji: '🍿', text: 'Game in progress', sub: "Watch the TV — you're in the next one!" } });
     } else send(p, { t: 'layout', layout: { name: 'msg', emoji: '🏁', text: 'Results!', sub: 'Look at the TV' } });
   }
+  // ---------- AI camera players ----------
+  const CAM_AV = ['🕺', '💃', '🤸', '🏃'];
+  function camFrame(ppl) {
+    S.cam = S.cam || {}; S.camAt = performance.now(); let changed = false;
+    for (const q of ppl) {
+      let cp = S.cam[q.s];
+      if (!cp) {
+        if (S.players.filter(x => x.connected && !x.isCam).length >= 8) continue;
+        const used = new Set(S.players.filter(x => x.connected).map(x => x.color)), idx = COLORS.findIndex(c => !used.has(c));
+        cp = S.cam[q.s] = { cid: 'cam' + q.s, name: `Cam ${q.s + 1}`, color: COLORS[Math.max(0, idx)], avatar: CAM_AV[q.s % 4], cam: true, conn: null, connected: true, trophies: 0, input: { x: 0, y: 0, a: false, b: false } };
+        S.players.push(cp); changed = true; banner(`${cp.avatar} ${cp.name} joined (camera)`, 1400, cp.color);
+      }
+      if (!cp.connected) { cp.connected = true; changed = true; }
+      cp.seen = performance.now(); cp.k = q.k;
+      const prevA = cp.input.a;
+      cp.input = { x: (S.def && S.def.ctrl === 'swing') ? +q.x || 0 : +q.l || 0, y: 0, a: !!q.u, b: false };
+      if (S.state === 'game' && S.game && S.game.onButton && S.game.ps && S.game.ps.includes(cp) && !prevA && cp.input.a) S.game.onButton(cp, 'a');
+    }
+    if (changed) { renderPlayers(); if (S.state === 'intro') renderReady(); }
+  }
+  function camDrop() { for (const k in (S.cam || {})) S.cam[k].connected = false; }
+  setInterval(() => { // people who left the camera view for 6 s leave the game
+    let ch = false; const now = performance.now();
+    for (const k in (S.cam || {})) { const cp = S.cam[k]; if (cp.connected && now - cp.seen > 6000) { cp.connected = false; ch = true; } }
+    if (ch) renderPlayers();
+  }, 1000);
+  // live skeleton picture-in-picture so players can see the camera tracking them
+  function drawCamView() {
+    const cv = document.getElementById('camView'); if (!cv) return;
+    const on = S.camAt && performance.now() - S.camAt < 3000 && S.state !== 'boot'; cv.classList.toggle('hidden', !on); if (!on) return;
+    const g2 = cv.getContext('2d'), W2 = cv.width, H2 = cv.height; g2.clearRect(0, 0, W2, H2);
+    g2.fillStyle = 'rgba(8,5,25,.78)'; g2.fillRect(0, 0, W2, H2); g2.lineCap = 'round';
+    const E = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
+    for (const k in (S.cam || {})) {
+      const cp = S.cam[k]; if (!cp.connected || !cp.k || performance.now() - cp.seen > 800) continue;
+      const P = i => ({ x: (1 - cp.k[i * 2]) * W2, y: cp.k[i * 2 + 1] * H2 }); // mirrored, like looking in a mirror
+      const hot = performance.now() - (cp.swingFx || 0) < 300;
+      g2.strokeStyle = cp.color; g2.lineWidth = hot ? 9 : 5;
+      for (const [a, b] of E) { const A = P(a), B = P(b); g2.beginPath(); g2.moveTo(A.x, A.y); g2.lineTo(B.x, B.y); g2.stroke(); }
+      const n = P(0); g2.fillStyle = cp.color; g2.beginPath(); g2.arc(n.x, n.y, 10, 0, TAU); g2.fill();
+      g2.font = '900 20px Nunito, sans-serif'; g2.textAlign = 'center'; g2.fillStyle = '#fff'; g2.fillText(cp.name + (hot ? ' 💥' : ''), n.x, n.y - 18);
+    }
+    g2.font = '16px Bungee, Impact, sans-serif'; g2.textAlign = 'left'; g2.fillStyle = '#ffd43b'; g2.fillText('📷 AI CAMERA', 10, 22);
+  }
+  setInterval(drawCamView, 66);
   function onClose(conn) {
     const p = S.players.find(q => q.conn === conn); if (!p) return;
+    if (p.isCam) { p.isCam = false; camDrop(); }
     p.connected = false; p.conn = null; p.input = { x: 0, y: 0, a: false, b: false };
     if (S.state === 'home') { renderPlayers(); sendLobby(); }
   }
@@ -175,7 +229,7 @@
   }
   function renderPlayers() {
     const v = vip();
-    $('#avatars').innerHTML = S.players.map(p => `<div class="av2 ${p.connected ? '' : 'away'}" style="--c:${p.color}" title="${esc(p.name)}">${p === v ? '<span class="crown">👑</span>' : ''}${p.avatar}</div>`).join('');
+    $('#avatars').innerHTML = S.players.map(p => `<div class="av2 ${p.connected ? '' : 'away'}" style="--c:${p.color}" title="${esc(p.name)}${p.isCam ? ' (AI camera)' : ''}">${p === v ? '<span class="crown">👑</span>' : ''}${p.isCam ? '📷' : p.avatar}</div>`).join('');
     if (S.state === 'home') buildRows();
   }
   function sendLobby() {
@@ -215,7 +269,7 @@
     clearTimeout(launchT); launchT = null;
   }
   function sendIntro(p) { const d = S.def; p.layout = { name: 'intro', emoji: d.emoji, title: d.name, how: d.how, ctrl: CTRL_LABEL[d.ctrl], ready: S.ready.has(p) }; send(p, { t: 'layout', layout: p.layout }); }
-  function renderReady() { $('#introReady').innerHTML = humans().map(p => `<span class="rchip ${S.ready.has(p) ? 'ok' : ''}" style="--c:${p.color}">${S.ready.has(p) ? '✓ ' : ''}${p.avatar} ${esc(p.name)}</span>`).join(''); }
+  function renderReady() { $('#introReady').innerHTML = humans().filter(p => !p.cam || camFits()).map(p => p.cam ? `<span class="rchip ok" style="--c:${p.color}">📷 ${p.avatar} ${esc(p.name)}</span>` : `<span class="rchip ${S.ready.has(p) ? 'ok' : ''}" style="--c:${p.color}">${S.ready.has(p) ? '✓ ' : ''}${p.avatar} ${esc(p.name)}</span>`).join(''); }
   function launchSoon(s) { if (launchT) return; launchT = setTimeout(() => { launchT = null; launch(); }, s * 1000); }
   // big diagonal colour wipe between screens
   function wipe(c1, c2) {
@@ -245,7 +299,7 @@
     return {
       W, H, sfx: SFX, banner, humans,
       roster(min) {
-        const list = humans().slice(); let i = 0;
+        const list = humans().filter(p => !p.cam || camFits()); let i = 0;
         while (list.length < min) { const used = new Set(list.map(p => p.color)); list.push({ cid: 'bot' + i, name: BOT_NAMES[i % BOT_NAMES.length], color: COLORS.find(c => !used.has(c)) || '#aaa', avatar: '🤖', bot: true, input: { x: 0, y: 0, a: false, b: false } }); i++; }
         return list;
       },
