@@ -323,3 +323,26 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .camRemote button { width: 46px; height: 42px; border-radius: 12px; background: rgba(255,255,255,.1); color: #fff; font-size: 18px; font-weight: 900; }
 .camRemote button.ok { background: #ffd43b; color: #1a0f00; width: 58px; font-family: 'Bungee', Impact, sans-serif; font-size: 15px; }
 .camRemote button.bk { background: rgba(255,77,109,.3); }
+
+/* ---------- game night panel (cards + buttons) ---------- */
+.gpanel { height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.gpanel.my { background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--c, #4dabff) 25%, transparent), transparent 60%); }
+.gpTop { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.gpTop b { font-family: 'Bungee', Impact, sans-serif; font-weight: 400; font-size: 18px; color: #fff; }
+.gpanel.my .gpTop b { color: #ffd43b; animation: swIdle 1.4s ease-in-out infinite; display: inline-block; }
+.gpTop span { color: #a5d8ff; font-size: 13px; font-weight: 800; }
+.gpSub { background: rgba(255,255,255,.08); border-radius: 12px; padding: 8px 10px; font-size: 14px; color: #dbe4ff; font-weight: 700; }
+.gpHand { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 8px; align-content: start; padding: 4px; }
+.tcard { aspect-ratio: 5/7; border-radius: 12px; background: linear-gradient(160deg, var(--cc), color-mix(in srgb, var(--cc) 55%, #000)); border: 3px solid rgba(255,255,255,.85); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; box-shadow: 0 6px 12px rgba(0,0,0,.35); opacity: .45; transition: transform .12s, opacity .12s; }
+.tcard.ok { opacity: 1; animation: cardPulse 1.6s ease-in-out infinite; }
+.tcard.ok:active { transform: translateY(-10px) scale(1.06); }
+.tcard.gone { transform: translateY(-40px) scale(.6); opacity: 0; }
+@keyframes cardPulse { 50% { box-shadow: 0 0 0 3px #fff, 0 0 18px var(--cc); } }
+.tcard .tci { font-size: 26px; line-height: 1; }
+.tcard b { font-family: 'Bungee', Impact, sans-serif; font-weight: 400; font-size: 17px; text-shadow: 0 2px 0 rgba(0,0,0,.4); text-align: center; line-height: 1.05; word-break: break-word; }
+.tcard small { font-size: 10px; font-weight: 800; opacity: .9; text-align: center; }
+.gpBtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.pbtn2 { flex: 1 1 40%; min-height: 50px; border-radius: 14px; background: var(--bc); color: #0a1024; font-weight: 900; font-size: 15px; box-shadow: 0 5px 0 rgba(0,0,0,.35); padding: 6px 8px; }
+.pbtn2.big { flex-basis: 100%; min-height: 62px; font-family: 'Bungee', Impact, sans-serif; font-weight: 400; font-size: 19px; }
+.pbtn2:disabled { filter: grayscale(1); opacity: .45; }
+.pbtn2:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,.35); }

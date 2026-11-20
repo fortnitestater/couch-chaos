@@ -2,14 +2,14 @@
 
 A free family party game: the **TV is the screen** and every **phone or PC is a controller**.
 
-## Games (36) — ❄️ Winter Edition
+## Games (39) — ❄️ Winter Edition
 Most games only need taps on the phone. Motion games also work with on-screen sticks or a PC keyboard.
 
 | Row | Games |
 |-----|-------|
 | 🎾 Motion Sports | Smash Tennis · Strike Bowling · Home Run Derby (3D, swing your phone like a racket/arm/bat) |
 | ❄️ Winter | Snowball Fight · Ski Slalom · Ice Hockey · Snow Curling · Iceberg Sumo · Frozen Lake · Sled Dash |
-| 🃏 Cards & Table | Wild Eights · Bingo · Dice Duel · Four in a Row · Memory Match · Word Rescue · Higher or Lower |
+| 🃏 Cards & Table | Color Storm · Avalanche! · Snow Tycoon (our own card & board games) · Wild Eights · Bingo · Dice Duel · Four in a Row · Memory Match · Word Rescue · Higher or Lower |
 | 💣 Bombs & Party | Bomb Squad · Hot Potato Bomb · Odd Elf Out · Most Likely To · Doodle Dash · Lowest Unique · RPS Royale |
 | 🧠 Brain | Trivia Blitz · Color Clash · Count It! · Copy Cat · Quick Math |
 | ⚡ Action | Sky Brawl · Light Trails · Paint Wars · Coin Rush · Target Blast · Reflex Rush · Stop the Meter |

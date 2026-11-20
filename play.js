@@ -309,7 +309,7 @@
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -478,6 +478,16 @@
     const end = e => { if (e.pointerId !== pid) return; pid = null; };
     bar.addEventListener('pointerup', end); bar.addEventListener('pointercancel', end);
   }
+  // generic game panel: your private cards (tap to play) + action buttons
+  let lastPanel = null;
+  function renderPanel(m) {
+    const cards = (m.cards || []).map((c, i) => `<button class="tcard ${c.ok ? 'ok' : ''}" data-i="${i}" ${c.ok ? '' : 'disabled'} style="--cc:${esc(c.color || '#495057')}">${c.icon ? `<span class="tci">${esc(c.icon)}</span>` : ''}<b>${esc(c.label)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</button>`).join('');
+    const btns = (m.buttons || []).map(b => `<button class="pbtn2 ${b.big ? 'big' : ''}" data-b="${esc(b.id)}" ${b.off ? 'disabled' : ''} style="--bc:${esc(b.color || '#4dabff')}">${esc(b.label)}</button>`).join('');
+    stage.innerHTML = `<div class="gpanel ${m.myTurn ? 'my' : ''}"><div class="gpTop"><b>${esc(m.title || '')}</b><span>${esc(m.info || '')}</span></div>
+      ${m.sub ? `<div class="gpSub">${esc(m.sub)}</div>` : ''}<div class="gpHand">${cards || '<div class="muted" style="padding:20px">No cards</div>'}</div><div class="gpBtns">${btns}</div></div>`;
+    stage.querySelectorAll('.tcard.ok').forEach(b => (b.onclick = () => { sendMsg({ t: 'act', a: 'card', i: +b.dataset.i }); navigator.vibrate?.(20); b.classList.add('gone'); }));
+    stage.querySelectorAll('.pbtn2').forEach(b => (b.onclick = () => { sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }); navigator.vibrate?.(25); }));
+  }
   function renderButton(L) {
     stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p><p class="muted" style="font-size:13px">PC: Space</p></div>`;
     bindHold($('#tap'), 'a');
@@ -534,6 +544,7 @@
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });
     } else if (m.t === 'layout') render(m.layout);
+    else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') renderPanel(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; const f = document.getElementById('focusName'); if (f) f.textContent = `${m.emoji} ${m.name}`; }
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);

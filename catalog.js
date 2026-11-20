@@ -31,6 +31,12 @@ const GAMES = [
   { id: 'sled', cat: 'winter', name: 'Sled Dash', emoji: '🛷', art: ['#ffffff', '#5c7cfa'], ctrl: 'shake', players: '1-8', mins: 1,
     desc: 'Shake your phone (or mash keys) to race your sled. Avalanches hit the leader!', how: ['Shake the phone, tap fast, or alternate ← →', 'First across the line wins', 'The leader gets hit by avalanches'], make: c => new ShakeRace(c) },
   // 🃏 cards & table
+  { id: 'storm', cat: 'table', name: 'Color Storm', emoji: '🌪️', art: ['#cc5de8', '#1864ab'], ctrl: 'tap', players: '2-8', mins: 8,
+    desc: 'Fast, mean card shedding! Match the color or symbol, stack +2s, flip direction, SWAP hands with the leader. Empty your hand first.', how: ['Match the COLOR or the SYMBOL on the pile', '+2 stack · STOP skips · ↺ reverses · ✌ TWIN plays again · wilds pick colors', 'One card left? Tap LAST CARD! — or get CAUGHT for +2'], make: c => new ColorStorm(c) },
+  { id: 'avalanche', cat: 'table', name: 'Avalanche!', emoji: '💣', art: ['#ff4d6d', '#0b1433'], ctrl: 'tap', players: '2-8', mins: 8,
+    desc: 'The deck hides avalanches. Draw one without a SHOVEL and you\'re buried! Peek, skip, steal and make others draw twice. Last one standing wins.', how: ['Play action cards, then DRAW to end your turn', 'Drew an AVALANCHE? A 🛡️ SHOVEL saves you — hide it back in the deck', '👀 Peek · ⏭ Skip · ⏩ Double · 🧤 Steal · ✋ Block · pairs steal'], make: c => new Avalanche(c) },
+  { id: 'tycoon', cat: 'table', name: 'Snow Tycoon', emoji: '🏔️', art: ['#51cf66', '#1c3d7a'], ctrl: 'tap', players: '2-6', mins: 15,
+    desc: 'Build a winter resort empire! Roll, buy spots, charge rent, own a full color and build cabins. Richest after 10 rounds wins.', how: ['🎲 ROLL and move · BUY the spots you like', 'Own a full color set → build 🏠 cabins (huge rent)', 'Avoid the Avalanche! Richest after 10 rounds wins'], make: c => new SnowTycoon(c) },
   { id: 'cards', cat: 'table', name: 'Wild Eights', emoji: '🃏', art: ['#51cf66', '#0b3d1e'], ctrl: 'tap', players: '2-8', mins: 5,
     desc: 'The crazy card game. Your hand is secret on your phone.', how: ['Match the suit or number', '8 = wild · 2 = +2 · J skip · Q reverse', 'A = CHAOS: every hand passes on!'], make: c => new WildEights(c) },
   { id: 'bingo', cat: 'table', name: 'Bingo', emoji: '🎱', art: ['#da77f2', '#5f3dc4'], ctrl: 'tap', players: '1-8', mins: 5,
