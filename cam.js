@@ -100,11 +100,19 @@ window.CCCam = (() => {
       s.aim = s.aim * 0.5 + aim * 0.5; s.lean = s.lean * 0.5 + (Math.abs(lean) < 0.12 ? 0 : lean) * 0.5;
       const up = (L[15].y < L[0].y - torso * 0.15) || (L[16].y < L[0].y - torso * 0.15);
       const vmax = Math.max(sp[0], sp[1]);
-      if (vmax > 5.5 && now - s.lastSwing > 450) {
-        s.lastSwing = now; s.flash = now;
-        const f = sp[1] >= sp[0] ? 1 : 0, dirSwing = clamp(-vx[f] / Math.max(1, sp[f]) * 1.4); // their right = image left
-        const aimNow = clamp(dirSwing * 0.85 + s.aim * 0.4);
-        st.send({ t: 'camSwing', s: s.id, p: +clamp(0.45 + (vmax - 5.5) / 12, 0.45, 1).toFixed(2), x: +aimNow.toFixed(2) }); navigator.vibrate?.(20);
+      // a swing starts when a wrist moves fast; we follow it for ~150 ms to catch its PEAK speed, then send
+      if (!s.pend && vmax > 5.5 && now - s.lastSwing > 450) {
+        const f = sp[1] >= sp[0] ? 1 : 0;
+        s.pend = { t0: now, vmax, dir: clamp(-vx[f] / Math.max(1, sp[f]) * 1.4), aim: s.aim }; s.lastSwing = now; s.flash = now;
+      } else if (s.pend) {
+        s.pend.vmax = Math.max(s.pend.vmax, vmax);
+        if (now - s.pend.t0 > 150) {
+          // torso (shoulders→hips) ≈ 0.5 m gives real units; racket head ≈ 1.6× the wrist; ball ≈ 1.4× the racket
+          const wristMs = s.pend.vmax * 0.5, kmh = Math.round(clamp(wristMs * 1.6 * 1.4 * 3.6, 20, 240));
+          const pw = clamp((kmh - 40) / 150 + 0.35, 0.3, 1), aimNow = clamp(s.pend.dir * 0.85 + s.pend.aim * 0.4);
+          st.send({ t: 'camSwing', s: s.id, p: +pw.toFixed(2), kmh, x: +aimNow.toFixed(2), lag: +((now - s.pend.t0) / 1000).toFixed(3) });
+          s.lastKmh = kmh; s.kmhAt = now; s.pend = null; navigator.vibrate?.(20);
+        }
       }
       if (vmax > 3.5 && now - s.lastPump > 140) { s.lastPump = now; st.send({ t: 'camPump', s: s.id }); }
       out.push({ s: s.id, x: +s.aim.toFixed(2), l: +s.lean.toFixed(2), u: up, k: KP.flatMap(i => [+L[i].x.toFixed(3), +L[i].y.toFixed(3)]) });
@@ -121,7 +129,7 @@ window.CCCam = (() => {
       g.strokeStyle = col; g.lineWidth = now - (s.flash || 0) < 250 ? 12 : 6;
       for (const [a, b] of EDGES) { const A = P(a), B = P(b); g.beginPath(); g.moveTo(A.x, A.y); g.lineTo(B.x, B.y); g.stroke(); }
       const n = P(0); g.fillStyle = col; g.beginPath(); g.arc(n.x, n.y, 14, 0, Math.PI * 2); g.fill();
-      g.font = 'bold 28px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff'; g.save(); g.translate(n.x, n.y - 30); if (st.facing === 'user') g.scale(-1, 1); g.fillText(`P${s.id + 1}`, 0, 0); g.restore();
+      g.font = 'bold 28px sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fff'; g.save(); g.translate(n.x, n.y - 30); if (st.facing === 'user') g.scale(-1, 1); g.fillText(`P${s.id + 1}${s.lastKmh && now - s.kmhAt < 2000 ? ` · ${s.lastKmh} km/h` : ''}`, 0, 0); g.restore();
     }
   }
   return { start, stop, active: () => !!st, send: m => st && st.send(m), state: () => st };

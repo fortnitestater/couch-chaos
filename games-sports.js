@@ -299,7 +299,7 @@ class SmashTennis extends Sport3D {
     const hs = this.ps.filter(p => !p.bot), bs = this.ps.filter(p => p.bot), order = [...shuffle(hs), ...bs];
     this.teams = [[], []]; order.forEach((p, i) => this.teams[i % 2].push(p));
     this.split = this.teams[0].length === 1 && this.teams[1].length === 1 && !this.teams[0][0].bot && !this.teams[1][0].bot;
-    this.pl = new Map(); this.hits = new Map(this.ps.map(p => [p, 0])); this.aces = new Map(this.ps.map(p => [p, 0]));
+    this.pl = new Map(); this.hits = new Map(this.ps.map(p => [p, 0])); this.aces = new Map(this.ps.map(p => [p, 0])); this.bests = new Map(); this.fastest = null; this.radarShow = null;
     this.teams.forEach((tm, ti) => tm.forEach((p, i) => { const lx = -3.4 + (i + 0.5) * (6.8 / tm.length); this.pl.set(p, { p, team: ti, home: lx, x: lx, homeZ: ti === 0 ? -1.2 : 25.2, z: ti === 0 ? -1.2 : 25.2, sw: 0, cool: 0, botAt: null, run: 0, stroke: 'racket' }); }));
     this.c.setLayout('all', SWING('tennis', { hint: 'Serve: swing · Rally: swing when the ring closes · purple ring = SMASH' }));
     for (const p of this.ps) if (!p.bot) this.c.send(p, { t: 'toast', text: this.pl.get(p).team === 0 ? '🔴 You are RED' : '🔵 You are BLUE' });
@@ -376,7 +376,8 @@ class SmashTennis extends Sport3D {
     const depth = kind === 'serve' ? rnd(2.8, 5.8) : kind === 'smash' ? rnd(3.5, 8) : kind === 'lob' ? rnd(8.5, 10.8) : rnd(5.5, 9.5) + power;
     const bz = 12 + fwd * Math.min(depth, 11.5);
     const dx = tx - S.x, dz = bz - S.z, dist = Math.hypot(dx, dz);
-    const speed = (kind === 'serve' ? 16 + power * 13 : kind === 'smash' ? 26 + power * 8 : kind === 'lob' ? 8 + power * 2 : 11.5 + power * 9) * (opt.boost || 1);
+    const kf = opt.kmh ? clamp((opt.kmh - 40) / 160, 0, 1) : power; // measured shot speed drives the ball
+    const speed = (kind === 'serve' ? 15 + kf * 16 : kind === 'smash' ? 25 + kf * 10 : kind === 'lob' ? 8 + kf * 2 : 10.5 + kf * 12) * (opt.boost && !opt.kmh ? opt.boost : 1);
     let t1 = dist / speed, vy = 0;
     const netY = (t) => { const tn = (12 - S.z) / (dz / t); return S.y + ((0 - S.y + 0.5 * G * t * t) / t) * tn - 0.5 * G * tn * tn; };
     if (opt.intoNet) { const vzN = dz / t1, tn = (12 - S.z) / vzN; vy = (0.45 - S.y + 0.5 * G * tn * tn) / tn; }
@@ -405,7 +406,7 @@ class SmashTennis extends Sport3D {
   onAct(p, m) {
     const pl = this.pl.get(p); if (!pl || !m) return;
     if (m.a === 'toss') return this.toss(pl);
-    if (m.a === 'swing') this.swing(pl, clamp(+m.p || 0.6, 0.2, 1), m.q, typeof m.aim === 'number' ? clamp(m.aim) : null, +m.lag || 0);
+    if (m.a === 'swing') this.swing(pl, clamp(+m.p || 0.6, 0.2, 1), m.q, typeof m.aim === 'number' ? clamp(m.aim) : null, +m.lag || 0, +m.kmh || 0);
   }
   onButton(p, b) {
     const pl = this.pl.get(p); if (!pl || b !== 'a') return;
@@ -416,14 +417,21 @@ class SmashTennis extends Sport3D {
   aimOf(pl) { return pl.p.bot ? (pl.botAim ?? rnd(-1, 1)) : this.aimT.at(pl.p, this.t); }
   // how late a swing reaches the TV: the phone's measuring delay + half the network round trip (+ camera processing)
   latency(pl, lag) { return lag + ((pl.p.rtt || 90) / 2000) + (pl.p.cam ? 0.12 : 0); }
-  swing(pl, power, raw, aimIn = null, lag = 0) {
+  // shot speed (km/h, what the radar shows): measured from the swing when we have it, otherwise estimated
+  speedOf(power, kmh, kind) { const k = kmh || Math.round(55 + power * 95 + rnd(-6, 6)); return Math.round(kind === 'smash' ? Math.max(k, 120) * 1.15 : kind === 'lob' ? k * 0.55 : kind === 'serve' ? k * 1.15 : k); }
+  radar(pl, kmh, kind) {
+    pl.p.best = Math.max(pl.p.best || 0, kmh); this.bests.set(pl.p, Math.max(this.bests.get(pl.p) || 0, kmh));
+    if (!this.fastest || kmh > this.fastest.kmh) { const first = !!this.fastest; this.fastest = { p: pl.p, kmh }; if (first && kmh > 120) this.pop.add(`⚡ NEW FASTEST: ${kmh} km/h!`, 800, 760, '#ffd43b', 44, 1.6); }
+    this.radarShow = { kmh, kind, color: pl.p.color, name: pl.p.name, t: 2.2 };
+  }
+  swing(pl, power, raw, aimIn = null, lag = 0, kmhIn = 0) {
     if (!pl || pl.cool > 0 || this.over) return;
     pl.sw = 1; pl.cool = 0.25; this.c.sfx.swish ? this.c.sfx.swish() : this.c.sfx.whoosh();
     const n = this.faceOf(pl, raw), aim = aimIn != null ? aimIn : n ? null : this.aimOf(pl);
     if (this.phase === 'serve' && pl === this.server) {
       // ONE swing serves: the ball goes up and is hit at the top automatically, with your swing's power + direction
       if (this.tossed) return;
-      this.toss(pl); pl.servePow = power; pl.serveAim = aim; pl.serveN = aimIn != null ? null : n; pl.serveAt = 0.5;
+      this.toss(pl); pl.servePow = power; pl.serveKmh = kmhIn; pl.serveAim = aim; pl.serveN = aimIn != null ? null : n; pl.serveAt = 0.5;
       return;
     }
     if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl || this.ball.netAt != null) return;
@@ -443,7 +451,9 @@ class SmashTennis extends Sport3D {
     this.pop.add(kind === 'smash' ? 'SMASH!' : kind === 'lob' ? 'LOB' : pl.stroke === 'fh' ? 'FOREHAND' : 'BACKHAND', s.x, s.y, kind === 'smash' ? '#ff922b' : '#fff', kind === 'smash' ? 40 : 26, 0.7);
     this.hitFx(pl, kind === 'smash' || fire, perfect, power, kind === 'smash' ? 'smash' : 'power');
     this.freeze = kind === 'smash' || fire ? 0.12 : 0.05; // hit-stop: a tiny freeze sells the impact
-    this.launch(pl, power, aim, n, { kind, fire, boost, start: { x: b.c.x, y: b.c.y, z: b.c.z }, intoNet: dt > 0.22 && Math.random() < 0.3 });
+    const kmh = this.speedOf(power, good ? kmhIn : kmhIn * 0.75, kind); this.radar(pl, kmh, kind);
+    if (kmh > 175 && kind !== 'smash' && Math.random() < 0.35) this.say('What a shot!');
+    this.launch(pl, power, aim, n, { kind, fire: fire || kmh > 150, boost, kmh, start: { x: b.c.x, y: b.c.y, z: b.c.z }, intoNet: dt > 0.22 && Math.random() < 0.3 });
   }
   fault(why) {
     this.faults++; this.ball = null; this.tossed = false;
@@ -455,7 +465,7 @@ class SmashTennis extends Sport3D {
   hitFx(pl, smash, perfect, power = 0.7, label = 'power') {
     const p = this.ball && !this.ball.done ? this.ballPos() : this.phase === 'serve' && this.tossed ? this.tossPos() : { x: pl.x, y: 1.2, z: pl.z };
     this.burst(p.x, p.y, p.z, smash ? 120 : 25, smash ? 0xff922b : 0xffffff, smash ? 12 : 5, 0.7, 3);
-    if (smash) { if (label === 'smash') this.say('Smash! What power!'); else if (Math.random() < 0.15) this.say('What a shot!'); this.pop.add(label === 'smash' ? '🔥 SMASH!! 🔥' : '💥 POWER SHOT!', 800, 330, '#ff922b', label === 'smash' ? 120 : 80, 1.2); this.c.shake(label === 'smash' ? 26 : 12); this.c.sfx.smash ? this.c.sfx.smash() : this.c.sfx.boom(); this.flash = 0.35; this.excite = 1; this.c.sfx.cheer && this.c.sfx.cheer(0.6); }
+    if (smash) { if (label === 'smash') this.say('Smash! What power!'); else if (Math.random() < 0.06) this.say('What a shot!'); this.pop.add(label === 'smash' ? '🔥 SMASH!! 🔥' : '💥 POWER SHOT!', 800, 330, '#ff922b', label === 'smash' ? 120 : 80, 1.2); this.c.shake(label === 'smash' ? 26 : 12); this.c.sfx.smash ? this.c.sfx.smash() : this.c.sfx.boom(); this.flash = 0.35; this.excite = 1; this.c.sfx.cheer && this.c.sfx.cheer(0.6); }
     else { if (perfect) { const s = this.scr(pl.x, 2.8, pl.z); this.pop.add('PERFECT!', s.x, s.y, '#51cf66', 44, 0.9); } this.c.shake(5); this.c.sfx.pok ? this.c.sfx.pok(power) : this.c.sfx.hit(); }
   }
   callScore() {
@@ -509,7 +519,8 @@ class SmashTennis extends Sport3D {
         if (Math.random() < (p < 0.4 ? 0.35 : 0.07)) return this.fault(p < 0.4 ? 'Too soft — into the net!' : 'Long!');
         const ace = p > 0.85; this.hitFx(sv, ace, ace, p); this.freeze = 0.06;
         if (ace) this.pop.add('⚡ BIG SERVE!', 800, 300, '#ffd43b', 80, 1.2);
-        this.launch(sv, p, sv.serveAim, sv.serveN, { kind: 'serve', ace, fire: ace, start: this.tossPos() });
+        const kmh = this.speedOf(p, sv.serveKmh, 'serve'); this.radar(sv, kmh, 'serve');
+        this.launch(sv, p, sv.serveAim, sv.serveN, { kind: 'serve', ace: ace || kmh > 185, fire: ace, kmh, start: this.tossPos() });
       }
       return;
     }
@@ -540,7 +551,7 @@ class SmashTennis extends Sport3D {
     if (this.done) return; this.done = this.over = true;
     this.c.sfx.crowdOff && this.c.sfx.crowdOff();
     const sc = t => this.games[t] * 10 + this.pts[t], win = sc(0) === sc(1) ? -1 : sc(0) > sc(1) ? 0 : 1;
-    this.c.finish(rankBy(this.ps, p => (this.pl.get(p).team === win ? 1000 : 0) + this.hits.get(p) + this.aces.get(p) * 3, p => `${this.pl.get(p).team === win ? '🏆 ' : ''}${this.hits.get(p)} hits${this.aces.get(p) ? ` · ${this.aces.get(p)} aces` : ''}`));
+    this.c.finish(rankBy(this.ps, p => (this.pl.get(p).team === win ? 1000 : 0) + this.hits.get(p) + this.aces.get(p) * 3, p => `${this.pl.get(p).team === win ? '🏆 ' : ''}${this.hits.get(p)} hits${this.aces.get(p) ? ` · ${this.aces.get(p)} aces` : ''}${this.bests.get(p) ? ` · ⚡${this.bests.get(p)} km/h` : ''}`));
   }
   sync() {
     for (const pl of this.pl.values()) {
@@ -613,6 +624,14 @@ class SmashTennis extends Sport3D {
     });
     txt(g, 'GAMES', 900, 22, 12, '#adb5bd', 'center', 'Nunito'); txt(g, 'POINTS', 1000, 22, 12, '#adb5bd', 'center', 'Nunito');
     clock(g, this.T);
+    if (this.radarShow && this.radarShow.t > 0) {
+      const r = this.radarShow, a = Math.min(1, r.t * 2); this.radarShow.t -= 1 / 60;
+      g.save(); g.globalAlpha = a; g.fillStyle = 'rgba(10,6,30,.88)'; rr(g, 1300, 120, 280, 120, 18); g.fill(); g.lineWidth = 3; g.strokeStyle = r.color; g.stroke();
+      txt(g, r.kind === 'serve' ? 'SERVE SPEED' : r.kind === 'smash' ? 'SMASH SPEED' : 'SHOT SPEED', 1440, 145, 16, '#adb5bd', 'center', 'Nunito');
+      txt(g, `${r.kmh}`, 1410, 192, 54, r.kmh > 160 ? '#ff922b' : '#fff'); txt(g, 'km/h', 1520, 200, 22, '#ffd43b');
+      txt(g, r.name, 1440, 228, 16, r.color, 'center', 'Nunito'); g.restore();
+    }
+    if (this.fastest) txt(g, `⚡ FASTEST: ${this.fastest.p.name} ${this.fastest.kmh} km/h`, 1580, 880, 20, '#ffd43b', 'right', 'Nunito');
     this.overlays(g);
     if (this.phase === 'serve' && !this.tossed) txt(g, this.server.p.bot ? '' : `${this.server.p.name}: SWING to serve!`, 800, 800, 34, this.server.p.color, 'center', 'Nunito');
     if (this.winTeam != null && this.phase === 'point') txt(g, `🏆 ${this.tn(this.winTeam).toUpperCase()} WINS!`, 800, 600, 92, this.winTeam === 0 ? '#ff4d6d' : '#4dabff');
@@ -859,13 +878,13 @@ class HomeRunDerby extends Sport3D {
     if (P.kind === 'CRAZY BALL') { x = Math.sin(u * 14) * 0.6 * (1 - u * 0.7); y += Math.cos(u * 11) * 0.35 * (1 - u * 0.6); }
     return { x, y, z };
   }
-  onAct(p, m) { if (m && m.a === 'swing') this.swing(p, clamp(+m.p || 0.6, 0.2, 1), m.q); }
+  onAct(p, m) { if (m && m.a === 'swing') { if (m.kmh) p.swKmh = +m.kmh; this.swing(p, clamp(+m.p || 0.6, 0.2, 1), m.q); } }
   dirOf(p, raw) { const q = phoneQ(raw || livePhone(p)); if (!q) return null; const n = faceDir(q, 0); return { ang: clamp(aimYaw(p, n), -0.78, 0.78), up: clamp(n.y, -0.4, 0.9) }; }
   onButton(p, b) { if (b === 'a' && !p.bot) this.swing(p, 0.6); }
   swing(p, pow, raw) {
     this.sw.set(p, 1); this.c.sfx.whoosh();
     if (this.phase !== 'pitch' || this.pitch.swings.has(p) || this.pitch.t < -0.2) return;
-    this.pitch.swings.set(p, { at: this.pitch.t, pow, aim: this.aimT.at(p, this.t), dir: this.dirOf(p, raw) });
+    this.pitch.swings.set(p, { at: this.pitch.t, pow, kmh: p.swKmh || 0, aim: this.aimT.at(p, this.t), dir: this.dirOf(p, raw) }); p.swKmh = 0;
   }
   resolve() {
     const P = this.pitch; P.res = [];
@@ -878,7 +897,9 @@ class HomeRunDerby extends Sport3D {
       }
       this.dist.set(p, this.dist.get(p) + d); if (type === 'HOME RUN') this.hr.set(p, this.hr.get(p) + 1);
       const aim = s ? s.aim : 0, dir = s && s.dir, ang = type === 'FOUL' ? (Math.random() < 0.5 ? -1 : 1) * rnd(0.85, 1.1) : dir ? clamp(dir.ang + rnd(-0.05, 0.05), -0.78, 0.78) : clamp(-aim * 0.7 + rnd(-0.08, 0.08), -0.78, 0.78);
-      P.res.push({ p, d, type, ang, fd: type === 'FOUL' ? rnd(30, 60) : d, h: rnd(10, 16) + d * 0.08 });
+      const exit = s && d ? Math.round((s.kmh || 70 + s.pow * 80) * (0.8 + (d / 150) * 0.5)) : 0; // exit velocity
+      if (exit) this.exitBest = Math.max(this.exitBest || 0, exit);
+      P.res.push({ p, d, type, ang, exit, fd: type === 'FOUL' ? rnd(30, 60) : d, h: rnd(10, 16) + d * 0.08 });
       if (!p.bot) this.c.send(p, { t: 'toast', text: type === 'HOME RUN' ? `💥 HOME RUN! ${d} m` : d ? `${type}! ${d} m` : type });
     }
     const hrs = P.res.filter(r => r.type === 'HOME RUN');
@@ -949,7 +970,7 @@ class HomeRunDerby extends Sport3D {
       if (this.is3d) for (const r of this.pitch.res) if (r.fd) { const i = this.ps.indexOf(r.p), x = this.bx(i) * (1 - u) + Math.sin(r.ang) * r.fd * u, z = Math.cos(r.ang) * r.fd * u, y = 1 + 4 * r.h * u * (1 - u); const s = this.scr(x, y + 3, z); if (s.vis) txt(g, `${r.p.name} ${r.type === 'FOUL' ? 'FOUL' : Math.round(r.d * u) + ' m'}`, s.x, s.y, 26, r.p.color, 'center', 'Nunito'); }
       const rows = [...this.pitch.res].sort((a, b) => b.d - a.d);
       g.fillStyle = 'rgba(10,6,30,.78)'; rr(g, 1250, 120, 330, rows.length * 38 + 20, 18); g.fill();
-      rows.forEach((r, i) => { const y = 148 + i * 38; g.fillStyle = r.p.color; g.beginPath(); g.arc(1276, y, 9, 0, TAU); g.fill(); txt(g, r.p.name.slice(0, 10), 1294, y, 19, '#fff', 'left', 'Nunito'); txt(g, r.d ? `${r.d} m` : r.type, 1564, y, 18, r.type === 'HOME RUN' ? '#ffd43b' : r.d ? '#fff' : '#ff8787', 'right'); });
+      rows.forEach((r, i) => { const y = 148 + i * 38; g.fillStyle = r.p.color; g.beginPath(); g.arc(1276, y, 9, 0, TAU); g.fill(); txt(g, r.p.name.slice(0, 10), 1294, y, 19, '#fff', 'left', 'Nunito'); txt(g, r.d ? `${r.d} m${r.exit ? ` · ${r.exit}km/h` : ''}` : r.type, 1564, y, 18, r.type === 'HOME RUN' ? '#ffd43b' : r.d ? '#fff' : '#ff8787', 'right'); });
     }
     strip(g, rankBy(this.ps, p => this.dist.get(p), () => '').map(r => ({ name: r.p.name, color: r.p.color, val: this.dist.get(r.p) + 'm' })));
     txt(g, `PITCH ${Math.min(this.n, this.N)}/${this.N}`, 1500, 110, 22, '#adb5bd');

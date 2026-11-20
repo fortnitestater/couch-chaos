@@ -77,7 +77,7 @@
       case 'camOn': p.isCam = true; p.input = { x: 0, y: 0, a: false, b: false }; banner('📷 AI camera is ON — step into view!', 2200, '#a5d8ff'); renderPlayers(); if (S.state === 'home') sendLobby(); break;
       case 'camOff': p.isCam = false; camDrop(); renderPlayers(); if (S.state === 'home') sendLobby(); break;
       case 'cam': if (p.isCam && Array.isArray(m.ppl)) camFrame(m.ppl); break;
-      case 'camSwing': { const cp = S.cam && S.cam[m.s]; if (cp && cp.connected && S.state === 'game' && S.game && S.game.onAct && S.game.ps && S.game.ps.includes(cp)) S.game.onAct(cp, { a: 'swing', p: +m.p || 0.6, aim: typeof m.x === 'number' ? m.x : undefined }); if (cp) cp.swingFx = performance.now(); break; }
+      case 'camSwing': { const cp = S.cam && S.cam[m.s]; if (cp && cp.connected && S.state === 'game' && S.game && S.game.onAct && S.game.ps && S.game.ps.includes(cp)) S.game.onAct(cp, { a: 'swing', p: +m.p || 0.6, aim: typeof m.x === 'number' ? m.x : undefined, kmh: +m.kmh || undefined, lag: +m.lag || 0 }); if (cp) cp.lastKmh = +m.kmh || 0; if (cp) cp.swingFx = performance.now(); break; }
       case 'camPump': { const cp = S.cam && S.cam[m.s]; if (cp && S.state === 'game' && S.game && S.game.onPump) S.game.onPump(cp, 1); break; }
       case 'pick': if (isVip && S.state === 'home') { const d = GAMES.find(x => x.id === m.g); if (d) { focusGame(d.id); startIntro(d); } } break;
       case 'party': if (isVip && S.state === 'home') startParty(); break;

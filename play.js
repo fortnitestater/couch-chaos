@@ -24,7 +24,7 @@
   const light = c => /^#(ffd43b|fcc419|f1f3f5|fff|ffffff|94d82d|ffe066|e9ecef)$/i.test(c);
 
   // ---------- motion ----------
-  let lastSwing = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
+  let lastSwing = 0, swingWin = null, curRot = 0, curAcc = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
   // iPhone/iPad (Safari) only shows the motion popup when requestPermission() is called straight from a real
   // button tap ('click'). Anything else (auto-join, pointerdown, timers) is silently refused.
   const needPerm = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
@@ -110,6 +110,8 @@
       // a swing = a fast twist of the wrist and/or a hard jolt. Fires the instant it crosses the line (timing matters!)
       const r = e.rotationRate, rot = r ? Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0) : 0;
       const strength = Math.max(rot / 420, mag / 14);
+      if (swingWin) { swingWin.rot = Math.max(swingWin.rot, rot); swingWin.acc = Math.max(swingWin.acc, mag); } // follow the swing to its peak
+      curRot = rot; curAcc = mag;
       // LIFT = toss: a sharp upward push (along gravity) that is not a swing
       if (!calRun && layout && layout.sport === 'tennis' && l && l.x != null && strength < swingThr * 0.85 && now - lastToss > 900) {
         const gx = a.x - l.x, gy = a.y - l.y, gz = (a.z || 0) - (l.z || 0), gm = Math.hypot(gx, gy, gz) || 1, up = (l.x * gx + l.y * gy + (l.z || 0) * gz) / gm;
@@ -423,15 +425,22 @@
   }
   // ---------- swing (motion sports) ----------
   const SPORT = { tennis: ['🎾', 'a tennis racket'], bowling: ['🎳', 'a bowling arm'], bat: ['⚾', 'a baseball bat'] };
+  // racket-head speed from the phone: spin rate (rad/s) × ~1.1 m (arm + racket), or the jolt if there is no gyro.
+  // A tennis ball leaves the strings ~1.4× faster than the racket head.
+  function shotKmh(rotDeg, acc) { const racket = rotDeg > 0 ? (rotDeg * Math.PI / 180) * 1.1 : acc * 0.3; return Math.round(clamp(racket * 3.6 * 1.4, 20, 240)); }
   function swing(power, how) {
     if (!layout || layout.name !== 'swing') return;
     lastSwing = performance.now();
-    if (how === 'motion' && orQ && orNeu) {
-      const t0 = performance.now(), pre = yawAt(220), y0 = yawNow(), q0 = relQ();
+    if (how === 'motion') {
+      const t0 = performance.now(), hasOr = orQ && orNeu, pre = hasOr ? yawAt(220) : 0, y0 = hasOr ? yawNow() : 0, q0 = hasOr ? relQ() : undefined;
+      swingWin = { rot: curRot, acc: curAcc };
       setTimeout(() => {
-        const dir = clamp((yawNow() - y0) / 32), point = clamp(pre / ((cal && cal.yaw) || 35));
-        const aim = clamp(dir * 0.85 + point * 0.45);
-        sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how, q: q0, aim: +aim.toFixed(2), lag: +((performance.now() - t0) / 1000).toFixed(3) });
+        const w = swingWin; swingWin = null;
+        const kmh = shotKmh(w.rot, w.acc), pw = clamp((kmh - 40) / 150 + 0.35, 0.3, 1);
+        const aim = hasOr ? clamp(clamp((yawNow() - y0) / 32) * 0.85 + clamp(pre / ((cal && cal.yaw) || 35)) * 0.45) : undefined;
+        sendMsg({ t: 'act', a: 'swing', p: +pw.toFixed(2), kmh, how, q: q0, aim: aim == null ? undefined : +aim.toFixed(2), lag: +((performance.now() - t0) / 1000).toFixed(3) });
+        const lb = document.getElementById('swPowTxt'); if (lb) lb.textContent = `🎾 ${kmh} km/h ${kmh > 160 ? '💥 MONSTER!' : kmh > 110 ? '🔥' : ''}`;
+        const pb = document.getElementById('swPow'); if (pb) { pb.style.transition = 'none'; pb.style.width = Math.round(pw * 100) + '%'; void pb.offsetWidth; pb.style.transition = 'width 1.4s ease-in'; pb.style.width = '0%'; }
       }, 110);
     } else sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how, q: orQ && orNeu ? relQ() : undefined });
     navigator.vibrate?.(power > 0.8 ? [30, 20, 60] : 35);
