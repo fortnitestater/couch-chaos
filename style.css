@@ -286,3 +286,24 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .mgBtn { background: linear-gradient(#ffe066, #fcc419); color: #1a0f00; font-family: 'Bungee', Impact, sans-serif; font-size: 20px; padding: 14px 18px; border-radius: 16px; box-shadow: 0 6px 0 #b08900; flex: 1; }
 .mgBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b08900; }
 .mgSkip { background: none; color: #8ea2c8; text-decoration: underline; font-size: 14px; padding: 6px; }
+
+/* ---------- calibration wizard ---------- */
+#calib { position: fixed; inset: 0; z-index: 70; background: radial-gradient(circle at 50% 30%, #2b1b6b, #07041a 75%); display: grid; place-items: center; padding: 18px; }
+.clCard { width: min(100%, 440px); text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.clTop { font-family: 'Bungee', Impact, sans-serif; color: #a5d8ff; letter-spacing: .08em; font-size: 15px; }
+.clTop span { color: #ffd43b; margin-left: 6px; }
+.clDots { display: flex; gap: 8px; } .clDots i { width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,.18); transition: all .25s; }
+.clDots i.on { background: #ffd43b; transform: scale(1.35); box-shadow: 0 0 12px #ffd43b; } .clDots i.ok { background: #51cf66; }
+.clStage { height: 210px; display: grid; place-items: center; perspective: 500px; }
+.clPhone { width: 92px; height: 170px; border-radius: 18px; background: linear-gradient(160deg, #495057, #212529); border: 4px solid #ced4da; display: grid; place-items: center; box-shadow: 0 18px 40px rgba(0,0,0,.6), 0 0 40px color-mix(in srgb, var(--c, #4dabff) 50%, transparent); transition: transform .08s linear; }
+.clScreen { width: 76px; height: 140px; border-radius: 10px; background: linear-gradient(160deg, var(--c, #4dabff), #1b1046); display: grid; place-items: center; font-size: 34px; }
+.clPhone.still { animation: clBreathe 1.4s ease-in-out infinite; }
+@keyframes clBreathe { 50% { transform: scale(1.06); } }
+.clPhone.swing { animation: clSwing 1s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes clSwing { 0%, 100% { transform: rotate(-50deg); } 50% { transform: rotate(50deg); } }
+.clPhone.hit { animation: swHit .45s cubic-bezier(.2,1.6,.4,1); }
+#calib h2 { font-family: 'Bungee', Impact, sans-serif; font-weight: 400; font-size: 30px; color: #fff; margin: 0; }
+#calib p { color: #dbe4ff; font-size: 17px; margin: 0; min-height: 48px; }
+.clMeter { width: 100%; height: 16px; border-radius: 8px; background: rgba(255,255,255,.1); overflow: hidden; }
+.clMeter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #4dabff, #51cf66); transition: width .08s linear; }
+.clDone { font-size: 90px; animation: swHit .6s cubic-bezier(.2,1.6,.4,1); }

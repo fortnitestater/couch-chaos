@@ -29,20 +29,47 @@
   // button tap ('click'). Anything else (auto-join, pointerdown, timers) is silently refused.
   const needPerm = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
   let permState = needPerm ? 'unknown' : 'granted';
-  function listenMotion() { if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); } }
+  function listenMotion() { if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); addEventListener('deviceorientation', onOrient); } }
+  // ---------- 1:1 orientation (the racket / bat / arm on the TV copies the phone exactly) ----------
+  // quaternion maths, [x,y,z,w]
+  const qmul = (a, b) => [a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1], a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0], a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3], a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
+  const qconj = a => [-a[0], -a[1], -a[2], a[3]];
+  function eulerQ(al, be, ga) { // W3C deviceorientation (Z-X'-Y'') → quaternion
+    const d = Math.PI / 360, cX = Math.cos(be * d), cY = Math.cos(ga * d), cZ = Math.cos(al * d), sX = Math.sin(be * d), sY = Math.sin(ga * d), sZ = Math.sin(al * d);
+    return [sX * cY * cZ - cX * sY * sZ, cX * sY * cZ + sX * cY * sZ, cX * cY * sZ + sX * sY * cZ, cX * cY * cZ - sX * sY * sZ];
+  }
+  let orQ = null, orNeu = null, orRecenter = false, orSeen = false;
+  function onOrient(e) {
+    if (e.beta == null && e.gamma == null) return;
+    const ang = (((screen.orientation && screen.orientation.angle) ?? (window.orientation || 0)) % 360 + 360) % 360, h = -ang * Math.PI / 360;
+    let q = eulerQ(e.alpha || 0, e.beta || 0, e.gamma || 0); q = qmul(q, [0, 0, Math.sin(h), Math.cos(h)]);
+    orQ = q; if (!orSeen) { orSeen = true; }
+    if (!orNeu || orRecenter) { orNeu = q; orRecenter = false; }
+  }
+  // rotation of the phone since "center", in the phone's own frame
+  const relQ = () => { const r = qmul(qconj(orNeu), orQ); return r.map(v => +v.toFixed(3)); };
+  setInterval(() => { if (orQ && orNeu && layout && layout.name === 'swing' && conn && conn.open) { try { conn.send({ t: 'or', q: relQ() }); } catch (e) {} } }, 33);
   let askP = null;
   function askMotion() { return askP || (askP = askMotionOnce().finally(() => { askP = null; })); }
   async function askMotionOnce() {
     if (!needPerm) { listenMotion(); return; }
     if (permState === 'granted') { listenMotion(); return; }
     try {
-      const r = await DeviceMotionEvent.requestPermission();
+      // ask for motion AND orientation in the same tap (iPhone shares one prompt)
+      const po = typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission ? DeviceOrientationEvent.requestPermission().catch(() => 'denied') : null;
+      const r = await DeviceMotionEvent.requestPermission(); if (po) await po;
       permState = r === 'granted' ? 'granted' : 'denied';
       if (permState === 'granted') { listenMotion(); try { DeviceOrientationEvent.requestPermission && DeviceOrientationEvent.requestPermission().catch(() => {}); } catch (_) {} }
     } catch (e) { /* not called from a tap: stays 'unknown' so the Enable button keeps showing */ }
     motionGate();
   }
   // the gate: a big "Enable motion" card for phones that need permission
+  function calButton() {
+    if (document.getElementById('calBtn') || !document.querySelector('#ctrlScr .topbar')) return;
+    const b = document.createElement('button'); b.id = 'calBtn'; b.className = 'chip'; b.textContent = '🎯 Calibrate';
+    b.onclick = () => { if (!motionSeen) return toast('Turn on motion first 📱'); startCalib(true); };
+    const st = document.getElementById('status'); st.parentNode.insertBefore(b, st);
+  }
   function motionGate() {
     let el = document.getElementById('motionGate');
     const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -51,6 +78,9 @@
     const big = layout && (layout.name === 'swing' || layout.name === 'shake' || (layout.name === 'pad' && layout.stick));
     if (!el) { el = document.createElement('div'); el.id = 'motionGate'; document.body.appendChild(el); }
     el.className = big ? 'big' : '';
+    // only rebuild when something changed, so the button never disappears under your finger
+    const key = permState + (big ? 'B' : 's') + (motionGate.skipped ? 'k' : '');
+    if (el.dataset.key === key) return; el.dataset.key = key;
     el.innerHTML = permState === 'denied'
       ? `<div class="mgCard"><div class="mgEm">🚫📱</div><b>Motion was blocked</b><p>iPhone remembers "Don't Allow" until Safari restarts. Swipe Safari closed in the app switcher, open the game link again, then tap <b>Allow</b>.</p><button class="mgBtn" id="mgTry">Try again</button><button class="mgSkip" id="mgSkip">Play with touch instead</button></div>`
       : `<div class="mgCard"><div class="mgEm">📱✨</div><b>Turn on motion controls</b><p>Needed to swing, steer and shake. Tap the button, then tap <b>Allow</b>.</p><button class="mgBtn" id="mgGo">Enable motion</button><button class="mgSkip" id="mgSkip">${big ? 'Play with touch instead' : 'Later'}</button></div>`;
@@ -73,11 +103,12 @@
     if (!neutral || recenterSoon) { neutral = { ...grav }; recenterSoon = false; }
     const l = e.acceleration, mag = l && l.x != null ? Math.hypot(l.x, l.y, l.z) : Math.abs(Math.hypot(a.x, a.y, a.z) - 9.81), now = performance.now();
     if (layout && layout.name === 'shake' && mag > 13 && now - lastShake > 110) { lastShake = now; pump(); }
-    if (layout && layout.name === 'swing') {
+    if (calRun || (layout && layout.name === 'swing')) {
       // a swing = a fast twist of the wrist and/or a hard jolt. Fires the instant it crosses the line (timing matters!)
       const r = e.rotationRate, rot = r ? Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0) : 0;
       const strength = Math.max(rot / 420, mag / 14);
-      if (strength > 1 && now - lastSwing > 420) swing(clamp(0.5 + (strength - 1) * 0.5, 0.5, 1), 'motion');
+      if (calRun) calSwing(strength); // calibration measures your swing
+      else if (strength > swingThr && now - lastSwing > 420) swing(clamp(0.5 + (strength / swingThr - 1) * 0.5, 0.5, 1), 'motion');
     }
   }
   const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || layout.name === 'swing');
@@ -94,7 +125,7 @@
   //  - held up like a steering wheel / yoke -> turn it like a wheel
   //  - held flat -> tip the left or right edge down
   // Measured from the pose captured when the game starts (or when you tap Center).
-  const DEG = 180 / Math.PI, LOCK = 28, DEAD = 3;
+  const DEG = 180 / Math.PI, DEAD = 3; let LOCK = 28, swingThr = 1;
   const asinG = v => Math.asin(clamp(v / 9.81)) * DEG;
   const wrapDeg = d => ((d + 540) % 360) - 180;
   function shape(deg) { const a = Math.abs(deg); if (a < DEAD) return 0; return Math.sign(deg) * Math.min(1, (a - DEAD) / (LOCK - DEAD)); }
@@ -108,8 +139,93 @@
       sx = -(asinG(g.x) - asinG(n.x));
       sy = asinG(g.y) - asinG(n.y);
     }
-    return { x: shape(sx * flip), y: shape(sy) };
+    return { x: shape(sx * flip), y: shape(sy), dx: sx * flip, dy: sy };
   }
+
+  // ---------- calibration (runs after joining, every time) ----------
+  // 1 hold still → sets "straight"  2 turn left  3 turn right → your aim range
+  // 4 tilt like a steering wheel → steering range  5 one big swing → swing sensitivity
+  let cal = (() => { try { return JSON.parse(store.get('cc_cal') || 'null'); } catch (e) { return null; } })() || { yaw: 35, lock: 28, thr: 1 };
+  LOCK = cal.lock; swingThr = cal.thr;
+  let calRun = null, calDone = false;
+  const qrot = (q, v) => qmul(qmul(q, [v[0], v[1], v[2], 0]), qconj(q)).slice(0, 3);
+  function yawNow() { if (!orQ || !orNeu) return 0; const b = qrot(qmul(qconj(orNeu), orQ), [0, 0, -1]); return Math.atan2(b[0], -b[2]) * DEG; } // + = back of phone turned to your right
+  const STEPS = [
+    { id: 'still', title: 'Hold it upright', text: 'Hold your phone <b>upright</b>, screen facing you, like a handle. Keep it <b>still</b>…', anim: 'still' },
+    { id: 'left', title: 'Turn it LEFT ⬅', text: 'Point the back of the phone to the <b>left</b> as far as feels comfy, and hold.', anim: 'left', needOr: true },
+    { id: 'right', title: 'Turn it RIGHT ➡', text: 'Now point it to the <b>right</b>, and hold.', anim: 'right', needOr: true },
+    { id: 'wheel', title: 'Steer RIGHT 🚗', text: 'Back to the middle, then <b>tilt it like a steering wheel</b> to the right, and hold.', anim: 'wheel' },
+    { id: 'swing', title: 'One BIG swing! 🎾', text: 'Swing your phone like a <b>racket</b>. Hold on tight!', anim: 'swing' },
+  ];
+  function startCalib(force) {
+    if (calRun || (calDone && !force)) return;
+    if (!motionSeen) return;
+    const steps = STEPS.filter(st => !st.needOr || orSeen);
+    calRun = { steps, i: -1, res: {}, t0: 0, hold: 0, peak: 0, lastQ: null, still: 0 };
+    let el = document.getElementById('calib');
+    if (!el) { el = document.createElement('div'); el.id = 'calib'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="clCard"><div class="clTop">🎯 QUICK CALIBRATION <span id="clStep"></span></div><div class="clDots" id="clDots">${steps.map(() => '<i></i>').join('')}</div>
+      <div class="clStage"><div class="clPhone" id="clPhone"><div class="clScreen">🎮</div></div></div><h2 id="clTitle"></h2><p id="clText"></p>
+      <div class="clMeter"><i id="clFill"></i></div><button class="mgSkip" id="clSkip">Skip calibration</button></div>`;
+    $('#clSkip').onclick = () => endCalib(false);
+    calNext();
+    calRun.timer = setInterval(calTick, 50);
+  }
+  function calNext() {
+    const R = calRun; R.i++; R.hold = 0; R.peak = 0; R.t0 = performance.now(); R.best = 0;
+    if (R.i >= R.steps.length) return endCalib(true);
+    const st = R.steps[R.i];
+    $('#clStep').textContent = `${R.i + 1}/${R.steps.length}`; $('#clTitle').textContent = st.title; $('#clText').innerHTML = st.text;
+    document.querySelectorAll('#clDots i').forEach((d, k) => d.className = k < R.i ? 'ok' : k === R.i ? 'on' : '');
+    $('#clPhone').className = 'clPhone ' + st.anim; $('#clFill').style.width = '0%';
+    navigator.vibrate?.(30);
+  }
+  function calOk(msg) { const R = calRun; toastCal(msg); navigator.vibrate?.([20, 30, 20]); document.querySelectorAll('#clDots i')[R.i].className = 'ok'; R.wait = performance.now() + 450; }
+  function toastCal(m) { const t = $('#clText'); if (t) t.innerHTML = `<b style="color:#51cf66">✓ ${m}</b>`; }
+  function calTick() {
+    const R = calRun; if (!R) return; const st = R.steps[R.i], now = performance.now(), fill = $('#clFill'), ph = $('#clPhone');
+    if (R.wait) { if (now > R.wait) { R.wait = 0; calNext(); } return; }
+    if (st.id === 'still') {
+      // still = the phone barely moved for 1 second
+      const q = orQ || (grav ? [grav.x, grav.y, grav.z, 0] : null), moved = q && R.lastQ ? Math.abs(q[0] - R.lastQ[0]) + Math.abs(q[1] - R.lastQ[1]) + Math.abs(q[2] - R.lastQ[2]) + Math.abs(q[3] - R.lastQ[3]) : 1;
+      R.lastQ = q ? q.slice() : null;
+      R.hold = (orQ ? moved < 0.012 : moved < 0.25) ? R.hold + 50 : 0;
+      fill.style.width = Math.min(100, R.hold / 10) + '%';
+      if (R.hold >= 1000) { orNeu = orQ; neutral = grav ? { ...grav } : null; calOk('Got it — that is "straight"'); }
+    } else if (st.id === 'left' || st.id === 'right') {
+      const y = yawNow(), want = st.id === 'left' ? -y : y; ph.style.transform = `perspective(400px) rotateY(${clamp(y / 70) * 70}deg)`;
+      fill.style.width = clamp(want / 40, 0, 1) * 100 + '%';
+      if (want > 18) { R.best = Math.max(R.best, want); R.hold += 50; } else R.hold = 0;
+      if (R.hold >= 600) { R.res[st.id] = R.best; calOk(`${Math.round(R.best)}° — nice`); }
+    } else if (st.id === 'wheel') {
+      const t = grav && neutral ? tiltAngles() : { dx: 0 }, d = Math.abs(t.dx || 0); ph.style.transform = `rotate(${clamp((t.dx || 0) / 60) * 60}deg)`;
+      fill.style.width = clamp(d / 35, 0, 1) * 100 + '%';
+      if (d > 12) { R.best = Math.max(R.best, d); R.hold += 50; } else R.hold = 0;
+      if (R.hold >= 600) { R.res.wheel = R.best; calOk(`${Math.round(R.best)}° steering`); }
+    } else if (st.id === 'swing') {
+      fill.style.width = clamp(R.peak / 2.5, 0, 1) * 100 + '%';
+      if (R.peak > 0.7 && now - R.peakAt > 250) { R.res.swing = R.peak; calOk(R.peak > 2 ? 'MONSTER swing! 💥' : 'Great swing!'); }
+      if (now - R.t0 > 12000) { R.res.swing = 1.6; calOk('OK — using normal swing'); }
+    }
+  }
+  function calSwing(strength) {
+    const R = calRun; if (!R || R.wait || R.steps[R.i].id !== 'swing') return;
+    if (strength > R.peak) { R.peak = strength; R.peakAt = performance.now(); const ph = $('#clPhone'); if (ph) { ph.classList.remove('hit'); void ph.offsetWidth; ph.classList.add('hit'); } }
+  }
+  function endCalib(ok) {
+    const R = calRun; if (!R) return; clearInterval(R.timer); calRun = null; calDone = true;
+    if (ok) {
+      const yaw = R.res.left && R.res.right ? (R.res.left + R.res.right) / 2 : cal.yaw;
+      cal = { yaw: clamp(yaw, 18, 70), lock: clamp((R.res.wheel || 32) * 0.85, 14, 40), thr: clamp((R.res.swing || 1.6) * 0.5, 0.7, 1.8) };
+      store.set('cc_cal', JSON.stringify(cal)); LOCK = cal.lock; swingThr = cal.thr; sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) });
+      const el = document.getElementById('calib'); if (el) el.innerHTML = `<div class="clCard"><div class="clDone">✅</div><h2>Calibrated!</h2><p>Aim range ${Math.round(cal.yaw)}° · steering ${Math.round(cal.lock)}° · swing tuned to you</p></div>`;
+      navigator.vibrate?.([40, 40, 80]);
+      setTimeout(() => { const e2 = document.getElementById('calib'); if (e2) e2.remove(); }, 1500);
+    } else { const el = document.getElementById('calib'); if (el) el.remove(); sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); }
+  }
+  // start once motion is actually working (after the Enable-motion tap on iPhone)
+  function maybeCalib() { if (joined && !calDone && !calRun && motionSeen && (!needPerm || permState === 'granted')) startCalib(); }
+  setInterval(maybeCalib, 400);
 
   // ---------- input state ----------
   const keys = { left: false, right: false, up: false, down: false, a: false, b: false }, btn = { a: false, b: false }, stick = { active: false, x: 0, y: 0 };
@@ -168,6 +284,7 @@
   function render(L) {
     layout = L; resetInput(); pumps = 0;
     if ((L.name === 'pad' && L.stick) || L.name === 'swing') recenterSoon = true;
+    if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
     const R = { swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
@@ -290,7 +407,7 @@
   function swing(power, how) {
     if (!layout || layout.name !== 'swing') return;
     lastSwing = performance.now();
-    sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how });
+    sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how, q: orQ && orNeu ? relQ() : undefined });
     navigator.vibrate?.(power > 0.8 ? [30, 20, 60] : 35);
     const ic = document.getElementById('swIcon'); if (ic) { ic.classList.remove('hit'); void ic.offsetWidth; ic.classList.add('hit'); }
     const pw = document.getElementById('swPow'); if (pw) { pw.style.transition = 'none'; pw.style.width = Math.round(power * 100) + '%'; void pw.offsetWidth; pw.style.transition = 'width 1.2s ease-in'; pw.style.width = '0%'; }
@@ -308,11 +425,11 @@
         <div class="swIcon" id="swIcon">${icon}</div>
         <div class="swLabel">${motion ? 'SWING IT!' : esc(L.label || 'SWING!')}</div>
         <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motion ? 'Hold it like ' + noun + ' and SWING!' : 'Motion is off'}</div>
-        <div class="swHint">${motion ? 'Hold the phone tight · tilt to aim · swing to hit' : esc(L.hint || '')}</div>
-        ${motion ? '<button class="chip" id="swCenter">⟲ Re-center aim</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
+        <div class="swHint">${motion ? 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want the ball to go and swing!' : esc(L.hint || '')}</div>
+        ${motion ? '<button class="chip on" id="swCenter">⟲ CENTER (hold still, screen to you)</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
       </div></div>`;
     if (motion) {
-      $('#swCenter').onclick = e => { e.stopPropagation(); neutral = grav ? { ...grav } : null; toast('Aim centered'); };
+      $('#swCenter').onclick = e => { e.stopPropagation(); neutral = grav ? { ...grav } : null; orRecenter = true; toast('Centered! Hold it like this = straight ahead'); };
       return;
     }
     $('#swMotion').onclick = async e => { e.stopPropagation(); if (!tiltOn) { tiltOn = true; store.set('cc_tilt', '1'); } await askMotion(); setTimeout(() => { if (motionSeen) render(layout); else toast('This device has no motion sensor — tap to swing instead'); }, 600); };
@@ -374,7 +491,7 @@
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong' }); } catch (e) {} return; }
     if (m.t === 'welcome') {
-      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); setTimeout(motionGate, 50);
+      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) });
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meName').textContent = `${m.avatar} ${m.name}`;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
