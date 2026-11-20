@@ -287,7 +287,7 @@
   }
   function launch() {
     if (S.state !== 'intro') return;
-    wipe(S.def.art[0], S.def.art[1]); SFX.whoosh();
+    wipe(S.def.art[0], S.def.art[1]); SFX.whoosh(); SFX.musicOff && SFX.musicOff();
     S.state = 'game'; show('game');
     try { S.game = S.def.make(makeCtx()); S.game.start(); }
     catch (e) { console.error(e); banner('Oops — that game crashed', 2000, '#ff4d6d'); toHome(); }
@@ -350,7 +350,7 @@
     }
     toHome();
   }
-  function toHome() { if (SFX.crowdOff) SFX.crowdOff(); try { speechSynthesis.cancel(); } catch (e) {}
+  function toHome() { if (SFX.crowdOff) SFX.crowdOff(); if (SFX.musicOn) setTimeout(() => S.state === 'home' && SFX.musicOn(), 600); try { speechSynthesis.cancel(); } catch (e) {}
     clearTimeout(timer); clearTimeout(launchT); launchT = null;
     if (S.state === 'game' || S.state === 'intro') S.party = null;
     S.state = 'home'; S.game = null; S.def = null;
@@ -402,6 +402,7 @@
   // ---------- keys ----------
   addEventListener('keydown', e => {
     if (S.state === 'boot') { boot(); return; }
+    if (e.key === 'm' || e.key === 'M') { const on = SFX.toggleMusic && SFX.toggleMusic(); banner(on ? '🎵 Music on' : '🔇 Music off', 1000, '#a5d8ff'); return; }
     if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.(); return; }
     const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'ok', ' ': 'ok', Escape: 'back', Backspace: 'back' };
     if (map[e.key]) { e.preventDefault(); nav(map[e.key]); }
@@ -414,7 +415,7 @@
   // ---------- boot ----------
   function boot() {
     if (S.state !== 'boot') return;
-    SFX.init(); SFX.join();
+    SFX.init(); SFX.join(); SFX.musicOn && SFX.musicOn();
     $('#start').classList.add('hidden');
     S.state = 'home'; show('home'); buildRows(); renderPlayers();
     let prev = null; try { prev = sessionStorage.getItem('cc_room'); } catch (e) {}

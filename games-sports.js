@@ -719,7 +719,7 @@ class StrikeBowling extends Sport3D {
     }
     if (this.phase === 'show') { this.wait -= dt; if (this.wait <= 0) { if (this.again) this.aimPhase(); else this.nextTurn(); } }
   }
-  knock(pn) { if (pn.down) return; pn.down = true; pn.dir = Math.atan2(pn.vx, pn.vz); this.c.sfx.bonk(); this.burst(pn.x, 0.25, pn.z, 10, 0xffffff, 3, 0.4, 3); }
+  knock(pn) { if (pn.down) return; if (!this.pins.some(p => p.down && !p.gone)) this.c.sfx.strike && this.c.sfx.strike(); pn.down = true; pn.dir = Math.atan2(pn.vx, pn.vz); this.c.sfx.bonk(); this.burst(pn.x, 0.25, pn.z, 10, 0xffffff, 3, 0.4, 3); }
   score() {
     this.ts = 1;
     const newly = this.pins.filter(p => p.down && !p.gone).length, before = this.roll === 0 ? 0 : this.firstDown, down = before + newly;
@@ -862,8 +862,8 @@ class HomeRunDerby extends Sport3D {
       if (!p.bot) this.c.send(p, { t: 'toast', text: type === 'HOME RUN' ? `💥 HOME RUN! ${d} m` : d ? `${type}! ${d} m` : type });
     }
     const hrs = P.res.filter(r => r.type === 'HOME RUN');
-    if (hrs.length) { this.pop.add(hrs.length > 1 ? `💥 ${hrs.length}× HOME RUN!! 💥` : `💥 HOME RUN ${hrs[0].p.name}! 💥`, 800, 230, '#ffd43b', 80, 2.2); this.flash = 0.45; this.c.shake(24); this.c.sfx.boom(); this.excite = 1; this.c.sfx.say && this.c.sfx.say('Home run!'); this.c.sfx.cheer && this.c.sfx.cheer(1.3); }
-    else if (P.res.some(r => r.d)) { this.c.sfx.hit(); this.c.shake(8); this.excite = 0.6; }
+    if (hrs.length) { this.pop.add(hrs.length > 1 ? `💥 ${hrs.length}× HOME RUN!! 💥` : `💥 HOME RUN ${hrs[0].p.name}! 💥`, 800, 230, '#ffd43b', 80, 2.2); this.flash = 0.45; this.c.shake(24); this.c.sfx.boom(); this.excite = 1; this.c.sfx.say && this.c.sfx.say('Home run!'); this.c.sfx.bat && this.c.sfx.bat(); this.c.sfx.cheer && this.c.sfx.cheer(1.3); }
+    else if (P.res.some(r => r.d)) { this.c.sfx.bat ? this.c.sfx.bat() : this.c.sfx.hit(); this.c.shake(8); this.excite = 0.6; this.c.sfx.cheer && this.c.sfx.cheer(0.5); }
     else { this.pop.add('STRIKE!', 800, 300, '#ff4d6d', 90, 1.4); this.c.sfx.buzz(); }
     for (const r of P.res) if (r.d || r.type === 'FOUL') { const i = this.ps.indexOf(r.p); this.burst(this.bx(i), 1, 0.3, 30, 0xffffff, 6, 0.5, 2); }
     this.phase = 'fly'; this.flyT = 0; this.fired = new Set();

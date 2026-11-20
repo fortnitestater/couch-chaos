@@ -17,6 +17,8 @@ Most games only need taps on the phone. Motion games also work with on-screen st
 **🎉 Party Mode** plays 6 random games (one from each row) and crowns a party champion. **🎲 Surprise Me** picks a game that fits your player count.
 Every game starts with a how-to-play screen; everyone taps READY on their phone.
 
+**🔊 Sound:** stadium crowd, cheers, "ooh"s, applause, racket hits, bounces, the bowling strike, the bat crack, a voice announcer and the menu music were made with ElevenLabs (files in `audio/`). Press **M** on the TV to mute the music.
+
 ## How to play
 1. Open the site on the TV (smart-TV browser, or a laptop/PC plugged into the TV) → **This is the TV** → **Start the party**. Press **F** for fullscreen.
 2. Everyone scans the QR code, or opens `…/play.html` and types the 4-letter room code.
