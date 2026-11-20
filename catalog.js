@@ -10,7 +10,7 @@ const CATEGORIES = [
 const GAMES = [
   // 🎾 motion sports (swing the phone)
   { id: 'tennis', cat: 'sports', name: 'Smash Tennis', emoji: '🎾', art: ['#d8f5a2', '#2b8a3e'], ctrl: 'swing', players: '1-8', mins: 3,
-    desc: 'Real 3D tennis in a roaring stadium. Hold your phone like a racket: tilt to aim, swing to hit. Perfect timing = flaming SMASH!', how: ['Hold the phone like a racket', 'TILT left/right to move your 🎯 target', 'SWING when the ring closes on you. First to 5!'], make: c => new SmashTennis(c) },
+    desc: 'Real 1:1 tennis in a roaring 3D stadium: toss and serve, forehands, backhands, aces, an announcer and a crowd. 1v1 = split screen!', how: ['SERVE: lift the phone ⬆ to toss, swing at the top', 'RALLY: swing TOWARD where you want the ball', 'Real scoring: 15-30-40-deuce. First to 2 games!'], make: c => new SmashTennis(c) },
   { id: 'bowling', cat: 'sports', name: 'Strike Bowling', emoji: '🎳', art: ['#e599f7', '#5f3dc4'], ctrl: 'swing', players: '1-8', mins: 4,
     desc: 'Real 3D neon bowling alley. Tilt to line up the ball, swing your arm to roll, pins fly in slow-mo.', how: ['TILT the phone to slide the ball + 🎯 line', 'SWING your arm like a real bowl', 'Strike = 20, spare = 15'], make: c => new StrikeBowling(c) },
   { id: 'derby', cat: 'sports', name: 'Home Run Derby', emoji: '⚾', art: ['#ffe066', '#e8590c'], ctrl: 'swing', players: '1-8', mins: 2,

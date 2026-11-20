@@ -181,6 +181,14 @@ function posePerson(P, t, sw, run, kind) {
     P.body.rotation.y = lerp(-0.5, 0.8, a);
   } else if (kind === 'bowl') {
     const a = sw > 0 ? Math.min(1, e * 1.5) : 0; R.rotation.set(lerp(0.4, -1.6, a), 0, 0.1);
+  } else if (kind === 'fh' || kind === 'bh') { // forehand: racket from the right side across; backhand: from the left
+    const s = kind === 'fh' ? 1 : -1, k = sw > 0 ? Math.min(1, e * 1.6) : 0;
+    R.rotation.set(-1.3, s * lerp(-2.0, 1.8, k), 0.2 * s); P.body.rotation.y = s * lerp(-0.7, 0.6, k);
+    if (kind === 'bh') P.arms[0].rotation.set(-1.2, lerp(1.5, -1.0, k), 0);
+  } else if (kind === 'serve') { // racket behind the head, up and over
+    const k = sw > 0 ? Math.min(1, e * 1.7) : 0;
+    R.rotation.set(lerp(-3.4, -0.3, k), 0, lerp(0.6, 0.1, k)); P.arms[0].rotation.set(lerp(-2.8, -0.6, k), 0, -0.2); P.body.rotation.y = lerp(-0.4, 0.4, k);
+  } else if (kind === 'toss') { R.rotation.set(-2.5, 0, 0.8); P.arms[0].rotation.set(-3.0, 0, -0.1); P.body.rotation.y = -0.3;
   } else if (kind === 'hold') { P.body.rotation.y = 0; P.arms[0].rotation.set(-0.5, 0, -0.3);
   } else { R.rotation.set(Math.sin(run) * 0.5, 0, 0.2); }
 }
@@ -276,23 +284,31 @@ class Sport3D {
 }
 
 /* =====================================================================
-   🎾 SMASH TENNIS — Red vs Blue. Your player runs to the ball for you.
-   AIM by tilting / dragging (your target ring shows on the other court),
-   SWING when the ring around you closes. Perfect + hard swing = SMASH.
+   🎾 SMASH TENNIS — real tennis, 1:1.
+   SERVE: lift the phone (or raise your hand on camera) to TOSS, then swing to hit
+          at the top of the toss. Two faults = double fault.
+   RALLY: your player runs to the ball; swing when the ring closes. Swing TOWARD
+          where you want the ball. Forehand / backhand picked by which side it comes.
+   Real scoring (15-30-40-deuce-advantage), first to 2 games. 1v1 = split screen.
    ===================================================================== */
+const CALLS = ['love', 'fifteen', 'thirty', 'forty'], SHOW = ['0', '15', '30', '40'];
 class SmashTennis extends Sport3D {
-  constructor(c) { super(c); this.score = [0, 0]; this.WIN = 5; this.T = 180; }
+  constructor(c) { super(c); this.pts = [0, 0]; this.games = [0, 0]; this.GAMES = 2; this.T = 300; this.faults = 0; this.serveIdx = [0, 0]; }
   start() {
     this.ps = this.c.roster(2);
     const hs = this.ps.filter(p => !p.bot), bs = this.ps.filter(p => p.bot), order = [...shuffle(hs), ...bs];
     this.teams = [[], []]; order.forEach((p, i) => this.teams[i % 2].push(p));
-    this.pl = new Map(); this.hits = new Map(this.ps.map(p => [p, 0]));
-    this.teams.forEach((tm, ti) => tm.forEach((p, i) => { const lx = -3.6 + (i + 0.5) * (7.2 / tm.length); this.pl.set(p, { p, team: ti, home: lx, x: lx, z: ti === 0 ? -1.2 : 25.2, sw: 0, cool: 0, botAt: null, run: 0 }); }));
-    this.c.setLayout('all', SWING('tennis', { hint: 'Tilt/drag to AIM · swing when the ring closes on you' }));
-    for (const p of this.ps) if (!p.bot) this.c.send(p, { t: 'toast', text: this.pl.get(p).team === 0 ? '🔴 You are RED (front court)' : '🔵 You are BLUE (back court)' });
+    this.split = this.teams[0].length === 1 && this.teams[1].length === 1 && !this.teams[0][0].bot && !this.teams[1][0].bot;
+    this.pl = new Map(); this.hits = new Map(this.ps.map(p => [p, 0])); this.aces = new Map(this.ps.map(p => [p, 0]));
+    this.teams.forEach((tm, ti) => tm.forEach((p, i) => { const lx = -3.4 + (i + 0.5) * (6.8 / tm.length); this.pl.set(p, { p, team: ti, home: lx, x: lx, z: ti === 0 ? -1.2 : 25.2, sw: 0, cool: 0, botAt: null, run: 0, stroke: 'racket' }); }));
+    this.c.setLayout('all', SWING('tennis', { hint: 'SERVE: lift ⬆ to toss, then swing · RALLY: swing toward where you want the ball' }));
+    for (const p of this.ps) if (!p.bot) this.c.send(p, { t: 'toast', text: this.pl.get(p).team === 0 ? '🔴 You are RED' : '🔵 You are BLUE' });
     this.cd = new Countdown(this.c); this.phase = 'cd'; this.serveTeam = 0;
     this.build();
+    this.c.sfx.crowdOn && this.c.sfx.crowdOn(0.1);
   }
+  tn(team) { return this.split ? this.teams[team][0].name : team === 0 ? 'Red' : 'Blue'; }
+  say(s) { this.c.sfx.say && this.c.sfx.say(s); }
   build() {
     if (!this.is3d) return;
     this.initScene(0x090523); const s = this.scene; this.shadowBox(0, 12, 22);
@@ -305,21 +321,19 @@ class SmashTennis extends Sport3D {
       g.beginPath(); g.moveTo(m + 1.37 * sx, m); g.lineTo(m + 1.37 * sx, h - m); g.moveTo(w - m - 1.37 * sx, m); g.lineTo(w - m - 1.37 * sx, h - m); g.moveTo(cx, sl(6.4)); g.lineTo(cx, sl(17.6)); g.stroke();
     }) }));
     court.rotation.x = -Math.PI / 2; court.position.set(0, 0, 12); court.receiveShadow = true; s.add(court);
-    // net
     const net = new THREE.Mesh(new THREE.PlaneGeometry(W + 1, 0.95), new THREE.MeshStandardMaterial({ transparent: true, side: THREE.DoubleSide, map: canvasTex(256, 32, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(20,20,30,.85)'; g.lineWidth = 1.5; for (let x = 0; x < w; x += 6) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); } for (let y = 0; y < h; y += 6) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); } }) }));
-    net.position.set(0, 0.48, 12); s.add(net);
+    net.position.set(0, 0.48, 12); s.add(net); this.netM = net;
     const band = new THREE.Mesh(new THREE.BoxGeometry(W + 1, 0.07, 0.05), mat(0xffffff)); band.position.set(0, 0.97, 12); s.add(band);
     for (const x of [-(W / 2 + 0.6), W / 2 + 0.6]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 8), mat(0xced4da, { metalness: 0.6 })); post.position.set(x, 0.55, 12); post.castShadow = true; s.add(post); }
     this.stadium = buildStadium(s, { x0: -12, x1: 12, z0: -8, z1: 32, rows: 7 });
-    // players
     for (const pl of this.pl.values()) { pl.P = makePerson(pl.p.color, 'racket'); pl.P.root.rotation.y = pl.team === 0 ? 0 : Math.PI; s.add(pl.P.root); }
-    // ball
     this.ballM = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 14), mat(0xe8ff3b, { emissive: 0x99aa00, emissiveIntensity: 0.6, roughness: 0.4 })); this.ballM.castShadow = true; s.add(this.ballM);
     this.trail = new Trail3D(s, 18);
-    // rings: timing ring around you, aim ring on the other court
     const ringMat = () => new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
     this.tRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), ringMat()); this.tRing.rotation.x = -Math.PI / 2; s.add(this.tRing);
     this.tCore = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), ringMat()); this.tCore.rotation.x = -Math.PI / 2; this.tCore.material.color.set(0xffffff); this.tCore.material.opacity = 0.5; s.add(this.tCore);
+    // toss meter: a ring at the top of the toss, glows green at the perfect moment
+    this.tossRing = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffd43b })); this.tossRing.visible = false; s.add(this.tossRing);
     this.aims = new Map();
     for (const p of this.ps) if (!p.bot) {
       const grp = new THREE.Group(); const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 40), new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false })); ring.rotation.x = -Math.PI / 2; grp.add(ring);
@@ -327,143 +341,260 @@ class SmashTennis extends Sport3D {
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 6), new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.5 })); beam.position.y = 1.5; grp.add(beam);
       grp.position.y = 0.03; s.add(grp); this.aims.set(p, grp);
     }
-    this.cam.position.set(0, 7.2, -12.5); this.camLook = new THREE.Vector3(0, 0, 12);
+    this.cam.position.set(0, 7.2, -12.5);
+    if (this.split) { this.camB = new THREE.PerspectiveCamera(50, 640 / 720, 0.1, 900); this.camB.position.set(0, 6.4, 34); this.cam.fov = 50; }
   }
   lanes(team) { return this.teams[team].map(p => this.pl.get(p)); }
+  // which world direction is "right" for this player's screen (split screen: blue looks the other way)
+  rightX(pl) { return this.split && pl.team === 1 ? 1 : -1; }
+  bodyRight(pl) { return pl.team === 0 ? -1 : 1; }
   newServe() {
-    this.server = pick(this.lanes(this.serveTeam)); this.phase = 'serve'; this.wait = this.server.p.bot ? rnd(0.9, 1.4) : 6;
+    const tm = this.lanes(this.serveTeam); this.server = tm[this.serveIdx[this.serveTeam] % tm.length];
+    this.phase = 'serve'; this.tossed = false; this.tossT = 0; this.server.auto = false; this.wait = this.server.p.bot ? rnd(0.8, 1.3) : 9;
     this.ball = null; if (this.trail) this.trail.clear();
-    this.pop.add(`${this.server.p.name} SERVES!`, 800, 240, this.server.p.color, 54, 1.6);
-    if (!this.server.p.bot) this.c.send(this.server.p, { t: 'buzz', ms: 120 });
+    // server stands at the baseline on the side of the score (deuce / ad court)
+    const side = (this.pts[0] + this.pts[1]) % 2 === 0 ? 1 : -1; this.server.serveX = side * 1.4 * (this.server.team === 0 ? -1 : 1);
+    this.pop.add(this.faults ? `2ND SERVE — ${this.server.p.name}` : `${this.server.p.name} SERVES`, 800, 230, this.server.p.color, 50, 1.6);
+    if (!this.server.p.bot) this.c.send(this.server.p, { t: 'toast', text: '⬆ Lift your phone to TOSS, then SWING!' });
   }
-  // aim -1..1 = left..right as seen from the TV
-  // n = racket-face direction in world (1:1 phone). Without a phone: aim -1..1 from tilt / bots
-  launch(from, power, aim, n) {
+  toss(pl) {
+    if (this.phase !== 'serve' || pl !== this.server || this.tossed) return;
+    this.tossed = true; this.tossT = 0; pl.stroke = 'toss'; this.c.sfx.swish && this.c.sfx.swish();
+  }
+  tossPos() { const s = this.server, u = this.tossT / 1.25; return { x: s.x - 0.35 * this.bodyRight(s), y: 1.7 + 2.5 * Math.sin(Math.PI * clamp(u, 0, 1)), z: s.z + (s.team === 0 ? 0.3 : -0.3), u }; }
+  // aim: -1..1 = left..right for the player. n: phone racket-face (old phones). opt.serve
+  launch(from, power, aim, n, opt = {}) {
     const other = 1 - from.team, opp = this.lanes(other);
     const smash = !!this.smashNext; this.smashNext = false;
     const fwd = from.team === 0 ? 1 : -1;
-    const tx = n ? clamp(from.x + Math.tan(aimYaw(from.p, n, fwd)) * 6 + rnd(-0.2, 0.2), -4.6, 4.6) // point the racket face where you want it
-                 : clamp(-aim * 4.3 + rnd(-0.35, 0.35), -4.6, 4.6); // camera looks down +z: screen-right is world -x
+    let tx = aim != null ? aim * 4.3 * this.rightX(from) : n ? from.x + Math.tan(aimYaw(from.p, n, fwd)) * 6 : 0;
+    tx = clamp(tx + rnd(-0.3, 0.3), -4.6, 4.6);
     const lift = n ? clamp(n.y, -0.3, 0.9) : 0;
     const to = opp.reduce((a, b) => (Math.abs(b.home - tx) < Math.abs(a.home - tx) ? b : a));
-    const near = other === 0, bz = near ? rnd(4, 7.5) : rnd(16.5, 20), tz = to.z;
-    const T = (smash ? 0.62 : 1) * (1.9 - power * 0.45);
-    this.ball = { fx: from.x + 0.4, fy: 1.2, fz: from.z, bx: lerp(from.x, tx, 0.82), bz, tx, ty: 1.05, tz, t: 0, t1: T * 0.68, t2: T * 0.32, h1: smash ? 0.75 : rnd(1.8, 2.3) + Math.max(0, lift) * 2.2, h2: smash ? 0.6 : 1.15, rcv: to, smash, bounced: false, done: false };
-    to.botAt = to.p.bot ? (Math.random() < (smash ? 0.4 : 0.13) ? null : T + rnd(-0.17, 0.17)) : null;
+    const near = other === 0;
+    let bz = opt.serve ? (near ? rnd(7, 11) : rnd(13, 17)) : (near ? rnd(3.5, 7.5) : rnd(16.5, 20.5));
+    // risky shots: very hard + very wide can go OUT; a late hit can clip the NET
+    const out = !opt.serve && power > 0.9 && Math.abs(aim || 0) > 0.85 && Math.random() < 0.35;
+    const intoNet = !!opt.late && Math.random() < 0.3;
+    if (out) { tx = Math.sign(tx || 1) * rnd(5.8, 6.6); }
+    const T = (smash ? 0.62 : 1) * (opt.serve ? 1.55 - power * 0.45 : 1.9 - power * 0.45);
+    this.ball = { fx: from.x + 0.4 * this.bodyRight(from), fy: opt.serve ? 2.7 : 1.2, fz: from.z, bx: lerp(from.x, tx, 0.82), bz, tx, ty: 1.05, tz: to.z, t: 0, t1: T * 0.68, t2: T * 0.32,
+      h1: smash ? 0.7 : opt.serve ? 0.6 : rnd(1.7, 2.2) + Math.max(0, lift) * 2.2, h2: smash ? 0.6 : 1.15, rcv: to, by: from, smash, bounced: false, done: false, out, intoNet, serve: !!opt.serve };
+    const miss = smash ? 0.4 : opt.ace ? 0.55 : 0.12;
+    to.botAt = to.p.bot ? (Math.random() < miss ? null : T + rnd(-0.17, 0.17)) : null;
     to.botAim = rnd(-1, 1);
     this.phase = 'rally';
   }
   ballPos() {
     const b = this.ball, t = b.t;
+    if (b.intoNet) { const u = Math.min(1, t / (b.t1 * 0.55)); if (u >= 1) return { x: lerp(b.fx, b.bx, 0.55), y: Math.max(0.13, 0.9 - (t - b.t1 * 0.55) * 3), z: 12 + (b.fz < 12 ? -0.15 : 0.15) }; return { x: lerp(b.fx, b.bx, u * 0.55), y: lerp(b.fy, 0.9, u) + 0.4 * u * (1 - u), z: lerp(b.fz, 12, u) }; }
     if (t < b.t1) { const u = t / b.t1; return { x: lerp(b.fx, b.bx, u), y: lerp(b.fy, 0.13, u) + 4 * b.h1 * u * (1 - u), z: lerp(b.fz, b.bz, u) }; }
     const u = (t - b.t1) / b.t2; return { x: lerp(b.bx, b.tx, u), y: Math.max(0.13, lerp(0.13, b.ty, u) + 4 * b.h2 * u * (1 - u)), z: lerp(b.bz, b.tz, u) };
   }
-  onAct(p, m) { if (m && m.a === 'swing') this.swing(this.pl.get(p), clamp(+m.p || 0.6, 0.2, 1), m.q); }
-  onButton(p, b) { if (b === 'a' && !p.bot) this.swing(this.pl.get(p), 0.6); }
+  onAct(p, m) {
+    const pl = this.pl.get(p); if (!pl || !m) return;
+    if (m.a === 'toss') return this.toss(pl);
+    if (m.a === 'swing') this.swing(pl, clamp(+m.p || 0.6, 0.2, 1), m.q, typeof m.aim === 'number' ? clamp(m.aim) : null, +m.lag || 0);
+  }
+  onButton(p, b) {
+    const pl = this.pl.get(p); if (!pl || b !== 'a') return;
+    if (this.phase === 'serve' && pl === this.server && !this.tossed) return this.toss(pl); // hand up on camera / Space = toss
+    if (!p.cam && !p.bot) this.swing(pl, 0.6);
+  }
   faceOf(pl, raw) { const q = phoneQ(raw || livePhone(pl.p)); return q ? faceDir(q, pl.team === 0 ? 0 : Math.PI) : null; }
   aimOf(pl) { return pl.p.bot ? (pl.botAim ?? rnd(-1, 1)) : this.aimT.at(pl.p, this.t); }
-  swing(pl, power, raw) {
+  swing(pl, power, raw, aimIn = null, lag = 0) {
     if (!pl || pl.cool > 0 || this.over) return;
-    pl.sw = 1; pl.cool = 0.32; this.c.sfx.whoosh();
-    const n = this.faceOf(pl, raw);
-    if (this.phase === 'serve' && pl === this.server) { this.hitFx(pl, false, false); this.launch(pl, power, this.aimOf(pl), n); return; }
+    pl.sw = 1; pl.cool = 0.3; this.c.sfx.swish ? this.c.sfx.swish() : this.c.sfx.whoosh();
+    const n = aimIn == null ? this.faceOf(pl, raw) : null, aim = aimIn != null ? aimIn : n ? null : this.aimOf(pl);
+    if (this.phase === 'serve' && pl === this.server) {
+      if (!this.tossed) return this.toss(pl); // forgot to toss: this swing tosses
+      const u = this.tossT / 1.25;
+      if (u < 0.2) return;
+      pl.stroke = 'serve';
+      const q = 1 - Math.abs(u - 0.5) / 0.45;
+      if (q < 0.25 || u > 0.95) return this.fault(u > 0.95 ? 'Too late!' : 'Into the net!');
+      const ace = q > 0.85 && power > 0.75;
+      this.smashNext = ace; this.hitFx(pl, ace, q > 0.85, power);
+      if (ace) { this.pop.add('⚡ BIG SERVE!', 800, 300, '#ffd43b', 80, 1.2); }
+      this.launch(pl, power, aim, n, { serve: true, ace });
+      return;
+    }
     if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl) return;
-    const dt = this.ball.t - (this.ball.t1 + this.ball.t2);
+    const b = this.ball, dt = b.t - lag - (b.t1 + b.t2);
     if (Math.abs(dt) <= 0.3) {
       const perfect = Math.abs(dt) < 0.09; this.hits.set(pl.p, this.hits.get(pl.p) + 1);
-      this.smashNext = perfect && power >= 0.68; this.hitFx(pl, this.smashNext, perfect);
-      this.launch(pl, power, this.aimOf(pl), n);
+      // forehand if the ball is on the player's right side
+      const bxRel = (b.tx - pl.x) * this.bodyRight(pl); pl.stroke = bxRel > -0.1 ? 'fh' : 'bh';
+      const s = this.scr(pl.x, 3, pl.z); this.pop.add(pl.stroke === 'fh' ? 'FOREHAND' : 'BACKHAND', s.x, s.y, '#fff', 26, 0.7);
+      this.smashNext = perfect && power >= 0.68; this.hitFx(pl, this.smashNext, perfect, power);
+      this.launch(pl, power, aim, n, { late: dt > 0.2 });
     } else if (dt < 0) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO EARLY!', s.x, s.y, '#ff922b', 36, 0.8); }
   }
-  hitFx(pl, smash, perfect) {
-    const p = this.ball && !this.ball.done ? this.ballPos() : { x: pl.x, y: 1.2, z: pl.z };
-    this.burst(p.x, p.y, p.z, smash ? 120 : 25, smash ? 0xff922b : 0xffffff, smash ? 12 : 5, 0.7, 3);
-    if (smash) { this.pop.add('🔥 SMASH!! 🔥', 800, 330, '#ff922b', 120, 1.4); this.c.shake(26); this.c.sfx.boom(); this.flash = 0.35; this.excite = 1; }
-    else { if (perfect) { const s = this.scr(pl.x, 2.8, pl.z); this.pop.add('PERFECT!', s.x, s.y, '#51cf66', 44, 0.9); } this.c.shake(5); this.c.sfx.hit(); }
+  fault(why) {
+    this.faults++; this.ball = null; this.tossed = false;
+    this.c.sfx.ooh && this.c.sfx.ooh();
+    if (this.faults >= 2) { this.faults = 0; return this.point(1 - this.serveTeam, 'DOUBLE FAULT!', 'Double fault.'); }
+    this.pop.add(`FAULT! ${why}`, 800, 330, '#ff922b', 60, 1.4); this.say('Fault.');
+    this.phase = 'between'; this.wait = 1.6;
   }
-  point(team, why) {
+  hitFx(pl, smash, perfect, power = 0.7) {
+    const p = this.ball && !this.ball.done ? this.ballPos() : this.phase === 'serve' && this.tossed ? this.tossPos() : { x: pl.x, y: 1.2, z: pl.z };
+    this.burst(p.x, p.y, p.z, smash ? 120 : 25, smash ? 0xff922b : 0xffffff, smash ? 12 : 5, 0.7, 3);
+    if (smash) { this.pop.add('🔥 SMASH!! 🔥', 800, 330, '#ff922b', 120, 1.4); this.c.shake(26); this.c.sfx.smash ? this.c.sfx.smash() : this.c.sfx.boom(); this.flash = 0.35; this.excite = 1; this.c.sfx.cheer && this.c.sfx.cheer(0.6); }
+    else { if (perfect) { const s = this.scr(pl.x, 2.8, pl.z); this.pop.add('PERFECT!', s.x, s.y, '#51cf66', 44, 0.9); } this.c.shake(5); this.c.sfx.pok ? this.c.sfx.pok(power) : this.c.sfx.hit(); }
+  }
+  callScore() {
+    const s = this.serveTeam, a = this.pts[s], b = this.pts[1 - s];
+    if (a >= 3 && b >= 3) return a === b ? 'Deuce' : `Advantage ${this.tn(a > b ? s : 1 - s)}`;
+    return a === b ? `${CALLS[a]} all` : `${CALLS[a]}, ${CALLS[b]}`;
+  }
+  showPts(team) { const a = this.pts[team], b = this.pts[1 - team]; if (a >= 3 && b >= 3) return a > b ? 'AD' : '40'; return SHOW[Math.min(3, a)]; }
+  point(team, why, spoken) {
     if (this.phase === 'point' || this.over) return;
-    this.score[team]++; this.phase = 'point'; this.wait = 2.4; this.excite = 1; this.ts = 1;
-    this.pop.add(why, 800, 330, '#ff4d6d', 70, 1.6);
-    this.pop.add(`${team === 0 ? 'RED' : 'BLUE'} SCORES!`, 800, 440, team === 0 ? '#ff4d6d' : '#4dabff', 60, 1.8);
+    this.pts[team]++; this.phase = 'point'; this.wait = 2.6; this.excite = 1; this.ts = 1; this.faults = 0;
+    const o = 1 - team; let call;
+    if (this.pts[team] >= 4 && this.pts[team] - this.pts[o] >= 2) {
+      this.games[team]++; this.pts = [0, 0];
+      this.serveIdx[this.serveTeam]++; this.serveTeam = 1 - this.serveTeam; // serve changes every game
+      if (this.games[team] >= this.GAMES) { this.winTeam = team; this.wait = 4; call = `Game, set and match, ${this.tn(team)}!`; for (let i = 0; i < 10; i++) this.firework(rnd(-16, 16), rnd(12, 24), rnd(15, 35)); this.c.sfx.applause && this.c.sfx.applause(2); }
+      else call = `Game, ${this.tn(team)}!`;
+      this.pop.add(this.winTeam != null ? '🏆 MATCH!' : 'GAME!', 800, 440, team === 0 ? '#ff4d6d' : '#4dabff', 90, 2);
+    } else call = this.callScore();
+    this.pop.add(why, 800, 330, '#ff4d6d', 64, 1.6);
+    this.say(`${spoken || ''} ${call}`.trim());
     for (let i = 0; i < 4; i++) this.firework(rnd(-14, 14), rnd(14, 22), rnd(20, 34));
-    this.c.sfx.win(); this.serveTeam = 1 - this.serveTeam;
-    if (this.score[team] >= this.WIN) { this.winTeam = team; this.wait = 3.4; for (let i = 0; i < 8; i++) this.firework(rnd(-16, 16), rnd(12, 24), rnd(15, 35)); }
+    this.c.sfx.cheer ? this.c.sfx.cheer(1) : this.c.sfx.win();
   }
   update(dt) {
     this.t += dt; this.pop.update(dt); this.flash = Math.max(0, this.flash - dt); this.excite = Math.max(0, this.excite - dt * 0.5);
     for (const p of this.ps) if (!p.bot) this.aimT.push(p, this.t);
-    for (const pl of this.pl.values()) { pl.sw = Math.max(0, pl.sw - dt * 2.6); pl.cool -= dt; }
+    for (const pl of this.pl.values()) { pl.sw = Math.max(0, pl.sw - dt * 2.4); pl.cool -= dt; if (pl.sw === 0 && pl.stroke !== 'toss') pl.stroke = 'racket'; }
     this.tick3d(dt * this.ts);
     if (this.over) return;
-    if (this.phase === 'cd') { if (this.cd.update(dt)) this.newServe(); return; }
+    if (this.phase === 'cd') { if (this.cd.update(dt)) { this.newServe(); this.say(`${this.tn(this.serveTeam)} to serve. Play!`); } return; }
     this.T -= dt;
     const sdt = dt * this.ts;
-    for (const pl of this.pl.values()) { const tx = this.ball && !this.ball.done && this.ball.rcv === pl ? this.ball.tx - 0.5 : pl.home, dx = (tx - pl.x) * Math.min(1, dt * 5); pl.x += dx; pl.run += Math.min(0.5, Math.abs(dx) * 4); }
-    if (this.phase === 'serve') { this.wait -= dt; if (this.wait <= 0) this.swing(this.server, rnd(0.45, 0.7)); return; }
+    for (const pl of this.pl.values()) {
+      let tx = pl.home;
+      if (this.ball && !this.ball.done && this.ball.rcv === pl) tx = this.ball.tx - 0.5 * this.bodyRight(pl); // ball on the forehand side
+      if ((this.phase === 'serve' || this.phase === 'between') && pl === this.server) tx = pl.serveX ?? pl.home;
+      const dx = (tx - pl.x) * Math.min(1, dt * 5); pl.x += dx; pl.run += Math.min(0.5, Math.abs(dx) * 4);
+    }
+    if (this.phase === 'between') { this.wait -= dt; if (this.wait <= 0) this.newServe(); return; }
+    if (this.phase === 'serve') {
+      const sv = this.server;
+      // bots serve by themselves; a human who does nothing for 9 s gets an automatic soft serve
+      if (!this.tossed) { this.wait -= dt; if (this.wait <= 0) { this.toss(sv); sv.auto = true; sv.autoAt = sv.p.bot ? 0.5 + rnd(-0.07, 0.07) : 0.55; } return; }
+      this.tossT += dt;
+      const u = this.tossT / 1.25;
+      if (sv.auto && u >= sv.autoAt) { sv.auto = false; sv.cool = 0; this.swing(sv, sv.p.bot ? rnd(0.55, 0.95) : 0.5); return; }
+      if (this.phase === 'serve' && u > 1.05) this.fault('Missed the toss!');
+      return;
+    }
     if (this.phase === 'point') { this.wait -= dt; if (this.wait <= 0) { if (this.winTeam != null || this.T <= 0) return this.end(); this.newServe(); } return; }
     if (this.phase === 'rally' && this.ball) {
       const b = this.ball; b.t += sdt;
-      const arr = b.t1 + b.t2, matchPt = Math.max(...this.score) >= this.WIN - 1;
-      this.ts += ((!b.rcv.p.bot && (matchPt || b.smash) && Math.abs(b.t - arr) < 0.35 ? 0.35 : 1) - this.ts) * Math.min(1, dt * 10);
-      if (!b.bounced && b.t >= b.t1) { b.bounced = true; this.burst(b.bx, 0.1, b.bz, 14, 0xffffff, 3, 0.4, 2); this.c.sfx.tink(); }
+      const arr = b.t1 + b.t2, big = this.games.some(g => g >= this.GAMES - 1) && this.pts.some(p => p >= 3);
+      this.ts += ((!b.rcv.p.bot && (big || b.smash) && Math.abs(b.t - arr) < 0.35 ? 0.35 : 1) - this.ts) * Math.min(1, dt * 10);
+      if (b.intoNet) {
+        if (!b.netHit && b.t >= b.t1 * 0.55) { b.netHit = true; this.c.sfx.netHit && this.c.sfx.netHit(); this.c.sfx.ooh && this.c.sfx.ooh(); }
+        if (b.t > b.t1 * 0.55 + 0.9) { b.done = true; this.point(1 - b.by.team, `NET! ${b.by.p.name}`, 'Net.'); }
+        return;
+      }
+      if (!b.bounced && b.t >= b.t1) {
+        b.bounced = true; this.burst(b.bx, 0.1, b.bz, 14, 0xffffff, 3, 0.4, 2); this.c.sfx.bounce ? this.c.sfx.bounce() : this.c.sfx.tink();
+        if (b.out) { b.done = true; this.c.sfx.ooh && this.c.sfx.ooh(); return this.point(1 - b.by.team, `OUT! ${b.by.p.name}`, 'Out!'); }
+      }
       if (b.rcv.p.bot && b.rcv.botAt != null && b.t >= b.rcv.botAt) { b.rcv.botAt = null; this.swing(b.rcv, rnd(0.45, 0.9)); }
-      if (b.t > arr + 0.32 && this.ball === b) { b.done = true; this.point(1 - b.rcv.team, `${b.rcv.p.name} MISSED!`); }
+      if (b.t > arr + 0.32 && this.ball === b) {
+        b.done = true;
+        if (b.serve) { this.aces.set(b.by.p, this.aces.get(b.by.p) + 1); this.point(b.by.team, `ACE! ${b.by.p.name}`, 'Ace!'); }
+        else this.point(1 - b.rcv.team, `${b.rcv.p.name} MISSED!`);
+      }
     }
     if (this.T <= 0 && this.phase !== 'point') this.end();
   }
   end() {
     if (this.done) return; this.done = this.over = true;
-    const win = this.score[0] === this.score[1] ? -1 : this.score[0] > this.score[1] ? 0 : 1;
-    this.c.finish(rankBy(this.ps, p => (this.pl.get(p).team === win ? 1000 : 0) + this.hits.get(p), p => `${this.pl.get(p).team === win ? '🏆 ' : ''}${this.hits.get(p)} hits`));
+    this.c.sfx.crowdOff && this.c.sfx.crowdOff();
+    const sc = t => this.games[t] * 10 + this.pts[t], win = sc(0) === sc(1) ? -1 : sc(0) > sc(1) ? 0 : 1;
+    this.c.finish(rankBy(this.ps, p => (this.pl.get(p).team === win ? 1000 : 0) + this.hits.get(p) + this.aces.get(p) * 3, p => `${this.pl.get(p).team === win ? '🏆 ' : ''}${this.hits.get(p)} hits${this.aces.get(p) ? ` · ${this.aces.get(p)} aces` : ''}`));
   }
   sync() {
     for (const pl of this.pl.values()) {
       pl.P.root.position.set(pl.x, 0, pl.z);
       const q = phoneQ(livePhone(pl.p));
       if (q) { posePerson(pl.P, this.t, 0, pl.run, 'hold'); if (!pl.qs) pl.qs = q.clone(); pl.qs.slerp(q, 0.6); holdTool(pl.P, pl.qs, pl.team === 0 ? 0 : Math.PI); }
-      else { freeTool(pl.P); posePerson(pl.P, this.t, pl.sw, pl.run, 'racket'); }
+      else { freeTool(pl.P); posePerson(pl.P, this.t, pl.sw, pl.run, pl === this.server && this.phase === 'serve' && this.tossed && pl.sw === 0 ? 'toss' : pl.stroke); }
     }
-    const live = this.ball && !this.ball.done;
-    this.ballM.visible = !!live;
-    if (live) { const p = this.ballPos(); this.ballM.position.set(p.x, p.y, p.z); this.trail.push(p.x, p.y, p.z); this.ballM.material.emissive.set(this.ball.smash ? 0xff5500 : 0x99aa00); }
+    const tossing = this.phase === 'serve' && this.tossed, live = this.ball && !this.ball.done;
+    this.ballM.visible = !!live || tossing;
+    let bp = null;
+    if (tossing) bp = this.tossPos(); else if (live) bp = this.ballPos();
+    if (bp) { this.ballM.position.set(bp.x, bp.y, bp.z); if (live) this.trail.push(bp.x, bp.y, bp.z); this.ballM.material.emissive.set(live && this.ball.smash ? 0xff5500 : 0x99aa00); }
     this.trail.draw(live && this.ball.smash, 0.32, 0xeaffa0);
-    // timing ring around the receiver
-    const R = live ? this.ball.rcv : null;
+    // toss timing ring: around the top of the toss, green at the sweet spot
+    this.tossRing.visible = tossing;
+    if (tossing) { const s = this.server, u = this.tossT / 1.25; this.tossRing.position.set(s.x - 0.35 * this.bodyRight(s), 4.15, s.z + (s.team === 0 ? 0.3 : -0.3)); this.tossRing.lookAt(this.cam.position); this.tossRing.material.color.set(Math.abs(u - 0.5) < 0.08 ? 0x51cf66 : 0xffd43b); this.tossRing.scale.setScalar(1 + Math.abs(u - 0.5) * 2); }
+    const R = live && !this.ball.intoNet ? this.ball.rcv : null;
     this.tRing.visible = this.tCore.visible = !!R;
     if (R) {
       const left = this.ball.t1 + this.ball.t2 - this.ball.t, k = clamp(left / 1.2, 0, 1), sc = 0.9 + k * 3;
       this.tRing.position.set(R.x, 0.04, R.z); this.tRing.scale.setScalar(sc); this.tCore.position.set(R.x, 0.035, R.z); this.tCore.scale.setScalar(0.9);
       this.tRing.material.color.set(Math.abs(left) < 0.09 ? 0x51cf66 : 0xffd43b);
     }
-    // aim rings: a human's target on the opponent court, bigger when the ball is coming to them
     for (const [p, grp] of this.aims) {
       const pl = this.pl.get(p), mine = (R === pl) || (this.phase === 'serve' && this.server === pl);
-      grp.visible = this.phase !== 'cd' && this.phase !== 'point';
+      grp.visible = mine && this.phase !== 'cd' && this.phase !== 'point';
       const n = this.faceOf(pl), fw = pl.team === 0 ? 1 : -1;
-      const ax = n ? clamp(pl.x + Math.tan(aimYaw(p, n, fw)) * 6, -4.6, 4.6) : -clamp((p.input && p.input.x) || 0) * 4.3; grp.position.x += (ax - grp.position.x) * 0.35; grp.position.z = pl.team === 0 ? 18.5 : 5.5;
-      grp.scale.setScalar(mine ? 1.5 + Math.sin(this.t * 10) * 0.1 : 0.8); grp.children.forEach(m => (m.material.opacity = mine ? 0.95 : 0.35));
+      const ax = n ? clamp(pl.x + Math.tan(aimYaw(p, n, fw)) * 6, -4.6, 4.6) : clamp(((p.input && p.input.x) || 0) * 4.3 * this.rightX(pl), -4.6, 4.6);
+      grp.position.x += (ax - grp.position.x) * 0.35; grp.position.z = pl.team === 0 ? 18.5 : 5.5;
+      grp.scale.setScalar(1.4 + Math.sin(this.t * 10) * 0.1);
     }
-    // camera: behind the red team, drifts with the ball, punches in on a smash
-    const bx = live ? this.ballPos().x : 0, punch = this.flash * 4;
+    const bx = bp ? bp.x : 0, punch = this.flash * 4;
     this.cam.position.x += (bx * 0.35 - this.cam.position.x) * 0.06; this.cam.position.y = 7.2 - punch * 0.5; this.cam.position.z = -12.5 + punch;
     this.cam.lookAt(this.cam.position.x * 0.5, 0, 12);
+    if (this.camB) { this.camB.position.x += (bx * 0.35 - this.camB.position.x) * 0.06; this.camB.position.y = 7.2 - punch * 0.5; this.camB.position.z = 36.5 - punch; this.camB.lookAt(this.camB.position.x * 0.5, 0, 12); }
   }
+  // split screen for 1v1: left = behind red, right = behind blue
+  render(g) {
+    if (!this.split || !this.is3d) return super.render(g);
+    const r = S3.renderer(); r.setScissorTest(true);
+    [[0, this.cam], [1, this.camB]].forEach(([i, cam]) => { cam.aspect = 640 / 720; cam.updateProjectionMatrix(); r.setViewport(i * 640, 0, 640, 720); r.setScissor(i * 640, 0, 640, 720); r.render(this.scene, cam); });
+    r.setScissorTest(false); r.setViewport(0, 0, 1280, 720);
+    g.drawImage(r.domElement, 0, 0, 1600, 900);
+    g.fillStyle = '#0a0620'; g.fillRect(796, 0, 8, 900);
+  }
+  scrIn(i, x, y, z) { const cam = i ? this.camB : this.cam, v = new THREE.Vector3(x, y, z).project(cam); return { x: i * 800 + (v.x + 1) * 400, y: (1 - v.y) * 450, vis: v.z < 1 && v.z > -1 }; }
   draw(g) {
     if (this.is3d) this.sync();
     this.render(g);
     if (this.is3d) {
-      for (const pl of this.pl.values()) this.nameTag(g, pl.p, pl.x, 2.75, pl.z);
-      for (const [p, grp] of this.aims) { const pl = this.pl.get(p), mine = (this.ball && !this.ball.done && this.ball.rcv === pl) || (this.phase === 'serve' && this.server === pl); if (mine && grp.visible) { const s = this.scr(grp.position.x, 3.3, grp.position.z); txt(g, `🎯 ${p.name}`, s.x, s.y, 22, p.color, 'center', 'Nunito'); } }
+      const views = this.split ? [0, 1] : [null];
+      for (const vi of views) {
+        const S = (x, y, z) => vi == null ? this.scr(x, y, z) : this.scrIn(vi, x, y, z);
+        for (const pl of this.pl.values()) { const s = S(pl.x, 2.75, pl.z); if (s.vis && (vi == null || s.x > vi * 800 && s.x < vi * 800 + 800)) txt(g, pl.p.name, s.x, s.y, 22, pl.p.color, 'center', 'Nunito'); }
+        for (const [p, grp] of this.aims) if (grp.visible) { const s = S(grp.position.x, 3.3, grp.position.z); if (s.vis) txt(g, `🎯 ${p.name}`, s.x, s.y, 22, p.color, 'center', 'Nunito'); }
+      }
+      if (this.split) { txt(g, `🔴 ${this.tn(0)}`, 400, 870, 30, '#ff4d6d'); txt(g, `🔵 ${this.tn(1)}`, 1200, 870, 30, '#4dabff'); }
     }
-    g.fillStyle = 'rgba(10,6,30,.82)'; rr(g, 560, 18, 480, 92, 22); g.fill(); g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.15)'; g.stroke();
-    txt(g, 'RED', 650, 46, 24, '#ff4d6d'); txt(g, 'BLUE', 950, 46, 24, '#4dabff');
-    txt(g, String(this.score[0]), 700, 86, 52, '#fff'); txt(g, '–', 800, 84, 40, '#adb5bd'); txt(g, String(this.score[1]), 900, 86, 52, '#fff');
-    txt(g, `first to ${this.WIN}`, 800, 40, 16, '#adb5bd', 'center', 'Nunito');
+    // scoreboard: games + points, like on TV
+    g.fillStyle = 'rgba(10,6,30,.86)'; rr(g, 520, 14, 560, 104, 22); g.fill(); g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.15)'; g.stroke();
+    [0, 1].forEach(tm => {
+      const y = 44 + tm * 44, col = tm === 0 ? '#ff4d6d' : '#4dabff';
+      if (this.serveTeam === tm && this.phase !== 'cd') { g.fillStyle = '#e8ff3b'; g.beginPath(); g.arc(545, y, 7, 0, TAU); g.fill(); }
+      txt(g, this.tn(tm).slice(0, 10).toUpperCase(), 562, y, 24, col, 'left');
+      txt(g, String(this.games[tm]), 900, y, 30, '#fff');
+      g.fillStyle = 'rgba(255,255,255,.12)'; rr(g, 950, y - 18, 100, 36, 10); g.fill();
+      txt(g, this.showPts(tm), 1000, y, 28, '#ffd43b');
+    });
+    txt(g, 'GAMES', 900, 22, 12, '#adb5bd', 'center', 'Nunito'); txt(g, 'POINTS', 1000, 22, 12, '#adb5bd', 'center', 'Nunito');
     clock(g, this.T);
     this.overlays(g);
-    if (this.winTeam != null && this.phase === 'point') txt(g, `${this.winTeam === 0 ? '🔴 RED' : '🔵 BLUE'} WINS!`, 800, 600, 96, this.winTeam === 0 ? '#ff4d6d' : '#4dabff');
-    if (this.phase === 'cd') { this.cd.draw(g); txt(g, 'Turn your phone — or point your arm 📷 — to move your 🎯 target', 800, 700, 34, '#fff', 'center', 'Nunito'); }
+    if (this.phase === 'serve' && !this.tossed) txt(g, this.server.p.bot ? '' : `${this.server.p.name}: lift ⬆ to TOSS · then SWING at the top`, 800, 800, 34, this.server.p.color, 'center', 'Nunito');
+    if (this.winTeam != null && this.phase === 'point') txt(g, `🏆 ${this.tn(this.winTeam).toUpperCase()} WINS!`, 800, 600, 92, this.winTeam === 0 ? '#ff4d6d' : '#4dabff');
+    if (this.phase === 'cd') { this.cd.draw(g); txt(g, 'Serve: lift to toss, swing at the top · Rally: swing TOWARD where you want it', 800, 700, 30, '#fff', 'center', 'Nunito'); }
   }
 }
 

@@ -45,7 +45,10 @@
     let q = eulerQ(e.alpha || 0, e.beta || 0, e.gamma || 0); q = qmul(q, [0, 0, Math.sin(h), Math.cos(h)]);
     orQ = q; if (!orSeen) { orSeen = true; }
     if (!orNeu || orRecenter) { orNeu = q; orRecenter = false; }
+    const tn = performance.now(); yawHist.push([tn, yawNow()]); while (yawHist.length && tn - yawHist[0][0] > 1000) yawHist.shift();
   }
+  const yawHist = []; let lastToss = 0;
+  const yawAt = ms => { const tn = performance.now() - ms; const h = yawHist.find(x => x[0] >= tn); return h ? h[1] : yawNow(); };
   // rotation of the phone since "center", in the phone's own frame
   const relQ = () => { const r = qmul(qconj(orNeu), orQ); return r.map(v => +v.toFixed(3)); };
   setInterval(() => { if (orQ && orNeu && layout && layout.name === 'swing' && conn && conn.open) { try { conn.send({ t: 'or', q: relQ() }); } catch (e) {} } }, 33);
@@ -107,6 +110,11 @@
       // a swing = a fast twist of the wrist and/or a hard jolt. Fires the instant it crosses the line (timing matters!)
       const r = e.rotationRate, rot = r ? Math.hypot(r.alpha || 0, r.beta || 0, r.gamma || 0) : 0;
       const strength = Math.max(rot / 420, mag / 14);
+      // LIFT = toss: a sharp upward push (along gravity) that is not a swing
+      if (!calRun && layout && layout.sport === 'tennis' && l && l.x != null && strength < swingThr * 0.85 && now - lastToss > 900) {
+        const gx = a.x - l.x, gy = a.y - l.y, gz = (a.z || 0) - (l.z || 0), gm = Math.hypot(gx, gy, gz) || 1, up = (l.x * gx + l.y * gy + (l.z || 0) * gz) / gm;
+        if (up > 6) { lastToss = now; sendMsg({ t: 'act', a: 'toss' }); navigator.vibrate?.(25); toast('⬆ Toss! Now SWING!', 900); }
+      }
       if (calRun) calSwing(strength); // calibration measures your swing
       else if (strength > swingThr && now - lastSwing > 420) swing(clamp(0.5 + (strength / swingThr - 1) * 0.5, 0.5, 1), 'motion');
     }
@@ -418,7 +426,14 @@
   function swing(power, how) {
     if (!layout || layout.name !== 'swing') return;
     lastSwing = performance.now();
-    sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how, q: orQ && orNeu ? relQ() : undefined });
+    if (how === 'motion' && orQ && orNeu) {
+      const t0 = performance.now(), pre = yawAt(220), y0 = yawNow(), q0 = relQ();
+      setTimeout(() => {
+        const dir = clamp((yawNow() - y0) / 32), point = clamp(pre / ((cal && cal.yaw) || 35));
+        const aim = clamp(dir * 0.85 + point * 0.45);
+        sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how, q: q0, aim: +aim.toFixed(2), lag: +((performance.now() - t0) / 1000).toFixed(3) });
+      }, 110);
+    } else sendMsg({ t: 'act', a: 'swing', p: +power.toFixed(2), how, q: orQ && orNeu ? relQ() : undefined });
     navigator.vibrate?.(power > 0.8 ? [30, 20, 60] : 35);
     const ic = document.getElementById('swIcon'); if (ic) { ic.classList.remove('hit'); void ic.offsetWidth; ic.classList.add('hit'); }
     const pw = document.getElementById('swPow'); if (pw) { pw.style.transition = 'none'; pw.style.width = Math.round(power * 100) + '%'; void pw.offsetWidth; pw.style.transition = 'width 1.2s ease-in'; pw.style.width = '0%'; }
@@ -436,7 +451,7 @@
         <div class="swIcon" id="swIcon">${icon}</div>
         <div class="swLabel">${motion ? 'SWING IT!' : esc(L.label || 'SWING!')}</div>
         <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motion ? 'Hold it like ' + noun + ' and SWING!' : 'Motion is off'}</div>
-        <div class="swHint">${motion ? 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want the ball to go and swing!' : esc(L.hint || '')}</div>
+        <div class="swHint">${motion ? (L.sport === 'tennis' ? 'Hold it like a racket (screen facing you). <b>Serve:</b> lift ⬆ to toss, swing at the top. <b>Rally:</b> swing <b>toward</b> where you want the ball — right swing = right side!' : 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want it and swing!') : esc(L.hint || '')}</div>
         ${motion ? '<button class="chip on" id="swCenter">⟲ CENTER (hold still, screen to you)</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
       </div></div>`;
     if (motion) {

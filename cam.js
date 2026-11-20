@@ -91,6 +91,7 @@ window.CCCam = (() => {
       const { L, sc, hc, torso } = s.p, W = [L[15], L[16]];
       // wrist speeds in "torso lengths per second" so it works near or far from the camera
       const sp = W.map((w, i) => (s.prev ? dist(w, s.prev[i]) / dt / torso : 0));
+      const vx = W.map((w, i) => (s.prev ? (w.x - s.prev[i].x) / dt / torso : 0));
       s.prev = W.map(w => ({ x: w.x, y: w.y }));
       sp.forEach((v, i) => (s.vEma[i] = s.vEma[i] * 0.7 + v * 0.3));
       const dom = s.vEma[1] >= s.vEma[0] ? 1 : 0, w = W[dom];
@@ -99,7 +100,12 @@ window.CCCam = (() => {
       s.aim = s.aim * 0.5 + aim * 0.5; s.lean = s.lean * 0.5 + (Math.abs(lean) < 0.12 ? 0 : lean) * 0.5;
       const up = (L[15].y < L[0].y - torso * 0.15) || (L[16].y < L[0].y - torso * 0.15);
       const vmax = Math.max(sp[0], sp[1]);
-      if (vmax > 5.5 && now - s.lastSwing > 450) { s.lastSwing = now; s.flash = now; st.send({ t: 'camSwing', s: s.id, p: +clamp(0.45 + (vmax - 5.5) / 12, 0.45, 1).toFixed(2) }); navigator.vibrate?.(20); }
+      if (vmax > 5.5 && now - s.lastSwing > 450) {
+        s.lastSwing = now; s.flash = now;
+        const f = sp[1] >= sp[0] ? 1 : 0, dirSwing = clamp(-vx[f] / Math.max(1, sp[f]) * 1.4); // their right = image left
+        const aimNow = clamp(dirSwing * 0.85 + s.aim * 0.4);
+        st.send({ t: 'camSwing', s: s.id, p: +clamp(0.45 + (vmax - 5.5) / 12, 0.45, 1).toFixed(2), x: +aimNow.toFixed(2) }); navigator.vibrate?.(20);
+      }
       if (vmax > 3.5 && now - s.lastPump > 140) { s.lastPump = now; st.send({ t: 'camPump', s: s.id }); }
       out.push({ s: s.id, x: +s.aim.toFixed(2), l: +s.lean.toFixed(2), u: up, k: KP.flatMap(i => [+L[i].x.toFixed(3), +L[i].y.toFixed(3)]) });
     }
