@@ -1,12 +1,14 @@
 /* Synthesized sound effects — no audio files needed */
 const SFX = (() => {
-  let ac = null, master = null, crowd = null;
+  let ac = null, master = null, crowd = null, voiceOut = null, voiceBuf = null, voiceSrc = [];
   const last = {};
   function init() {
     if (ac) return;
     try {
       ac = new (window.AudioContext || window.webkitAudioContext)();
       master = ac.createGain(); master.gain.value = 0.35; master.connect(ac.destination);
+      voiceOut = ac.createGain(); voiceOut.gain.value = 1.0; voiceOut.connect(ac.destination);
+      if (typeof VOICE !== 'undefined') fetch(VOICE.url).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(buf => { voiceBuf = buf; }).catch(() => {});
     } catch (e) { ac = null; }
   }
   function tone(f, dur, type = 'square', vol = 0.3, slide = 0, delay = 0) {
@@ -63,9 +65,15 @@ const SFX = (() => {
     ooh() { if (!ac) return; for (let i = 0; i < 6; i++) tone(180 + Math.random() * 120, 0.9, 'sine', 0.05, 0.75, i * 0.02); bandNoise(0.9, 0.18, 500, 1.5, 0.2); },
     applause(k = 1) { if (!ac) return; for (let i = 0; i < 40 * k; i++) noiseClap(Math.random() * 2.2 * k); },
     // announcer: the device's built-in voice (free). Replaceable by recorded clips later.
+    voiceKeys: t => voiceKeys(t).map(k => (k >= 0 ? VOICE.lines[k] : '?')),
     say(text, o = {}) {
+      if (SFX.muteVoice) return;
+      // 1) the recorded ElevenLabs announcer, when every sentence is a known call
+      const keys = voiceKeys(text);
+      if (voiceBuf && keys.length && keys.every(k => k >= 0)) return playClips(keys, o.interrupt !== false);
+      // 2) otherwise the device's built-in voice (names etc.)
       try {
-        if (!('speechSynthesis' in window) || SFX.muteVoice) return;
+        if (!('speechSynthesis' in window)) return;
         const u = new SpeechSynthesisUtterance(text); u.rate = o.rate || 1.05; u.pitch = o.pitch || 0.9; u.volume = 1;
         const vs = speechSynthesis.getVoices(), v = vs.find(x => /en-GB|en_GB/.test(x.lang) && /male|daniel|george|arthur/i.test(x.name)) || vs.find(x => /^en/.test(x.lang));
         if (v) u.voice = v;
@@ -74,6 +82,27 @@ const SFX = (() => {
       } catch (e) {}
     },
   };
+  function voiceKeys(text) { // whole line first ("Red to serve. Play!"), else sentence by sentence
+    if (typeof VOICE === 'undefined') return [-1];
+    const whole = voiceKey(text); if (whole >= 0) return [whole];
+    return String(text).split(/(?<=[.!?])\s+/).map(voiceKey).filter(k => k !== -2);
+  }
+  function voiceKey(sentence) {
+    const t = String(sentence).toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return -2;
+    let i = VOICE.lines.indexOf(t); if (i >= 0) return i;
+    if (/^game set and match/.test(t)) return VOICE.lines.indexOf('game set and match');
+    if (/^game /.test(t)) return VOICE.lines.indexOf('game');
+    return -1;
+  }
+  function playClips(keys, interrupt) {
+    if (interrupt) { voiceSrc.forEach(x => { try { x.stop(); } catch (e) {} }); voiceSrc = []; }
+    let t = ac.currentTime + 0.03;
+    for (const k of keys) {
+      const [a, b] = VOICE.clips[k], src = ac.createBufferSource(); src.buffer = voiceBuf; src.connect(voiceOut);
+      src.start(t, a, b - a); voiceSrc.push(src); t += b - a + 0.12;
+    }
+  }
   function noiseBuf(sec) { const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0); let l = 0; for (let i = 0; i < n; i++) { l = l * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = (Math.random() * 2 - 1) * 0.6 + l * 8; } return b; }
   function bandNoise(dur, vol, freq, q = 1, attack = 0.02) {
     if (!ac) return; const t = ac.currentTime, src = ac.createBufferSource(); src.buffer = noiseBuf(dur + 0.1);

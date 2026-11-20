@@ -350,7 +350,8 @@ class SmashTennis extends Sport3D {
   bodyRight(pl) { return pl.team === 0 ? -1 : 1; }
   newServe() {
     const tm = this.lanes(this.serveTeam); this.server = tm[this.serveIdx[this.serveTeam] % tm.length];
-    this.phase = 'serve'; this.tossed = false; this.tossT = 0; this.server.auto = false; this.wait = this.server.p.bot ? rnd(0.8, 1.3) : 9;
+    this.phase = 'serve'; this.tossed = false; this.tossT = 0; this.server.auto = false; this.rally = 0;
+    if (!this.faults && Math.random() < 0.25 && this.pts[0] + this.pts[1] > 0) setTimeout(() => this.say('Quiet, please.'), 900); this.wait = this.server.p.bot ? rnd(0.8, 1.3) : 9;
     this.ball = null; if (this.trail) this.trail.clear();
     // server stands at the baseline on the side of the score (deuce / ad court)
     const side = (this.pts[0] + this.pts[1]) % 2 === 0 ? 1 : -1; this.server.serveX = side * 1.4 * (this.server.team === 0 ? -1 : 1);
@@ -423,7 +424,8 @@ class SmashTennis extends Sport3D {
     if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl) return;
     const b = this.ball, dt = b.t - lag - (b.t1 + b.t2);
     if (Math.abs(dt) <= 0.3) {
-      const perfect = Math.abs(dt) < 0.09; this.hits.set(pl.p, this.hits.get(pl.p) + 1);
+      const perfect = Math.abs(dt) < 0.09; this.hits.set(pl.p, this.hits.get(pl.p) + 1); this.rally = (this.rally || 0) + 1;
+      if (this.rally === 8) { this.say('Unbelievable!'); this.c.sfx.cheer && this.c.sfx.cheer(0.5); } else if (perfect && Math.random() < 0.3) this.say('What a shot!');
       // forehand if the ball is on the player's right side
       const bxRel = (b.tx - pl.x) * this.bodyRight(pl); pl.stroke = bxRel > -0.1 ? 'fh' : 'bh';
       const s = this.scr(pl.x, 3, pl.z); this.pop.add(pl.stroke === 'fh' ? 'FOREHAND' : 'BACKHAND', s.x, s.y, '#fff', 26, 0.7);
@@ -441,7 +443,7 @@ class SmashTennis extends Sport3D {
   hitFx(pl, smash, perfect, power = 0.7) {
     const p = this.ball && !this.ball.done ? this.ballPos() : this.phase === 'serve' && this.tossed ? this.tossPos() : { x: pl.x, y: 1.2, z: pl.z };
     this.burst(p.x, p.y, p.z, smash ? 120 : 25, smash ? 0xff922b : 0xffffff, smash ? 12 : 5, 0.7, 3);
-    if (smash) { this.pop.add('🔥 SMASH!! 🔥', 800, 330, '#ff922b', 120, 1.4); this.c.shake(26); this.c.sfx.smash ? this.c.sfx.smash() : this.c.sfx.boom(); this.flash = 0.35; this.excite = 1; this.c.sfx.cheer && this.c.sfx.cheer(0.6); }
+    if (smash) { this.say('Smash! What power!'); this.pop.add('🔥 SMASH!! 🔥', 800, 330, '#ff922b', 120, 1.4); this.c.shake(26); this.c.sfx.smash ? this.c.sfx.smash() : this.c.sfx.boom(); this.flash = 0.35; this.excite = 1; this.c.sfx.cheer && this.c.sfx.cheer(0.6); }
     else { if (perfect) { const s = this.scr(pl.x, 2.8, pl.z); this.pop.add('PERFECT!', s.x, s.y, '#51cf66', 44, 0.9); } this.c.shake(5); this.c.sfx.pok ? this.c.sfx.pok(power) : this.c.sfx.hit(); }
   }
   callScore() {
@@ -605,7 +607,7 @@ class SmashTennis extends Sport3D {
 class StrikeBowling extends Sport3D {
   constructor(c) { super(c); this.aim = 0; }
   start() {
-    this.ps = this.c.roster(1); this.frames = this.ps.length > 4 ? 2 : 3;
+    this.ps = this.c.roster(1); this.frames = this.ps.length > 4 ? 2 : 3; this.c.sfx.crowdOn && this.c.sfx.crowdOn(0.06);
     this.pts = new Map(this.ps.map(p => [p, 0])); this.strikes = new Map(this.ps.map(p => [p, 0]));
     this.turns = []; for (let f = 0; f < this.frames; f++) for (const p of this.ps) this.turns.push(p);
     this.build();
@@ -694,7 +696,7 @@ class StrikeBowling extends Sport3D {
     if (this.phase === 'roll') {
       const sdt = dt * this.ts, b = this.ball; this.rollT += dt;
       b.z += b.vz * sdt; b.x += b.vx * sdt; b.rot += b.vz * sdt / 0.11;
-      if (!b.gutter && b.z < 17.6 && Math.abs(b.x) > 0.53) { b.gutter = true; b.x = Math.sign(b.x) * 0.65; b.vx = 0; b.y = 0.06; this.pop.add('GUTTER!', 800, 300, '#adb5bd', 70, 1.2); this.c.sfx.buzz(); }
+      if (!b.gutter && b.z < 17.6 && Math.abs(b.x) > 0.53) { b.gutter = true; b.x = Math.sign(b.x) * 0.65; b.vx = 0; b.y = 0.06; this.pop.add('GUTTER!', 800, 300, '#adb5bd', 70, 1.2); this.c.sfx.buzz(); this.c.sfx.say && this.c.sfx.say('Gutter ball.'); this.c.sfx.ooh && this.c.sfx.ooh(); }
       if (b.z > 17.6 && Math.abs(b.x) > 0.62) { b.x = Math.sign(b.x) * 0.62; b.vx = 0; }
       if (b.z > 21.5) b.y -= sdt * 2;
       for (const pn of this.pins) {
@@ -723,8 +725,8 @@ class StrikeBowling extends Sport3D {
     const newly = this.pins.filter(p => p.down && !p.gone).length, before = this.roll === 0 ? 0 : this.firstDown, down = before + newly;
     let gain = newly, msg = `${newly} PIN${newly === 1 ? '' : 'S'}`, color = '#fff';
     this.again = false;
-    if (this.roll === 0 && down === 10) { gain = 20; msg = '💥 STRIKE!! 💥'; color = '#ffd43b'; this.strikes.set(this.cur, this.strikes.get(this.cur) + 1); this.flash = 0.5; this.excite = 1; this.c.shake(30); this.c.sfx.boom(); for (let i = 0; i < 6; i++) this.burst(rnd(-0.6, 0.6), rnd(0.3, 1.5), rnd(18, 20), 60, pick([0xff4d6d, 0xffd43b, 0x4dabff, 0x51cf66]), 6, 1.3, 3); }
-    else if (this.roll === 1 && down === 10) { gain = 15 - before; msg = '✨ SPARE! ✨'; color = '#51cf66'; this.excite = 0.8; this.burst(0, 1, 19, 80, 0x51cf66, 5, 1.2, 3); this.c.sfx.win(); }
+    if (this.roll === 0 && down === 10) { gain = 20; msg = '💥 STRIKE!! 💥'; color = '#ffd43b'; this.c.sfx.say && this.c.sfx.say('Strike!'); this.c.sfx.cheer && this.c.sfx.cheer(1); this.strikes.set(this.cur, this.strikes.get(this.cur) + 1); this.flash = 0.5; this.excite = 1; this.c.shake(30); this.c.sfx.boom(); for (let i = 0; i < 6; i++) this.burst(rnd(-0.6, 0.6), rnd(0.3, 1.5), rnd(18, 20), 60, pick([0xff4d6d, 0xffd43b, 0x4dabff, 0x51cf66]), 6, 1.3, 3); }
+    else if (this.roll === 1 && down === 10) { gain = 15 - before; msg = '✨ SPARE! ✨'; color = '#51cf66'; this.c.sfx.say && this.c.sfx.say('Spare!'); this.c.sfx.applause && this.c.sfx.applause(1); this.excite = 0.8; this.burst(0, 1, 19, 80, 0x51cf66, 5, 1.2, 3); this.c.sfx.win(); }
     else if (this.roll === 0) { this.again = true; this.firstDown = down; this.c.sfx.ding(); if (down === 0) msg = 'OOPS… 0'; }
     this.pts.set(this.cur, this.pts.get(this.cur) + gain);
     this.pop.add(msg, 800, 300, color, down === 10 ? 110 : 70, 2);
@@ -732,7 +734,7 @@ class StrikeBowling extends Sport3D {
     if (this.again) { this.pins.forEach(p => { if (p.down) p.gone = true; p.vx = p.vz = 0; }); this.roll = 1; }
     this.phase = 'show'; this.wait = down === 10 ? 3 : 2.2;
   }
-  end() { if (this.done) return; this.done = this.over = true; this.c.finish(rankBy(this.ps, p => this.pts.get(p) * 10 + this.strikes.get(p), p => `${this.pts.get(p)} pts${this.strikes.get(p) ? ` · ${this.strikes.get(p)}× strike` : ''}`)); }
+  end() { if (this.done) return; this.done = this.over = true; this.c.sfx.crowdOff && this.c.sfx.crowdOff(); this.c.finish(rankBy(this.ps, p => this.pts.get(p) * 10 + this.strikes.get(p), p => `${this.pts.get(p)} pts${this.strikes.get(p) ? ` · ${this.strikes.get(p)}× strike` : ''}`)); }
   sync() {
     // neon sign
     const sg = this.signCv.getContext('2d'); sg.clearRect(0, 0, 1024, 160); sg.font = '110px Bungee, Impact'; sg.textAlign = 'center'; sg.textBaseline = 'middle'; sg.shadowColor = `hsl(${(this.t * 90) % 360},100%,60%)`; sg.shadowBlur = 30; sg.fillStyle = `hsl(${(this.t * 90) % 360},100%,72%)`; sg.fillText('STRIKE ZONE', 512, 85); this.sign.needsUpdate = true;
@@ -777,6 +779,7 @@ class HomeRunDerby extends Sport3D {
   constructor(c) { super(c); this.N = 8; this.n = 0; }
   start() {
     this.ps = this.c.roster(1); this.dist = new Map(this.ps.map(p => [p, 0])); this.hr = new Map(this.ps.map(p => [p, 0])); this.sw = new Map(this.ps.map(p => [p, 0]));
+    this.c.sfx.crowdOn && this.c.sfx.crowdOn(0.1);
     this.c.setLayout('all', SWING('bat', { hint: 'Tilt/drag to aim your 🎯 · swing when the ring closes!' }));
     this.cd = new Countdown(this.c); this.phase = 'cd'; this.flyT = 0;
     this.build();
@@ -859,7 +862,7 @@ class HomeRunDerby extends Sport3D {
       if (!p.bot) this.c.send(p, { t: 'toast', text: type === 'HOME RUN' ? `💥 HOME RUN! ${d} m` : d ? `${type}! ${d} m` : type });
     }
     const hrs = P.res.filter(r => r.type === 'HOME RUN');
-    if (hrs.length) { this.pop.add(hrs.length > 1 ? `💥 ${hrs.length}× HOME RUN!! 💥` : `💥 HOME RUN ${hrs[0].p.name}! 💥`, 800, 230, '#ffd43b', 80, 2.2); this.flash = 0.45; this.c.shake(24); this.c.sfx.boom(); this.excite = 1; }
+    if (hrs.length) { this.pop.add(hrs.length > 1 ? `💥 ${hrs.length}× HOME RUN!! 💥` : `💥 HOME RUN ${hrs[0].p.name}! 💥`, 800, 230, '#ffd43b', 80, 2.2); this.flash = 0.45; this.c.shake(24); this.c.sfx.boom(); this.excite = 1; this.c.sfx.say && this.c.sfx.say('Home run!'); this.c.sfx.cheer && this.c.sfx.cheer(1.3); }
     else if (P.res.some(r => r.d)) { this.c.sfx.hit(); this.c.shake(8); this.excite = 0.6; }
     else { this.pop.add('STRIKE!', 800, 300, '#ff4d6d', 90, 1.4); this.c.sfx.buzz(); }
     for (const r of P.res) if (r.d || r.type === 'FOUL') { const i = this.ps.indexOf(r.p); this.burst(this.bx(i), 1, 0.3, 30, 0xffffff, 6, 0.5, 2); }
@@ -883,7 +886,7 @@ class HomeRunDerby extends Sport3D {
       if (this.flyT > 4) this.nextPitch();
     }
   }
-  end() { if (this.done) return; this.done = this.over = true; this.c.finish(rankBy(this.ps, p => this.dist.get(p) * 10 + this.hr.get(p), p => `${this.dist.get(p)} m${this.hr.get(p) ? ` · ${this.hr.get(p)} HR` : ''}`)); }
+  end() { if (this.done) return; this.done = this.over = true; this.c.sfx.crowdOff && this.c.sfx.crowdOff(); this.c.finish(rankBy(this.ps, p => this.dist.get(p) * 10 + this.hr.get(p), p => `${this.dist.get(p)} m${this.hr.get(p) ? ` · ${this.hr.get(p)} HR` : ''}`)); }
   sync() {
     const P = this.pitch;
     // pitcher wind-up
