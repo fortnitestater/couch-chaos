@@ -103,14 +103,15 @@ window.CCCam = (() => {
       // a swing starts when a wrist moves fast; we follow it for ~150 ms to catch its PEAK speed, then send
       if (!s.pend && vmax > 5.5 && now - s.lastSwing > 450) {
         const f = sp[1] >= sp[0] ? 1 : 0;
-        s.pend = { t0: now, vmax, dir: clamp(-vx[f] / Math.max(1, sp[f]) * 1.4), aim: s.aim }; s.lastSwing = now; s.flash = now;
+        s.pend = { t0: now, vmax, dir: clamp(-vx[f] / Math.max(1, sp[f]) * 1.4), aim: s.aim, f, y0: W[f].y }; s.lastSwing = now; s.flash = now;
       } else if (s.pend) {
         s.pend.vmax = Math.max(s.pend.vmax, vmax);
         if (now - s.pend.t0 > 150) {
           // torso (shoulders→hips) ≈ 0.5 m gives real units; racket head ≈ 1.6× the wrist; ball ≈ 1.4× the racket
           const wristMs = s.pend.vmax * 0.5, kmh = Math.round(clamp(wristMs * 1.6 * 1.4 * 3.6, 20, 240));
           const pw = clamp((kmh - 40) / 150 + 0.35, 0.3, 1), aimNow = clamp(s.pend.dir * 0.85 + s.pend.aim * 0.4);
-          st.send({ t: 'camSwing', s: s.id, p: +pw.toFixed(2), kmh, x: +aimNow.toFixed(2), lag: +((now - s.pend.t0) / 1000).toFixed(3) });
+          const spin = +clamp(-(W[s.pend.f].y - s.pend.y0) / torso * 1.3).toFixed(2); // wrist rising = topspin (image y grows downward)
+          st.send({ t: 'camSwing', s: s.id, p: +pw.toFixed(2), kmh, spin, x: +aimNow.toFixed(2), lag: +((now - s.pend.t0) / 1000).toFixed(3) });
           s.lastKmh = kmh; s.kmhAt = now; s.pend = null; navigator.vibrate?.(20);
         }
       }

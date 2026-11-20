@@ -283,6 +283,46 @@ class Sport3D {
   }
 }
 
+
+/* ---------- TENNIS BALL PHYSICS (metres, seconds) ----------
+   Simulated, not faked: gravity + air drag + Magnus force from spin, a real bounce (spin changes the kick),
+   and the net. Real tennis-ball numbers: m = 57 g, r = 3.3 cm, drag Cd ≈ 0.55, lift from spin up to CL ≈ 0.3.
+   GAME_SPEED slows real shot speeds a little so people in a living room can react. */
+const TB = { g: 9.81, kD: 0.0196, kL: 0.035, r: 0.033, e: 0.75, NET_H: 0.914, dt: 1 / 240, GAME_SPEED: 0.82 };
+function tennisSim(p, v, spin, maxT = 4) {
+  let x = p.x, y = p.y, z = p.z, vx = v.x, vy = v.y, vz = v.z, s = spin, t = 0, k = 0;
+  const pts = [[0, x, y, z]], bounces = []; let net = null;
+  while (t < maxT) {
+    const sp = Math.hypot(vx, vy, vz) || 1, hl = Math.hypot(vx, vz) || 1, wx = vz / hl, wz = -vx / hl; // spin axis ⟂ to travel
+    const cl = 0.3 * s; // topspin (+) pushes down, slice (−) lifts
+    const ax = -TB.kD * sp * vx + TB.kL * cl * sp * (-wz * vy);
+    const ay = -TB.g - TB.kD * sp * vy + TB.kL * cl * sp * (wz * vx - wx * vz);
+    const az = -TB.kD * sp * vz + TB.kL * cl * sp * (wx * vy);
+    const pz = z;
+    vx += ax * TB.dt; vy += ay * TB.dt; vz += az * TB.dt; x += vx * TB.dt; y += vy * TB.dt; z += vz * TB.dt; t += TB.dt;
+    // the net (0.914 m in the middle, 1.07 m at the posts)
+    if ((pz - 12) * (z - 12) <= 0 && y < TB.NET_H + Math.min(1, Math.abs(x) / 5.5) * 0.155 + TB.r) { net = { t, x, y: Math.max(TB.r, y), z: 12 + Math.sign(pz - 12) * 0.08 }; pts.push([t, net.x, net.y, net.z]); break; }
+    if (y < TB.r && vy < 0) { // bounce: topspin kicks forward and high, slice skids and stays low
+      y = TB.r; vy = -vy * (TB.e + 0.05 * s); const f = clamp(0.68 + 0.12 * s, 0.5, 0.85); vx *= f; vz *= f; s *= 0.55;
+      bounces.push({ t, x, z }); if (bounces.length >= 2) { pts.push([t, x, y, z]); break; }
+    }
+    if (++k % 2 === 0) pts.push([t, x, y, z]);
+  }
+  return { pts, bounces, net, end: pts[pts.length - 1][0] };
+}
+/* aim a shot: find the launch angle that lands the ball on the target with this speed and spin.
+   If the speed is too high for that distance the ball just goes long — like real tennis (use topspin!). */
+function solveShot(S, T, speed, spin, kind, noLift) {
+  const dx = T.x - S.x, dz = T.z - S.z, dist = Math.hypot(dx, dz), yaw = Math.atan2(dx, dz);
+  const shoot = th => { const c = Math.cos(th), v = { x: speed * c * Math.sin(yaw), y: speed * Math.sin(th), z: speed * c * Math.cos(yaw) }; const sim = tennisSim(S, v, spin); const b = sim.bounces[0]; return { sim, th, d: b ? Math.hypot(b.x - S.x, b.z - S.z) : sim.net ? 0 : 99 }; };
+  const lob = kind === 'lob';
+  let lo = lob ? 0.62 : kind === 'smash' || kind === 'serve' ? -0.4 : -0.15, hi = lob ? 1.2 : 0.7, r = null;
+  for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; r = shoot(mid); const tooShort = r.d < dist; if (lob ? !tooShort : tooShort) lo = mid; else hi = mid; }
+  // players aim to clear the net: if this one clips it, lift it a little (it may then land long)
+  for (let i = 0; r.sim.net && !noLift && i < 6 && kind !== 'lob'; i++) r = shoot(r.th + 0.025);
+  return r;
+}
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
 /* =====================================================================
    🎾 SMASH TENNIS — real tennis, 1:1.
    SERVE: lift the phone (or raise your hand on camera) to TOSS, then swing to hit
@@ -317,8 +357,8 @@ class SmashTennis extends Sport3D {
     const court = new THREE.Mesh(new THREE.PlaneGeometry(W + 3, L + 6), mat(0xffffff, { roughness: 0.85, map: canvasTex(560, 1200, (g, w, h) => {
       g.fillStyle = '#2f9e44'; g.fillRect(0, 0, w, h); const m = 60; g.fillStyle = '#3b5bdb'; g.fillRect(m, m, w - m * 2, h - m * 2);
       g.strokeStyle = '#fff'; g.lineWidth = 8; const cx = w / 2, sx = (w - m * 2) / W; g.strokeRect(m, m, w - m * 2, h - m * 2);
-      const sl = (z) => m + (z / L) * (h - m * 2); g.lineWidth = 5; [6.4, 17.6].forEach(z => { g.beginPath(); g.moveTo(m + 1.37 * sx, sl(z)); g.lineTo(w - m - 1.37 * sx, sl(z)); g.stroke(); });
-      g.beginPath(); g.moveTo(m + 1.37 * sx, m); g.lineTo(m + 1.37 * sx, h - m); g.moveTo(w - m - 1.37 * sx, m); g.lineTo(w - m - 1.37 * sx, h - m); g.moveTo(cx, sl(6.4)); g.lineTo(cx, sl(17.6)); g.stroke();
+      const sl = (z) => m + (z / L) * (h - m * 2); g.lineWidth = 5; [5.6, 18.4].forEach(z => { g.beginPath(); g.moveTo(m + 1.37 * sx, sl(z)); g.lineTo(w - m - 1.37 * sx, sl(z)); g.stroke(); });
+      g.beginPath(); g.moveTo(m + 1.37 * sx, m); g.lineTo(m + 1.37 * sx, h - m); g.moveTo(w - m - 1.37 * sx, m); g.lineTo(w - m - 1.37 * sx, h - m); g.moveTo(cx, sl(5.6)); g.lineTo(cx, sl(18.4)); g.stroke();
     }) }));
     court.rotation.x = -Math.PI / 2; court.position.set(0, 0, 12); court.receiveShadow = true; s.add(court);
     const net = new THREE.Mesh(new THREE.PlaneGeometry(W + 1, 0.95), new THREE.MeshStandardMaterial({ transparent: true, side: THREE.DoubleSide, map: canvasTex(256, 32, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(20,20,30,.85)'; g.lineWidth = 1.5; for (let x = 0; x < w; x += 6) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); } for (let y = 0; y < h; y += 6) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); } }) }));
@@ -333,6 +373,7 @@ class SmashTennis extends Sport3D {
     this.tRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), ringMat()); this.tRing.rotation.x = -Math.PI / 2; s.add(this.tRing);
     this.tCore = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), ringMat()); this.tCore.rotation.x = -Math.PI / 2; this.tCore.material.color.set(0xffffff); this.tCore.material.opacity = 0.5; s.add(this.tCore);
     // toss meter: a ring at the top of the toss, glows green at the perfect moment
+    this.markM = [0, 1, 2].map(() => { const m = new THREE.Mesh(new THREE.CircleGeometry(0.14, 20), new THREE.MeshBasicMaterial({ color: 0x51cf66, transparent: true, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.scale.y = 1.6; m.visible = false; s.add(m); return m; });
     this.tossRing = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffd43b })); this.tossRing.visible = false; s.add(this.tossRing);
     this.aims = new Map();
     for (const p of this.ps) if (!p.bot) {
@@ -366,47 +407,77 @@ class SmashTennis extends Sport3D {
   // ---------- REAL BALL PHYSICS ----------
   // kind: 'drive' | 'lob' | 'smash' | 'serve'. The ball flies with gravity, clears the net (unless it's a mishit),
   // bounces with energy loss, and we work out exactly where and when it reaches the receiver.
+  halfW() { return this.teams[0].length === 1 && this.teams[1].length === 1 ? 4.115 : 5.485; } // singles / doubles sidelines
+  // REAL SHOT: intended target from aim + timing, speed from the measured swing, spin from the swing path
   launch(from, power, aim, n, opt = {}) {
-    const G = 9.8, other = 1 - from.team, opp = this.lanes(other), fwd = from.team === 0 ? 1 : -1, kind = opt.kind || 'drive';
-    const S = opt.start || { x: from.x + 0.45 * this.bodyRight(from), y: kind === 'smash' ? 2.4 : 1.1, z: from.z + fwd * 0.35 };
-    let tx = aim != null ? aim * 4.0 * this.rightX(from) : n ? from.x + Math.tan(aimYaw(from.p, n, fwd)) * 6 : 0;
-    tx = clamp(tx + rnd(-0.3, 0.3), -4.3, 4.3);
-    const out = kind === 'drive' && power > 0.93 && Math.abs(aim || 0) > 0.9 && Math.random() < 0.25;
-    if (out) tx = Math.sign(tx || 1) * rnd(5.7, 6.3);
-    const depth = kind === 'serve' ? rnd(2.8, 5.8) : kind === 'smash' ? rnd(3.5, 8) : kind === 'lob' ? rnd(8.5, 10.8) : rnd(5.5, 9.5) + power;
-    const bz = 12 + fwd * Math.min(depth, 11.5);
-    const dx = tx - S.x, dz = bz - S.z, dist = Math.hypot(dx, dz);
-    const kf = opt.kmh ? clamp((opt.kmh - 40) / 160, 0, 1) : power; // measured shot speed drives the ball
-    const speed = (kind === 'serve' ? 15 + kf * 16 : kind === 'smash' ? 25 + kf * 10 : kind === 'lob' ? 8 + kf * 2 : 10.5 + kf * 12) * (opt.boost && !opt.kmh ? opt.boost : 1);
-    let t1 = dist / speed, vy = 0;
-    const netY = (t) => { const tn = (12 - S.z) / (dz / t); return S.y + ((0 - S.y + 0.5 * G * t * t) / t) * tn - 0.5 * G * tn * tn; };
-    if (opt.intoNet) { const vzN = dz / t1, tn = (12 - S.z) / vzN; vy = (0.45 - S.y + 0.5 * G * tn * tn) / tn; }
-    else { for (let k = 0; k < 20 && netY(t1) < (kind === 'lob' ? 3.6 : 1.2); k++) t1 *= 1.06; vy = (0 - S.y + 0.5 * G * t1 * t1) / t1; }
-    const vx = dx / t1, vz = dz / t1, vyb = vy - G * t1, keep = kind === 'lob' ? 0.78 : 0.66;
-    const vy2 = -vyb * keep, vx2 = vx * 0.86, vz2 = vz * 0.86;
-    // pick the receiver closest to where it lands, then find where they meet the ball
-    const to = opp.reduce((a, b) => (Math.abs(b.home - tx) < Math.abs(a.home - tx) ? b : a));
-    const y2 = u => vy2 * u - 0.5 * G * u * u;
-    let u = (to.homeZ - bz) / vz2; if (!(u > 0)) u = 0.5;
-    if (y2(u) < 0.65) u = (vy2 + Math.sqrt(Math.max(0, vy2 * vy2 - 2 * G * 0.75))) / G; // ball dropping: step in and take it at waist height
-    const c = { x: tx + vx2 * u, y: Math.max(0.5, y2(u)), z: bz + vz2 * u };
-    this.ball = { S, vx, vy, vz, t1, bx: tx, bz, vx2, vy2, vz2, t2: u, A: t1 + u, c, t: 0, rcv: to, by: from, kind, smash: kind === 'smash' || !!opt.fire, bounced: false, done: false, out, intoNet: !!opt.intoNet, serve: kind === 'serve', prevZ: S.z };
-    const miss = this.ball.smash ? 0.4 : opt.ace ? 0.5 : kind === 'lob' ? 0.2 : 0.1;
-    to.botAt = to.p.bot ? (Math.random() < miss ? null : this.ball.A + rnd(-0.1, 0.1)) : null;
-    to.botAim = rnd(-1, 1);
-    if (!to.p.bot && c.y > 2) { const s = this.scr(c.x, 3.2, c.z); this.pop.add('⬆ HIGH BALL — SMASH IT!', s.x, s.y, '#cc5de8', 34, 1.2); }
+    const kind = opt.kind || 'drive', other = 1 - from.team, fwd = from.team === 0 ? 1 : -1, opp = this.lanes(other), hw = this.halfW();
+    const S = opt.start || { x: from.x + 0.45 * this.bodyRight(from), y: kind === 'smash' ? 2.5 : 1.0, z: from.z + fwd * 0.35 };
+    const kmh = opt.kmh || 60 + power * 90, err = opt.err || 0;
+    let spin = opt.spin != null ? clamp(opt.spin) : kind === 'lob' ? 0.2 : kind === 'smash' ? 0.05 : kind === 'serve' ? 0.15 : 0.4;
+    let tx, tz;
+    if (kind === 'serve') { // cross-court into the diagonal service box: aim chooses wide or down the T
+      const side = Math.sign(from.serveX || 1), box = -side, w = clamp(((aim ?? rnd(-1, 1)) * box * this.rightX(from) * -1) * 0.5 + 0.5, 0, 1);
+      tx = box * lerp(0.5, 3.5, w); tz = 12 + fwd * rnd(4.6, 5.8); this.serveBox = { sign: box, fwd };
+    } else {
+      tx = aim != null ? aim * 3.4 * this.rightX(from) : n ? from.x + Math.tan(aimYaw(from.p, n, fwd)) * 6 : rnd(-2, 2);
+      tz = 12 + fwd * (kind === 'lob' ? 10 : kind === 'smash' ? rnd(5, 9) : opt.attack ? rnd(6.2, 8.4) : rnd(8.6, 10.2));
+      if (opt.attack) tx *= 1.18;
+    }
+    // timing error: early/late pulls the ball sideways and makes the length less precise (that's where errors come from)
+    // mistiming turns the racket face: being 0.1 s early/late pulls the ball ~2.5 m off line (a bit gentler for phone players,
+    // whose timing also includes sensor noise)
+    const ek = from.p.bot ? 25 : 15;
+    tx += err * ek * this.bodyRight(from) + gauss() * Math.abs(err) * ek * 0.4; tz += fwd * gauss() * Math.abs(err) * ek * 0.6;
+    tx = clamp(tx, -hw - 1.5, hw + 1.5);
+    // real speed × game speed, with a playable minimum (a soft swing still gets the ball back, like a real rally ball)
+    const raw = (kmh / 3.6) * TB.GAME_SPEED;
+    const speed = kind === 'lob' ? clamp(raw * 0.7, 16, 19) : kind === 'smash' ? Math.max(22, raw) : kind === 'serve' ? Math.max(18, raw) : Math.max(14.5, raw);
+    // mistimed or very low balls often don't get lifted enough → into the net (like real)
+    const noLift = kind === 'drive' && ((Math.abs(err) > 0.07 && Math.random() < 0.6) || (S.y < 0.65 && Math.random() < 0.45));
+    if (noLift) tz -= fwd * rnd(3, 6);
+    const shot = solveShot(S, { x: tx, z: tz }, speed, spin, kind, noLift), sim = shot.sim, b1 = sim.bounces[0];
+    // in or out? (lines are in — the ball only has to touch them)
+    let inside = false;
+    if (b1 && !sim.net) {
+      if (kind === 'serve') inside = Math.sign(b1.x) === this.serveBox.sign || Math.abs(b1.x) < TB.r ? Math.abs(b1.x) <= 4.115 + TB.r && (fwd > 0 ? b1.z >= 12 && b1.z <= 18.4 + TB.r : b1.z <= 12 && b1.z >= 5.6 - TB.r) : false;
+      else inside = Math.abs(b1.x) <= hw + TB.r && (fwd > 0 ? b1.z >= 12 && b1.z <= 24 + TB.r : b1.z <= 12 && b1.z >= -TB.r);
+    }
+    // where the receiver can meet it: after the bounce, at a comfortable height, or at their baseline
+    let c = null;
+    if (inside) {
+      for (const [t, x, y, z] of sim.pts) {
+        if (t <= b1.t + 0.05) continue;
+        const behind = fwd > 0 ? z > 24.4 : z < -0.4, idx = sim.pts.findIndex(q => q[0] === t), prev = sim.pts[Math.max(0, idx - 1)], falling = y < prev[2];
+        if ((falling && y <= 1.25) || behind || (sim.bounces[1] && t >= sim.bounces[1].t - 0.04)) { c = { x, y, z, t }; break; }
+      }
+      if (!c) { const l = sim.pts[sim.pts.length - 1]; c = { t: l[0], x: l[1], y: l[2], z: l[3] }; }
+    }
+    const to = opp.reduce((a, q) => (Math.abs(q.x - (c ? c.x : tx)) < Math.abs(a.x - (c ? c.x : tx)) ? q : a));
+    // can they get there in time? real players: ~0.25 s to react, ~5.5 m/s sprint, ~1.3 m reach with the racket
+    const reach = c ? Math.hypot(c.x - to.x, c.z - to.z) <= 5.3 * Math.max(0, c.t - 0.3) + 1.25 : false;
+    this.ball = { sim, t: 0, t1: b1 ? b1.t : 99, bx: b1 ? b1.x : tx, bz: b1 ? b1.z : tz, A: c ? c.t : sim.end, c: c || { x: tx, y: 1, z: to.z, t: sim.end }, rcv: to, by: from, kind, spin, kmh: Math.round(kmh),
+      smash: kind === 'smash' || !!opt.fire, bounced: false, done: false, out: !!b1 && !sim.net && !inside, netT: sim.net ? sim.net.t : null, serve: kind === 'serve', reach, prevZ: S.z };
+    // bots: they try to hit it on time, but like people they are sometimes a bit early / late
+    const hard = clamp((kmh - 90) / 70, 0, 1) + (c && (c.y > 1.9 || c.y < 0.45) ? 0.5 : 0); // fast or awkward balls are harder
+    const e = gauss() * (this.ball.smash ? 0.13 : 0.09) * (1 + hard);
+    const beaten = kind === 'serve' && kmh > 160 && Math.random() < (kmh - 158) / 230; // a big serve can beat the returner (ace)
+    to.botAt = to.p.bot && c && reach && !beaten && !this.ball.out && this.ball.netT == null ? c.t + e : null; to.botErr = e;
+    to.botAim = -Math.sign(from.x || rnd(-1, 1)) * this.rightX(to) * rnd(0.4, 1); // aim for the open court, toward the lines
+    if (!to.p.bot && c && reach && c.y > 2) { const s = this.scr(c.x, 3.2, c.z); this.pop.add('⬆ HIGH BALL — SMASH IT!', s.x, s.y, '#cc5de8', 34, 1.2); }
     this.phase = 'rally';
   }
   ballPos() {
-    const b = this.ball, t = b.t, G = 9.8;
-    if (b.netAt != null) { const u = t - b.netAt; return { x: b.netPos.x, y: Math.max(0.07, b.netPos.y - 0.5 * G * u * u), z: b.netPos.z }; }
-    if (t < b.t1) return { x: b.S.x + b.vx * t, y: b.S.y + b.vy * t - 0.5 * G * t * t, z: b.S.z + b.vz * t };
-    const u = t - b.t1; return { x: b.bx + b.vx2 * u, y: Math.max(0.07, b.vy2 * u - 0.5 * G * u * u), z: b.bz + b.vz2 * u };
+    const b = this.ball, pts = b.sim.pts, t = b.t;
+    if (b.netT != null && t > b.netT) { const n = b.sim.net, u = t - b.netT; return { x: n.x, y: Math.max(TB.r, n.y - 0.5 * TB.g * u * u), z: n.z }; }
+    const i = Math.min(pts.length - 2, Math.max(0, Math.floor(t * 120)));
+    if (t >= b.sim.end) { const l = pts[pts.length - 1], u = t - b.sim.end; return { x: l[1], y: Math.max(TB.r, l[2]), z: l[3] + (b.by.team === 0 ? 1 : -1) * u * 4 }; }
+    const a = pts[i], q = pts[i + 1], f = clamp((t - a[0]) / ((q[0] - a[0]) || 1), 0, 1);
+    return { x: lerp(a[1], q[1], f), y: lerp(a[2], q[2], f), z: lerp(a[3], q[3], f) };
   }
   onAct(p, m) {
     const pl = this.pl.get(p); if (!pl || !m) return;
     if (m.a === 'toss') return this.toss(pl);
-    if (m.a === 'swing') this.swing(pl, clamp(+m.p || 0.6, 0.2, 1), m.q, typeof m.aim === 'number' ? clamp(m.aim) : null, +m.lag || 0, +m.kmh || 0);
+    if (m.a === 'swing') { pl.spinIn = typeof m.spin === 'number' ? clamp(m.spin) : null; this.swing(pl, clamp(+m.p || 0.6, 0.2, 1), m.q, typeof m.aim === 'number' ? clamp(m.aim) : null, +m.lag || 0, +m.kmh || 0); }
   }
   onButton(p, b) {
     const pl = this.pl.get(p); if (!pl || b !== 'a') return;
@@ -434,10 +505,11 @@ class SmashTennis extends Sport3D {
       this.toss(pl); pl.servePow = power; pl.serveKmh = kmhIn; pl.serveAim = aim; pl.serveN = aimIn != null ? null : n; pl.serveAt = 0.5;
       return;
     }
-    if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl || this.ball.netAt != null) return;
+    if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl || this.ball.netT != null || this.ball.out) return;
     const b = this.ball, dt = b.t - this.latency(pl, lag) - b.A;
     if (dt < -0.38) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO EARLY!', s.x, s.y, '#ff922b', 36, 0.7); pl.cool = 0.15; return; }
     if (dt > 0.3) return; // too late — the ball is past you
+    if (!b.reach) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO FAR!', s.x, s.y, '#ff922b', 34, 0.7); return; }
     const perfect = Math.abs(dt) < 0.09, good = Math.abs(dt) < 0.2, high = b.c.y > 2.0;
     this.hits.set(pl.p, this.hits.get(pl.p) + 1); this.rally = (this.rally || 0) + 1;
     if (this.rally === 8) { this.say('Unbelievable!'); this.c.sfx.cheer && this.c.sfx.cheer(0.5); } else if (perfect && Math.random() < 0.12) this.say('What a shot!');
@@ -453,7 +525,9 @@ class SmashTennis extends Sport3D {
     this.freeze = kind === 'smash' || fire ? 0.12 : 0.05; // hit-stop: a tiny freeze sells the impact
     const kmh = this.speedOf(power, good ? kmhIn : kmhIn * 0.75, kind); this.radar(pl, kmh, kind);
     if (kmh > 175 && kind !== 'smash' && Math.random() < 0.35) this.say('What a shot!');
-    this.launch(pl, power, aim, n, { kind, fire: fire || kmh > 150, boost, kmh, start: { x: b.c.x, y: b.c.y, z: b.c.z }, intoNet: dt > 0.22 && Math.random() < 0.3 });
+    const spin = kind === 'smash' ? 0.05 : kind === 'lob' ? 0.2 : pl.spinIn != null ? pl.spinIn : pl.p.bot ? rnd(0.2, 0.7) : 0.4; pl.spinIn = null;
+    if (this.radarShow) this.radarShow.spin = spin;
+    this.launch(pl, power, aim, n, { kind, fire: fire || kmh > 150, kmh: kmh * (good ? 1 : 0.85), spin, attack: pl.p.bot && pl.attack, err: pl.p.bot ? pl.botErr || 0 : dt, start: { x: b.c.x, y: b.c.y, z: b.c.z } }); pl.attack = false;
   }
   fault(why) {
     this.faults++; this.ball = null; this.tossed = false;
@@ -461,6 +535,12 @@ class SmashTennis extends Sport3D {
     if (this.faults >= 2) { this.faults = 0; return this.point(1 - this.serveTeam, 'DOUBLE FAULT!', 'Double fault.'); }
     this.pop.add(`FAULT! ${why}`, 800, 330, '#ff922b', 60, 1.4); this.say('Fault.');
     this.phase = 'between'; this.wait = 1.6;
+  }
+  // Hawk-Eye: a mark where the ball landed (green in, red out) and a close-call label
+  mark(x, z, out) {
+    const hw = this.halfW(), lineD = Math.min(Math.abs(Math.abs(x) - hw), Math.abs(z), Math.abs(z - 24));
+    this.marks = (this.marks || []).concat([{ x, z, out, life: 3 }]).slice(-3);
+    if (lineD < 0.3) { const s = this.scr(x, 0.5, z); this.pop.add(out ? 'OUT ✋ (close!)' : 'IN ✔ (on the line!)', s.x, s.y - 40, out ? '#ff4d6d' : '#51cf66', 30, 1.6); }
   }
   hitFx(pl, smash, perfect, power = 0.7, label = 'power') {
     const p = this.ball && !this.ball.done ? this.ballPos() : this.phase === 'serve' && this.tossed ? this.tossPos() : { x: pl.x, y: 1.2, z: pl.z };
@@ -502,25 +582,27 @@ class SmashTennis extends Sport3D {
       // run to where the ball will be met (ball on the forehand side), otherwise back to your spot
       let tx = pl.home, tz = pl.homeZ;
       const b = this.ball;
-      if (b && !b.done && b.rcv === pl && b.netAt == null) { tx = b.c.x - 0.55 * this.bodyRight(pl); tz = b.c.z - (pl.team === 0 ? 0.35 : -0.35); }
+      if (b && !b.done && b.rcv === pl && b.netT == null && !b.out) { tx = b.c.x - 0.55 * this.bodyRight(pl); tz = b.c.z - (pl.team === 0 ? 0.35 : -0.35); }
       if ((this.phase === 'serve' || this.phase === 'between') && pl === this.server) { tx = pl.serveX ?? pl.home; tz = pl.homeZ; }
+      else if ((this.phase === 'serve' || this.phase === 'between') && this.server && pl.team !== this.server.team) { tx = -Math.sign(this.server.serveX || 1) * 2.3 + (pl.home * 0.3); tz = pl.homeZ; } // returner stands behind the box
       tz = pl.team === 0 ? clamp(tz, -3, 10.5) : clamp(tz, 13.5, 27);
-      const mx = clamp(tx - pl.x, -8 * dt, 8 * dt), mz = clamp(tz - pl.z, -7 * dt, 7 * dt);
+      const mx = clamp(tx - pl.x, -5.8 * dt, 5.8 * dt), mz = clamp(tz - pl.z, -5 * dt, 5 * dt); // human sprint speeds
       pl.x += mx; pl.z += mz; pl.run += Math.min(0.5, Math.hypot(mx, mz) * 3);
     }
     if (this.phase === 'between') { this.wait -= dt; if (this.wait <= 0) this.newServe(); return; }
     if (this.phase === 'serve') {
       const sv = this.server;
       // bots serve by themselves; a human who does nothing for 9 s gets an automatic soft serve
-      if (!this.tossed) { this.wait -= dt; if (this.wait <= 0) { sv.cool = 0; this.swing(sv, sv.p.bot ? rnd(0.55, 0.95) : 0.55); } return; }
+      if (!this.tossed) { this.wait -= dt; if (this.wait <= 0) { sv.cool = 0; this.swing(sv, sv.p.bot ? rnd(0.55, 0.95) : 0.55, null, null, 0, sv.p.bot ? Math.round(this.faults ? rnd(115, 145) : rnd(140, 190)) : 0); } return; }
       this.tossT += dt;
       if (this.tossT >= (sv.serveAt || 0.5)) { // hit at the top of the toss
         const p = sv.servePow || 0.6; sv.stroke = 'serve'; sv.sw = 1;
-        if (Math.random() < (p < 0.4 ? 0.35 : 0.07)) return this.fault(p < 0.4 ? 'Too soft — into the net!' : 'Long!');
+        if (p < 0.4 && Math.random() < 0.35) return this.fault('Too soft — into the net!');
         const ace = p > 0.85; this.hitFx(sv, ace, ace, p); this.freeze = 0.06;
         if (ace) this.pop.add('⚡ BIG SERVE!', 800, 300, '#ffd43b', 80, 1.2);
         const kmh = this.speedOf(p, sv.serveKmh, 'serve'); this.radar(sv, kmh, 'serve');
-        this.launch(sv, p, sv.serveAim, sv.serveN, { kind: 'serve', ace: ace || kmh > 185, fire: ace, kmh, start: this.tossPos() });
+        const se = gauss() * 0.022 * (1 + Math.max(0, (kmh - 130) / 35)) * (this.faults ? 0.6 : 1); // 2nd serves are safer
+        this.launch(sv, p, sv.serveAim, sv.serveN, { kind: 'serve', ace: ace || kmh > 185, fire: ace, kmh, err: se, start: this.tossPos() });
       }
       return;
     }
@@ -529,20 +611,18 @@ class SmashTennis extends Sport3D {
       const b = this.ball;
       if (this.freeze > 0) { this.freeze -= dt; return; }
       b.t += dt;
-      const p = this.ballPos();
-      // the net: crossing z = 12 below the tape stops the ball
-      if (b.netAt == null && (b.prevZ - 12) * (p.z - 12) <= 0 && p.y < 0.98 && !b.bounced) { b.netAt = b.t; b.netPos = { x: p.x, y: p.y, z: 12 + (b.prevZ < 12 ? -0.12 : 0.12) }; this.c.sfx.netHit && this.c.sfx.netHit(); this.c.sfx.ooh && this.c.sfx.ooh(); }
-      b.prevZ = p.z;
-      if (b.netAt != null) { if (b.t - b.netAt > 0.9) { b.done = true; this.point(1 - b.by.team, `NET! ${b.by.p.name}`, 'Net.'); } return; }
+      if (b.netT != null && b.t >= b.netT && !b.netDone) { b.netDone = true; this.c.sfx.netHit && this.c.sfx.netHit(); this.c.sfx.ooh && this.c.sfx.ooh(); }
+      if (b.netT != null) { if (b.t > b.netT + 0.9) { b.done = true; if (b.serve) this.fault('Net!'); else this.point(1 - b.by.team, `NET! ${b.by.p.name}`, 'Net.'); } return; }
       if (!b.bounced && b.t >= b.t1) {
         b.bounced = true; this.burst(b.bx, 0.1, b.bz, 14, 0xffffff, 3, 0.4, 2); this.c.sfx.bounce ? this.c.sfx.bounce() : this.c.sfx.tink();
-        if (b.out) { b.done = true; this.c.sfx.ooh && this.c.sfx.ooh(); return this.point(1 - b.by.team, `OUT! ${b.by.p.name}`, 'Out!'); }
+        this.mark(b.bx, b.bz, b.out);
+        if (b.out) { b.done = true; this.c.sfx.ooh && this.c.sfx.ooh(); if (b.serve) return this.fault('Out!'); return this.point(1 - b.by.team, `OUT! ${b.by.p.name}`, 'Out!'); }
       }
-      if (b.rcv.p.bot && b.rcv.botAt != null && b.t >= b.rcv.botAt) { b.rcv.botAt = null; this.swing(b.rcv, rnd(0.45, 0.9)); }
-      if (b.t > b.A + 0.32 + this.latency(b.rcv, 0.11) && this.ball === b) {
+      if (b.rcv.p.bot && b.rcv.botAt != null && b.t >= b.rcv.botAt) { b.rcv.botAt = null; b.rcv.attack = Math.random() < 0.22; this.swing(b.rcv, rnd(0.5, 0.9), null, null, 0, Math.round(rnd(85, 135) + (b.rcv.attack ? 18 : 0))); }
+      if (b.t > b.A + 0.3 + this.latency(b.rcv, 0.11) && this.ball === b) {
         b.done = true;
         if (b.serve) { this.aces.set(b.by.p, this.aces.get(b.by.p) + 1); this.point(b.by.team, `ACE! ${b.by.p.name}`, 'Ace!'); }
-        else this.point(1 - b.rcv.team, `${b.rcv.p.name} MISSED!`);
+        else this.point(b.by.team, b.reach ? `${b.rcv.p.name} MISSED!` : `WINNER! ${b.by.p.name}`, b.reach ? '' : 'What a shot!');
       }
     }
     if (this.T <= 0 && this.phase !== 'point') this.end();
@@ -569,7 +649,9 @@ class SmashTennis extends Sport3D {
     // toss timing ring: around the top of the toss, green at the sweet spot
     this.tossRing.visible = tossing;
     if (tossing) { const s = this.server, u = this.tossT / 1.25; this.tossRing.position.set(s.x - 0.35 * this.bodyRight(s), 3.6, s.z + (s.team === 0 ? 0.3 : -0.3)); this.tossRing.lookAt(this.cam.position); this.tossRing.material.color.set(0x51cf66); this.tossRing.scale.setScalar(0.8 + u); }
-    const R = live && this.ball.netAt == null ? this.ball.rcv : null;
+    (this.marks || []).forEach(m => (m.life -= 1 / 60)); this.marks = (this.marks || []).filter(m => m.life > 0);
+    this.markM.forEach((m, i) => { const k = this.marks[i]; m.visible = !!k; if (k) { m.position.set(k.x, 0.012, k.z); m.material.color.set(k.out ? 0xff4d6d : 0x51cf66); m.material.opacity = Math.min(1, k.life); } });
+    const R = live && this.ball.netT == null && !this.ball.out && this.ball.reach ? this.ball.rcv : null;
     this.tRing.visible = this.tCore.visible = !!R;
     if (R) {
       // the ring sits where you'll meet the ball and closes exactly when you should swing; purple = high ball, SMASH it
@@ -629,7 +711,7 @@ class SmashTennis extends Sport3D {
       g.save(); g.globalAlpha = a; g.fillStyle = 'rgba(10,6,30,.88)'; rr(g, 1300, 120, 280, 120, 18); g.fill(); g.lineWidth = 3; g.strokeStyle = r.color; g.stroke();
       txt(g, r.kind === 'serve' ? 'SERVE SPEED' : r.kind === 'smash' ? 'SMASH SPEED' : 'SHOT SPEED', 1440, 145, 16, '#adb5bd', 'center', 'Nunito');
       txt(g, `${r.kmh}`, 1410, 192, 54, r.kmh > 160 ? '#ff922b' : '#fff'); txt(g, 'km/h', 1520, 200, 22, '#ffd43b');
-      txt(g, r.name, 1440, 228, 16, r.color, 'center', 'Nunito'); g.restore();
+      txt(g, `${r.name}${r.spin != null ? ` · ${r.spin > 0.25 ? 'TOPSPIN' : r.spin < -0.15 ? 'SLICE' : 'FLAT'} ${Math.round(Math.abs(r.spin) * 3000 + 300)} rpm` : ''}`, 1440, 228, 15, r.color, 'center', 'Nunito'); g.restore();
     }
     if (this.fastest) txt(g, `⚡ FASTEST: ${this.fastest.p.name} ${this.fastest.kmh} km/h`, 1580, 880, 20, '#ffd43b', 'right', 'Nunito');
     this.overlays(g);
