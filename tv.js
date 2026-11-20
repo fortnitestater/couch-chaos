@@ -41,7 +41,7 @@
     const now = Date.now();
     for (const p of S.players) {
       if (!p.connected || !p.conn) continue;
-      send(p, { t: 'ping' });
+      send(p, { t: 'ping', ts: Date.now() });
       if (p.pongAt && now - p.lastSeen > 12000) { const c = p.conn; onClose(c); try { c.close(); } catch (e) {} }
     }
   }, 2000);
@@ -63,7 +63,7 @@
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join') return onJoin(conn, m);
     const p = S.players.find(q => q.conn === conn); if (!p) return;
-    p.lastSeen = Date.now(); if (m.t === 'pong') { p.pongAt = p.lastSeen; return; }
+    p.lastSeen = Date.now(); if (m.t === 'pong') { p.pongAt = p.lastSeen; if (m.ts) { const r = Math.min(600, Date.now() - m.ts); p.rtt = p.rtt ? p.rtt * 0.7 + r * 0.3 : r; } return; } // round-trip time → latency compensation
     const isVip = p === vip() || (p.isCam && !vip());
     switch (m.t) {
       case 'in': {

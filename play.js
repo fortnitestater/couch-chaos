@@ -451,7 +451,7 @@
         <div class="swIcon" id="swIcon">${icon}</div>
         <div class="swLabel">${motion ? 'SWING IT!' : esc(L.label || 'SWING!')}</div>
         <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motion ? 'Hold it like ' + noun + ' and SWING!' : 'Motion is off'}</div>
-        <div class="swHint">${motion ? (L.sport === 'tennis' ? 'Hold it like a racket (screen facing you). <b>Serve:</b> lift ⬆ to toss, swing at the top. <b>Rally:</b> swing <b>toward</b> where you want the ball — right swing = right side!' : 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want it and swing!') : esc(L.hint || '')}</div>
+        <div class="swHint">${motion ? (L.sport === 'tennis' ? 'Hold it like a racket (screen facing you). <b>Serve:</b> just swing. <b>Rally:</b> swing when the ring closes, <b>toward</b> where you want it. <b>Purple ring</b> = high ball → swing hard to SMASH!' : 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want it and swing!') : esc(L.hint || '')}</div>
         ${motion ? '<button class="chip on" id="swCenter">⟲ CENTER (hold still, screen to you)</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
       </div></div>`;
     if (motion) {
@@ -515,7 +515,7 @@
   function onData(m) {
     if (!m || typeof m !== 'object') return;
     lastSeen = Date.now();
-    if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong' }); } catch (e) {} return; }
+    if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong', ts: m.ts }); } catch (e) {} return; }
     if (m.t === 'welcome') {
       joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) });
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
