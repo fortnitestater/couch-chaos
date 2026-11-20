@@ -11,7 +11,7 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 function txt(g, s, x, y, size, color = '#fff', align = 'center', font = 'Bungee') {
-  g.font = font === 'Nunito' ? `900 ${size}px Nunito, sans-serif` : `${size}px Bungee, Impact, sans-serif`;
+  g.font = font === 'Nunito' ? `700 ${size}px Inter, system-ui, sans-serif` : `700 ${size}px Fredoka, Inter, system-ui, sans-serif`;
   g.textAlign = align; g.textBaseline = 'middle'; g.lineJoin = 'round';
   g.lineWidth = Math.max(3, size / 6); g.strokeStyle = 'rgba(14,10,36,.8)'; g.strokeText(s, x, y);
   g.fillStyle = color; g.fillText(s, x, y);

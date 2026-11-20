@@ -6,6 +6,32 @@
 const panelMsg = (o) => Object.assign({ t: 'panel' }, o);
 function seatPos(i, n, cx = 800, cy = 470, rx = 600, ry = 300) { const a = Math.PI / 2 + (i / n) * TAU; return { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry }; }
 function felt(g, c1 = '#1d6b45', c2 = '#0b2a1c') { const gr = g.createRadialGradient(800, 450, 80, 800, 450, 950); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.fillStyle = gr; g.fillRect(0, 0, 1600, 900); g.strokeStyle = 'rgba(255,255,255,.06)'; g.lineWidth = 2; g.beginPath(); g.ellipse(800, 470, 660, 340, 0, 0, TAU); g.stroke(); }
+function cardTable(g, t, tint = '#13406b') {
+  const gr = g.createRadialGradient(800, 470, 60, 800, 470, 980); gr.addColorStop(0, shadeHex(tint, 0.12)); gr.addColorStop(0.55, tint); gr.addColorStop(1, '#05070e'); g.fillStyle = gr; g.fillRect(0, 0, 1600, 900);
+  // felt texture: faint noise rings + the table edge
+  g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 2; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(800, 470, 380 + k * 140, 200 + k * 75, 0, 0, TAU); g.stroke(); }
+  const v = g.createRadialGradient(800, 450, 420, 800, 450, 1000); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)'); g.fillStyle = v; g.fillRect(0, 0, 1600, 900);
+}
+function namePlate(g, p, x, y, active, sub) {
+  const w = 230, h = 64;
+  g.save();
+  if (active) { g.shadowColor = p.color; g.shadowBlur = 36; }
+  g.fillStyle = active ? 'rgba(255,255,255,.95)' : 'rgba(10,12,22,.72)'; rr(g, x - w / 2, y - h / 2, w, h, h / 2); g.fill(); g.shadowBlur = 0;
+  g.lineWidth = 1.5; g.strokeStyle = active ? 'transparent' : 'rgba(255,255,255,.12)'; g.stroke();
+  g.fillStyle = p.color; g.beginPath(); g.arc(x - w / 2 + 32, y, 24, 0, TAU); g.fill();
+  g.font = '26px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p.avatar || '🙂', x - w / 2 + 32, y + 1);
+  g.font = '600 22px Inter, system-ui, sans-serif'; g.textAlign = 'left'; g.fillStyle = active ? '#0b0d17' : '#f7f8fc'; g.fillText(p.name.slice(0, 11), x - w / 2 + 64, y - 9);
+  g.font = '500 16px Inter, system-ui, sans-serif'; g.fillStyle = active ? '#3c4566' : '#b9c0d8'; g.fillText(sub || '', x - w / 2 + 64, y + 14);
+  g.restore();
+}
+// a hand of card backs fanned toward the table centre
+function backFan(g, x, y, n, painter, w = 62, h = 90) {
+  const base = Math.atan2(470 - y, 800 - x) - Math.PI / 2, m = Math.min(n, 12), mid = (m - 1) / 2;
+  g.save(); g.translate(x, y); g.rotate(base);
+  const step = Math.min(0.16, 0.9 / Math.max(1, m)); // spread like a real hand, tighter when it gets big
+  for (let k = 0; k < m; k++) { g.save(); g.rotate((k - mid) * step); painter(g, (k - mid) * 6, -h * 0.55, w, h, null, true, 0); g.restore(); }
+  g.restore();
+}
 function seat(g, p, x, y, active, extra) {
   if (active) { g.save(); g.shadowColor = p.color; g.shadowBlur = 40; g.fillStyle = 'rgba(255,255,255,.08)'; rr(g, x - 110, y - 52, 220, 104, 26); g.fill(); g.restore(); g.lineWidth = 4; g.strokeStyle = p.color; rr(g, x - 110, y - 52, 220, 104, 26); g.stroke(); }
   drawBlob(g, x - 62, y, 30, p.color, -Math.PI / 2, { happy: active, shadow: false });
@@ -48,10 +74,16 @@ class ColorStorm {
     let top; do { top = this.deck.pop(); if (!top.c || isNaN(+top.v)) { this.deck.unshift(top); top = null; } } while (!top);
     this.pile = [top]; this.color = top.c; this.turn = irnd(0, this.ps.length - 1); this.dir = 1; this.pending = 0; this.drew = false; this.needColor = false; this.twin = false;
     this.timer = 25; this.botT = rnd(1, 1.8); this.lastCall = null; this.over = false; this.winner = null;
+    this.pile[0].rot = rnd(-0.2, 0.2); this.fl = new CardFlights(); this.shown = new Map(this.ps.map(p => [p, 0]));
+    // deal: cards fly from the deck to every seat, one by one
+    const n0 = this.hands.get(this.ps[0]).length;
+    for (let k = 0; k < n0; k++) this.ps.forEach((p, i) => this.fl.add({ from: { x: 560, y: 450 }, to: this.fanPos(i), card: null, w: 54, h: 78, delay: (k * this.ps.length + i) * 0.045, dur: 0.38, arc: -40, onLand: () => { this.shown.set(p, this.shown.get(p) + 1); this.c.sfx.card(); } }));
     this.c.setLayout('all', { name: 'panel' }); this.sync(); this.c.banner('🌪️ COLOR STORM!');
   }
   get cur() { return this.ps[this.turn]; }
   top() { return this.pile[this.pile.length - 1]; }
+  seatAt(i) { return seatPos(i, this.ps.length, 800, 470, 640, 330); }
+  fanPos(i) { const s = this.seatAt(i); return { x: s.x + (800 - s.x) * 0.3, y: s.y + (470 - s.y) * 0.42 }; }
   idx(k) { const n = this.ps.length; return (((this.turn + this.dir * k) % n) + n) % n; }
   playable(card) {
     if (this.twin) return card.c === this.color;
@@ -88,7 +120,10 @@ class ColorStorm {
     else if (m.a === 'btn' && m.id === 'pass' && (this.drew || this.twin)) { this.twin = false; this.next(1); }
   }
   draw1(p) { if (!this.deck.length) { const top = this.pile.pop(); this.deck = shuffle(this.pile); this.pile = [top]; } return this.deck.pop(); }
-  give(p, n) { const h = this.hands.get(p); for (let i = 0; i < n; i++) { const c = this.draw1(p); if (c) h.push(c); } this.c.sfx.card(); }
+  give(p, n) {
+    const h = this.hands.get(p), i0 = this.ps.indexOf(p);
+    for (let i = 0; i < n; i++) { const c = this.draw1(p); if (c) h.push(c); if (this.fl) this.fl.add({ from: { x: 560, y: 450 }, to: this.fanPos(i0), card: null, w: 54, h: 78, delay: i * 0.09, dur: 0.4, arc: -50, onLand: () => this.c.sfx.card() }); }
+  }
   doDraw(p) {
     if (this.drew || this.twin) return;
     if (this.pending) { const n = this.pending; this.pending = 0; this.give(p, n); this.log = `${p.name} drew ${n}! 😱`; this.c.shake(8); return this.next(1); }
@@ -98,7 +133,8 @@ class ColorStorm {
   }
   play(p, i) {
     const h = this.hands.get(p), card = h[i]; if (!card || !this.playable(card)) return;
-    h.splice(i, 1); this.pile.push(card); this.fly = { from: seatPos(this.turn, this.ps.length), card, t: 0 }; this.c.sfx.card();
+    h.splice(i, 1); card.rot = rnd(-0.3, 0.3); card.flying = true; this.pile.push(card); this.c.sfx.card();
+    if (this.fl) this.fl.add({ from: this.fanPos(this.turn), to: { x: 800, y: 450 }, card, w: 150, h: 220, dur: 0.42, arc: -90, rot0: rnd(-0.6, 0.6), rot1: card.rot, onLand: () => { card.flying = false; this.c.shake(3); } });
     this.twin = false; this.log = `${p.name} played ${card.c ? STORM_NAMES[card.c] + ' ' : ''}${stormText(card)}`;
     if (card.c) this.color = card.c;
     if (h.length === 1) this.lastCall = { p, safe: false, t: 3.5 };
@@ -125,7 +161,7 @@ class ColorStorm {
     this.doDraw(p);
   }
   update(dt) {
-    this.t += dt; this.fx.update(dt); if (this.fly) { this.fly.t += dt * 3; if (this.fly.t >= 1) this.fly = null; }
+    this.t += dt; this.fx.update(dt); if (this.fl) this.fl.update(dt);
     if (this.over) { this.endT -= dt; if (this.endT <= 0 && !this.ended) { this.ended = true; this.c.finish(rankBy(this.ps, p => -this.hands.get(p).length + (p === this.winner ? 100 : 0), p => `${this.hands.get(p).length} cards left`)); } return; }
     if (this.lastCall) { // 'last card' race: the player calls it, or someone catches them
       const lc = this.lastCall; lc.t -= dt;
@@ -139,24 +175,29 @@ class ColorStorm {
     if (this.timer <= 0) { this.timer = 25; if (this.needColor) this.onAct(p, { a: 'btn', id: 'colR' }); else this.botTurn(p); }
   }
   draw(g) {
-    felt(g, '#3b1f7a', '#0b0620');
-    const n = this.ps.length;
-    // discard pile + current color ring
-    g.save(); g.shadowColor = STORM_COLORS[this.color]; g.shadowBlur = 60; g.strokeStyle = STORM_COLORS[this.color]; g.lineWidth = 10; g.beginPath(); g.arc(800, 450, 150 + Math.sin(this.t * 4) * 6, 0, TAU); g.stroke(); g.restore();
-    const pl = this.pile.slice(-4); pl.forEach((c, i) => drawStormCard(g, 800 + (i - pl.length + 1) * 10, 450 + (i - pl.length + 1) * 4, 150, 220, c));
-    drawStormCard(g, 560, 450, 120, 176, null, true); txt(g, `${this.deck.length}`, 560, 570, 22, '#fff');
-    // direction arrows
-    g.save(); g.translate(800, 450); g.rotate(this.t * this.dir * 0.6); g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 6; for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(0, 0, 230, k * 2.09, k * 2.09 + 1.2); g.stroke(); } g.restore();
-    if (this.pending) txt(g, `+${this.pending}`, 1000, 360, 80, '#ff4d6d');
+    cardTable(g, this.t, '#0f4a5c');
+    const n = this.ps.length, ink = CARD_INK[this.color];
+    // current-color halo + direction arrows sweeping around the pile
+    g.save(); const halo = g.createRadialGradient(800, 450, 90, 800, 450, 260); halo.addColorStop(0, shadeHex(ink, 0.2).replace('rgb', 'rgba').replace(')', ',.35)')); halo.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = halo; g.fillRect(500, 150, 600, 600); g.restore();
+    g.save(); g.translate(800, 450); g.rotate(this.t * this.dir * 0.5); g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 7; g.lineCap = 'round';
+    for (let k = 0; k < 2; k++) { g.rotate(Math.PI); g.beginPath(); g.arc(0, 0, 205, -0.9, 0.55); g.stroke(); const ax = Math.cos(0.55) * 205, ay = Math.sin(0.55) * 205; g.save(); g.translate(ax, ay); g.rotate(0.55 + Math.PI / 2 * this.dir); g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.moveTo(0, -14 * this.dir); g.lineTo(-12, 6 * this.dir); g.lineTo(12, 6 * this.dir); g.fill(); g.restore(); }
+    g.restore();
+    // deck with depth
+    for (let k = 5; k >= 0; k--) drawStormCard(g, 560 - k * 1.5, 450 - k * 2.5, 128, 186, null, true, -0.04);
+    // pile: every card keeps the angle it landed at
+    this.pile.filter(c => !c.flying).slice(-6).forEach(c => drawStormCard(g, 800, 450, 150, 220, c, false, c.rot || 0));
+    if (this.pending) { g.save(); g.fillStyle = 'rgba(232,51,63,.92)'; rr(g, 900, 300, 130, 64, 32); g.fill(); g.restore(); txt(g, `+${this.pending}`, 965, 333, 40, '#fff'); }
+    // seats: fans of real card backs + glass name plates
     this.ps.forEach((p, i) => {
-      const s = seatPos(i, n), cnt = this.hands.get(p).length;
-      seat(g, p, s.x, s.y, i === this.turn && !this.over, `🂠 ${cnt}`);
-      for (let k = 0; k < Math.min(cnt, 10); k++) drawStormCard(g, s.x - 45 + k * 10, s.y - 85, 34, 50, null, true);
-      if (this.lastCall && this.lastCall.p === p) txt(g, this.lastCall.safe ? '☝ LAST CARD!' : '⚠️ 1 card…', s.x, s.y + 75, 24, this.lastCall.safe ? '#51cf66' : '#ff922b');
+      const s = this.seatAt(i), f = this.fanPos(i), cnt = this.fl && this.fl.l.some(x => x.delay > 0 || x.t < 1) && this.shown.get(p) < this.hands.get(p).length && this.t < 3 ? this.shown.get(p) : this.hands.get(p).length;
+      backFan(g, f.x, f.y, cnt, drawStormCard);
+      const lc = this.lastCall && this.lastCall.p === p ? (this.lastCall.safe ? ' · ☝ LAST CARD' : ' · ⚠️ 1 card') : '';
+      namePlate(g, p, s.x, s.y, i === this.turn && !this.over, `${cnt} card${cnt === 1 ? '' : 's'}${lc}`);
     });
-    if (this.fly) { const f = this.fly, e = 1 - Math.pow(1 - f.t, 3); drawStormCard(g, lerp(f.from.x, 800, e), lerp(f.from.y, 450, e), 110 + e * 40, 160 + e * 60, f.card); }
-    txt(g, this.log, 800, 70, 30, '#fff', 'center', 'Nunito');
-    txt(g, `color: ${STORM_NAMES[this.color]}`, 800, 640, 26, STORM_COLORS[this.color]);
+    if (this.fl) this.fl.draw(g, drawStormCard);
+    // status line
+    g.fillStyle = 'rgba(10,12,22,.65)'; rr(g, 560, 34, 480, 52, 26); g.fill(); txt(g, this.log, 800, 60, 22, '#fff', 'center', 'Nunito');
+    g.fillStyle = ink; g.beginPath(); g.arc(800, 640, 14, 0, TAU); g.fill(); txt(g, STORM_NAMES[this.color], 830, 640, 22, '#fff', 'left', 'Nunito');
     this.fx.draw(g);
   }
 }
@@ -215,7 +256,7 @@ class Avalanche {
     }
   }
   // actions wait 2.5 s so others can BLOCK them
-  announce(p, card, kind) { this.pendingAct = { by: p, card, kind, t: 2.5, blockedBy: null }; this.log = `${p.name} plays ${AV[card][0]} ${kind === 'pair' ? 'a PAIR' : AV[card][1]}…`; this.c.sfx.card(); this.sync(); }
+  announce(p, card, kind) { (this.discard = this.discard || []).push({ k: card, rot: rnd(-0.3, 0.3) }); this.pendingAct = { by: p, card, kind, t: 2.5, blockedBy: null }; this.log = `${p.name} plays ${AV[card][0]} ${kind === 'pair' ? 'a PAIR' : AV[card][1]}…`; this.c.sfx.card(); this.sync(); }
   resolve(a) {
     const p = a.by; this.pendingAct = null;
     if (a.blockedBy) { this.sync(); return; }
@@ -276,14 +317,15 @@ class Avalanche {
     const d = this.danger();
     // the deck: a wobbling pile, redder as danger grows
     const wob = Math.sin(this.t * (6 + d * 20)) * d * 6;
-    for (let i = Math.min(12, this.deck.length) - 1; i >= 0; i--) { g.fillStyle = i ? '#1c2b55' : `rgb(${120 + d * 135},${60 - d * 30},${90 - d * 40})`; rr(g, 720 + wob - i * 2, 330 - i * 4, 160, 230, 18); g.fill(); g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 2; g.stroke(); }
-    txt(g, '💣', 800 + wob, 440, 90); txt(g, `${this.deck.length} cards`, 800, 600, 26, '#fff');
-    g.fillStyle = 'rgba(10,6,30,.7)'; rr(g, 640, 630, 320, 46, 23); g.fill(); g.fillStyle = d > 0.3 ? '#ff4d6d' : d > 0.15 ? '#ff922b' : '#51cf66'; rr(g, 646, 636, 308 * Math.min(1, d * 2), 34, 17); g.fill(); txt(g, `DANGER ${Math.round(d * 100)}%`, 800, 653, 22, '#fff');
+    for (let i = Math.min(10, this.deck.length) - 1; i >= 0; i--) drawAvCard(g, 800 + wob - i * 1.5, 445 - i * 3, 160, 232, null, -0.02);
+    if (d > 0.12) { g.save(); g.globalAlpha = Math.min(0.55, d); g.fillStyle = '#ff4d5e'; rr(g, 720 + wob, 329, 160, 232, 15); g.fill(); g.restore(); } 
+    g.fillStyle = 'rgba(10,12,22,.72)'; rr(g, 600, 104, 400, 44, 22); g.fill(); g.fillStyle = d > 0.3 ? '#ff4d5e' : d > 0.15 ? '#ff9f43' : '#34c77b'; rr(g, 604, 108, 392 * Math.min(1, d * 2.2) + 36, 36, 18); g.fill(); txt(g, `${this.deck.length} CARDS  ·  DANGER ${Math.round(d * 100)}%`, 800, 127, 19, '#fff', 'center', 'Nunito');
     const n = this.ps.length;
     this.ps.forEach((p, i) => {
       const s = seatPos(i, n, 800, 470, 640, 320), alive = this.alive.has(p);
-      g.globalAlpha = alive ? 1 : 0.35; seat(g, p, s.x, s.y, i === this.turn && alive && !this.over, alive ? `🂠 ${this.hands.get(p).length}${i === this.turn && this.owed > 1 ? ' ×2' : ''}` : '❄️ buried'); g.globalAlpha = 1;
+      g.globalAlpha = alive ? 1 : 0.35; if (alive) backFan(g, s.x + (800 - s.x) * 0.3, s.y + (470 - s.y) * 0.42, this.hands.get(p).length, (gg, x, y, w, h) => drawAvCard(gg, x, y, w, h, null)); namePlate(g, p, s.x, s.y, i === this.turn && alive && !this.over, alive ? `${this.hands.get(p).length} cards${i === this.turn && this.owed > 1 ? ' · 2 turns' : ''}` : '❄️ buried'); g.globalAlpha = 1;
     });
+    (this.discard || []).slice(-4).forEach((d, k, arr) => drawAvCard(g, 1050, 440, 130, 190, d.k, d.rot));
     if (this.pendingAct) { const a = this.pendingAct, [ic, lb] = AV[a.card]; g.fillStyle = 'rgba(10,6,30,.85)'; rr(g, 560, 200, 480, 110, 24); g.fill(); txt(g, `${ic} ${a.kind === 'pair' ? 'PAIR → STEAL' : lb}`, 800, 240, 44, a.blockedBy ? '#868e96' : '#ffd43b'); txt(g, a.blockedBy ? `✋ BLOCKED by ${a.blockedBy.name}!` : `block it? ${a.t.toFixed(1)}s`, 800, 285, 24, a.blockedBy ? '#f783ac' : '#fff', 'center', 'Nunito'); }
     txt(g, this.log, 800, 70, 30, '#fff', 'center', 'Nunito');
     if (this.flash > 0) { g.fillStyle = `rgba(255,255,255,${this.flash})`; g.fillRect(0, 0, 1600, 900); }

@@ -1,0 +1,106 @@
+/* =====================================================================
+   COUCH CHAOS — DESIGN SYSTEM (loaded last on every page)
+   Three layers:  PRIMITIVE (raw values) → SEMANTIC (roles) → COMPONENT (parts)
+   Motion follows Apple's fluid-interface rules: feedback on press, critically
+   damped springs by default, a little bounce only for momentum moments.
+   ===================================================================== */
+
+/* ---------- 1. PRIMITIVES ---------- */
+:root {
+  /* ink / graphite scale (cool, slightly blue — reads as "console", not "website") */
+  --c-ink-950: #07080f; --c-ink-900: #0b0d17; --c-ink-850: #10131f; --c-ink-800: #151927; --c-ink-750: #1b2032;
+  --c-ink-700: #232a40; --c-ink-600: #2e3652; --c-ink-500: #3c4566; --c-ink-400: #5a6488; --c-ink-300: #8b94b3;
+  --c-ink-200: #b9c0d8; --c-ink-100: #e2e6f3; --c-ink-0: #f7f8fc;
+  /* brand + signal colors */
+  --c-blue-500: #3d8bff; --c-blue-400: #63a4ff; --c-cyan-400: #5ce1e6; --c-violet-500: #8b5cf6; --c-pink-500: #ff5c93;
+  --c-red-500: #ff4d5e; --c-orange-500: #ff9f43; --c-gold-400: #ffd166; --c-green-500: #34c77b; --c-white: #ffffff;
+  /* card inks (playing cards) */
+  --c-card-red: #e8333f; --c-card-blue: #1f7ae0; --c-card-green: #22a35a; --c-card-yellow: #f6b21a; --c-card-ink: #1a1d29;
+  /* type */
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fredoka', 'Inter', system-ui, sans-serif;
+  /* spacing (4 pt grid) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+  /* radii */
+  --r-xs: 6px; --r-sm: 10px; --r-md: 16px; --r-lg: 22px; --r-xl: 30px; --r-pill: 999px;
+  /* motion: springs expressed with CSS linear() */
+  --ease-spring: linear(0, 0.034, 0.126 4.4%, 0.394 11.5%, 0.665 20.1%, 0.839 28.8%, 0.937 38.3%, 0.981 48.4%, 0.996 60.1%, 1); /* damping 1.0 */
+  --ease-bounce: linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 15.5%, 0.938 22.1%, 1.017 28.6%, 1.035 33.8%, 1.02 43%, 1.005 52.2%, 0.999 61.7%, 1); /* damping ~0.8 */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --d-press: 90ms; --d-fast: 160ms; --d-med: 320ms; --d-slow: 520ms;
+}
+
+/* ---------- 2. SEMANTIC ---------- */
+:root {
+  --bg: var(--c-ink-900); --bg2: var(--c-ink-800); --panel: var(--c-ink-750);
+  --surface-0: var(--c-ink-900);           /* app background */
+  --surface-1: var(--c-ink-800);           /* resting cards */
+  --surface-2: var(--c-ink-700);           /* raised / hovered */
+  --surface-glass: rgba(27, 32, 50, .62);  /* translucent chrome */
+  --stroke: rgba(255, 255, 255, .08); --stroke-strong: rgba(255, 255, 255, .16);
+  --ink: var(--c-ink-0); --text-1: var(--c-ink-0); --text-2: var(--c-ink-200); --text-3: var(--c-ink-300); --muted: var(--c-ink-300);
+  --accent: var(--c-blue-500); --accent-2: var(--c-cyan-400); --focus: #ffffff;
+  --gold: var(--c-gold-400); --hot: var(--c-red-500); --blue: var(--c-blue-500); --green: var(--c-green-500);
+  --success: var(--c-green-500); --warning: var(--c-orange-500); --danger: var(--c-red-500);
+  --shadow-1: 0 1px 2px rgba(0,0,0,.35), 0 4px 12px rgba(0,0,0,.25);
+  --shadow-2: 0 8px 24px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.3);
+  --shadow-3: 0 24px 64px rgba(0,0,0,.55), 0 6px 18px rgba(0,0,0,.35);
+  --ring: 0 0 0 3px var(--c-ink-900), 0 0 0 6px var(--focus), 0 18px 50px rgba(0,0,0,.6);
+}
+
+/* ---------- 3. COMPONENTS ---------- */
+:root {
+  --btn-h: 52px; --btn-r: var(--r-md); --btn-bg: var(--surface-2); --btn-primary-bg: var(--c-white); --btn-primary-ink: var(--c-ink-900);
+  --chip-bg: rgba(255,255,255,.08); --chip-ink: var(--text-2);
+  --tile-r: var(--r-lg); --sheet-r: var(--r-xl);
+  --card-r: 9%; --card-paper: linear-gradient(160deg, #ffffff 0%, #f6f4ee 60%, #ece8de 100%);
+}
+
+/* =====================================================================
+   OS LAYER — global restyle (overrides older styles)
+   ===================================================================== */
+html, body { background: var(--surface-0); color: var(--text-1); font-family: var(--font-ui); font-weight: 500;
+  -webkit-font-smoothing: antialiased; font-feature-settings: 'ss01', 'cv11'; letter-spacing: -0.005em; }
+h1, h2, h3 { letter-spacing: -0.02em; }
+button { font-family: var(--font-ui); font-weight: 600; border-radius: var(--btn-r);
+  transition: transform var(--d-press) var(--ease-out), background-color var(--d-fast), box-shadow var(--d-fast), opacity var(--d-fast); -webkit-tap-highlight-color: transparent; }
+button:active:not(:disabled) { transform: scale(.96); }  /* feedback on press, instant */
+
+/* brand wordmark */
+.logo { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; color: var(--text-1); text-shadow: none;
+  background: linear-gradient(180deg, #fff 30%, #c9d6ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.logo span { background: linear-gradient(135deg, var(--c-cyan-400), var(--c-blue-500) 50%, var(--c-violet-500)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; text-shadow: none; margin-left: .2em; }
+
+/* primary button */
+.big { background: var(--btn-primary-bg); color: var(--btn-primary-ink); box-shadow: var(--shadow-2); font-weight: 700; font-size: 20px; padding: 16px 34px; border-radius: var(--r-pill); }
+.big:active { box-shadow: var(--shadow-1); transform: scale(.96); }
+
+/* chips */
+.chip { background: var(--chip-bg); color: var(--chip-ink); border: 1px solid var(--stroke); font-weight: 600; letter-spacing: 0; }
+.chip.on { background: var(--c-white); color: var(--c-ink-900); border-color: transparent; }
+
+/* toast + banner */
+#toast { font-family: var(--font-ui) !important; }
+#banner { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; color: #fff; text-shadow: 0 10px 40px rgba(0,0,0,.6), 0 2px 0 rgba(0,0,0,.25); }
+
+/* ---------- controller (phone) ---------- */
+body.padBody { background: radial-gradient(120% 70% at 50% -10%, #1d2a52 0%, transparent 60%), var(--surface-0); }
+#joinScr { gap: var(--sp-4); }
+#joinScr .logo { font-size: 46px; margin-bottom: var(--sp-4); }
+#joinScr label { color: var(--text-3); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+#joinScr input { background: var(--surface-1); border: 1px solid var(--stroke-strong); border-radius: var(--r-md); font-family: var(--font-ui); font-weight: 600; color: var(--text-1);
+  transition: border-color var(--d-fast), box-shadow var(--d-fast); }
+#joinScr input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(61,139,255,.25); }
+#roomIn { font-family: var(--font-display) !important; font-weight: 700; letter-spacing: .35em !important; }
+.topbar { background: var(--surface-glass); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid var(--stroke); font-weight: 600; font-size: 15px; min-height: 52px; padding: 8px 14px; }
+.dot { box-shadow: 0 0 0 3px rgba(255,255,255,.12); }
+.status { color: var(--text-3); font-weight: 500; }
+.center h2 { font-family: var(--font-display); font-weight: 700; font-size: 28px; }
+.center p { color: var(--text-2); font-weight: 500; }
+.gbtn { background: var(--surface-1); border: 1px solid var(--stroke); border-radius: var(--r-lg); box-shadow: var(--shadow-1); }
+.gbtn:active { border-color: var(--accent); transform: scale(.97); }
+.gbtn b { font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; } }
+@media (prefers-reduced-transparency: reduce) { .topbar { background: var(--surface-1); backdrop-filter: none; } }
