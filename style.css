@@ -368,3 +368,36 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .swingBtn span { font-size: 58px; line-height: 1; }
 .joyPad.nobtn { grid-template-columns: 1fr !important; grid-template-rows: 1fr !important; }
 .joyPad.nobtn .joyBtns { display: none; }
+
+/* ---------- 🎵 song guess ---------- */
+.songUI{display:flex;flex-direction:column;gap:10px;padding:10px 12px 18px;max-width:640px;margin:0 auto;width:100%;box-sizing:border-box}
+.songTop{display:flex;justify-content:space-between;align-items:center;font-size:17px}
+.songTop span{background:rgba(255,212,59,.15);color:#ffd43b;padding:4px 12px;border-radius:999px;font-weight:800}
+.songStages{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.songStages span{text-align:center;font-size:12px;font-weight:800;padding:5px 0;border-radius:8px;background:rgba(255,255,255,.07);color:#8c7fb8}
+.songStages span.past{background:rgba(204,93,232,.35);color:#e5dbff}
+.songStages span.cur{background:#cc5de8;color:#fff;box-shadow:0 0 0 2px #fff inset}
+.songStat{font-size:19px;font-weight:800;text-align:center;padding:12px;border-radius:16px;background:rgba(255,255,255,.06);line-height:1.35}
+.songStat.right{background:rgba(47,158,68,.35);font-size:24px}
+.songStat.wrong{background:rgba(224,49,49,.28)}
+.songStat.reveal{background:rgba(204,93,232,.22)}
+.songStat.reveal b{color:#ffd43b;font-size:22px}
+.songIn{display:flex;gap:6px;position:sticky;top:0;z-index:2}
+.songIn input{flex:1;min-width:0;font:700 20px Inter,system-ui,sans-serif;padding:14px 16px;border-radius:16px;border:3px solid #cc5de8;background:#140f30;color:#fff;outline:none;-webkit-appearance:none;appearance:none}
+.songIn input:focus{border-color:#ffd43b}
+.songIn input:disabled{opacity:.45;border-color:#555}
+.songIn button{width:54px;border-radius:16px;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:20px}
+.songSug{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
+.songSug button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:11px 14px;border-radius:14px;border:0;background:#2a1f5c;color:#fff;font:inherit}
+.songSug button:active{background:#cc5de8;transform:scale(.98)}
+.songSug b{font-size:18px}
+.songSug small{font-size:14px;color:#b197fc;font-weight:700}
+.sgNone{text-align:center;padding:8px}
+.songTried{font-size:15px;color:#ff8787;display:flex;flex-direction:column;gap:2px}
+.songBtns{display:grid;grid-template-columns:1fr 1.6fr;gap:8px}
+.songBtns button,.songHost button{padding:16px 10px;border-radius:16px;border:0;font:800 17px Inter,system-ui,sans-serif;color:#fff;background:#364fc7}
+.songBtns button#sgSkip{background:#5f3dc4}
+.songHost{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.songHost:empty{display:none}
+.songHost button.end{background:#c92a2a}
+@media (orientation:landscape) and (max-height:500px){.songUI{padding-top:4px;gap:6px}.songStat{padding:6px;font-size:16px}.songSug{max-height:38vh}.songBtns button{padding:10px}}

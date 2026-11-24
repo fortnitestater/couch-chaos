@@ -103,11 +103,17 @@ class NativeGame {
     nativeBlit(g, this.texts);
   }
   onPump(p, n) { const i = this.ps.indexOf(p); if (i >= 0 && this.ready) NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, 'pump', Math.max(1, +n || 1), 0]); }
-  onAct(p, m) { const i = this.ps.indexOf(p); if (i >= 0 && this.ready) NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, String(m.a || ''), +m.i || 0, +m.p || 0]); }
+  onAct(p, m) {
+    const i = this.ps.indexOf(p); if (i < 0 || !this.ready) return;
+    const kind = String(m.a || '') + (m.id ? ':' + m.id : ''), n = m.s ? ['♠', '♥', '♦', '♣'].indexOf(m.s) : +m.i || 0;
+    NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, kind, n, +m.p || 0]);
+  }
+  resync(p) { const i = this.ps.indexOf(p); if (i >= 0 && this.sent && this.sent[i]) this.c.send(p, this.sent[i]); }
   // ---- called from C++ ----
   layout(pid, json) { const L = JSON.parse(json); if (pid < 0) this.c.setLayout('all', L); else if (this.ps[pid]) this.c.setLayout(this.ps[pid], L); }
   sfx(n) { const f = this.c.sfx[n]; if (typeof f === 'function') f.call(this.c.sfx); }
   banner(s, ms, col) { this.c.banner(s, ms, col); }
+  sendTo(pid, json) { const p = this.ps[pid]; if (!p || p.bot) return; const m = JSON.parse(json); (this.sent = this.sent || {})[pid] = m; this.c.send(p, m); }
   buzz(pid, ms) { const p = this.ps[pid]; if (p && !p.bot) this.c.send(p, { t: 'buzz', ms }); }
   finish(s) {
     if (this.dead) return; this.dead = true;

@@ -24,7 +24,8 @@ void Sfx(const char* name);
 void Shake(float amount);
 void Finish(const std::string& ranking);
 void Banner(const std::string& text, int ms = 1600, const char* color = "#ffffff");
-void Buzz(int pid, int ms);        // "pid:stat;pid:stat" best first
+void Buzz(int pid, int ms);
+void Send(int pid, const std::string& json);  // any message straight to one phone        // "pid:stat;pid:stat" best first
 
 // ---------- players ----------
 struct Player { int id; std::string name; Color color; bool bot; Vector2 stick{}; bool a = false, b = false, pa = false, pb = false; };
@@ -102,4 +103,13 @@ std::unique_ptr<Game> MakeSimon();
 std::unique_ptr<Game> MakeTug();
 std::unique_ptr<Game> MakeHockey();
 std::unique_ptr<Game> MakeTag();
+std::unique_ptr<Game> MakeEights();
+std::unique_ptr<Game> MakeFour();
+std::unique_ptr<Game> MakeSnakes();
+std::unique_ptr<Game> MakeBlackjack();
+std::unique_ptr<Game> MakeBingo();
+std::unique_ptr<Game> MakeDice();
+std::unique_ptr<Game> MakeMemory();
+std::unique_ptr<Game> MakeHiLo();
+std::unique_ptr<Game> MakeWord();
 #include "json.h"

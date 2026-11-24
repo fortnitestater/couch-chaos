@@ -15,6 +15,7 @@ EM_JS(void, js_sfx, (const char* s), { if (Module.game) Module.game.sfx(UTF8ToSt
 EM_JS(void, js_shake, (float a), { if (Module.game) Module.game.c.shake(a); });
 EM_JS(void, js_banner, (const char* s, int ms, const char* c), { if (Module.game) Module.game.banner(UTF8ToString(s), ms, UTF8ToString(c)); });
 EM_JS(void, js_buzz, (int pid, int ms), { if (Module.game) Module.game.buzz(pid, ms); });
+EM_JS(void, js_send, (int pid, const char* s), { if (Module.game && Module.game.sendTo) Module.game.sendTo(pid, UTF8ToString(s)); });
 EM_JS(void, js_finish, (const char* s), { if (Module.game) Module.game.finish(UTF8ToString(s)); });
 
 void Text(float x, float y, float size, Color c, const std::string& s, int align, int style, float w) { if (c.a == 0 || s.empty()) return; js_text(x, y, size, (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a), s.c_str(), align, style, w); }
@@ -27,6 +28,7 @@ void Shake(float a) { js_shake(a); }
 void Finish(const std::string& r) { js_finish(r.c_str()); }
 void Banner(const std::string& s, int ms, const char* c) { js_banner(s.c_str(), ms, c); }
 void Buzz(int pid, int ms) { js_buzz(pid, ms); }
+void Send(int pid, const std::string& json) { js_send(pid, json.c_str()); }
 
 Color ParseColor(const std::string& hex) { unsigned v = 0x888888; if (hex.size() >= 7 && hex[0] == '#') v = (unsigned)strtoul(hex.substr(1, 6).c_str(), nullptr, 16); return Hex(v); }
 
@@ -121,6 +123,15 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
   else if (g == "tug") game = MakeTug();
   else if (g == "airhockey") game = MakeHockey();
   else if (g == "tag") game = MakeTag();
+  else if (g == "cards") game = MakeEights();
+  else if (g == "four") game = MakeFour();
+  else if (g == "snakes") game = MakeSnakes();
+  else if (g == "blackjack") game = MakeBlackjack();
+  else if (g == "bingo") game = MakeBingo();
+  else if (g == "dice") game = MakeDice();
+  else if (g == "memory") game = MakeMemory();
+  else if (g == "hilo") game = MakeHiLo();
+  else if (g == "word") game = MakeWord();
   if (game) { game->ps = &players; game->Start(); }
 }
 EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {

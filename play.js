@@ -127,7 +127,7 @@
   const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || layout.name === 'swing');
   function updateTiltUI() {
     const show = tiltApplies() && ctrlMode === 'motion';
-    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
+    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode || (layout && layout.name === 'song')); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
     $('#tiltBtn').classList.add('hidden');
     const kb = document.getElementById('calBtn'); if (kb) kb.classList.toggle('hidden', ctrlMode !== 'motion'); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
     $('#tiltBtn').textContent = tiltOn ? 'Tilt: ON' : 'Tilt: off'; $('#tiltBtn').classList.toggle('on', tiltOn);
@@ -319,7 +319,7 @@
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -522,6 +522,76 @@
       ${m.sub ? `<div class="gpSub">${esc(m.sub)}</div>` : ''}<div class="gpHand">${cards || '<div class="muted" style="padding:20px">No cards</div>'}</div><div class="gpBtns">${btns}</div></div>`;
     stage.querySelectorAll('.tcard.ok').forEach(b => (b.onclick = () => { sendMsg({ t: 'act', a: 'card', i: +b.dataset.i }); navigator.vibrate?.(20); b.classList.add('gone'); }));
     stage.querySelectorAll('.pbtn2').forEach(b => (b.onclick = () => { sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }); navigator.vibrate?.(25); }));
+  }
+  // ---------- 🎵 song guess: type + pick from live suggestions ----------
+  const sNorm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  let songList = [], songTried = [], songRound = -1;
+  function songMatches(q) {
+    q = sNorm(q); if (!q) return [];
+    const words = q.split(' '), out = [];
+    for (const it of songList) {
+      let sc = 0, ok = true;
+      for (const w of words) {
+        if (it.t.startsWith(w)) sc += 0; else if (it.w.some(x => x.startsWith(w))) sc += 1; else if (it.n.includes(w)) sc += 3; else { ok = false; break; }
+      }
+      if (ok) out.push({ it, sc: sc + (it.t.startsWith(q) ? -5 : 0) + it.t.length / 100 });
+    }
+    return out.sort((a, b) => a.sc - b.sc).slice(0, 8).map(x => x.it);
+  }
+  function renderSong(L) {
+    if (L.list && L.list.length !== songList.length) songList = L.list.map((s, i) => { const [t, a = ''] = s.split(' — '); return { i, s, t: sNorm(t), a, title: t, n: sNorm(s), w: sNorm(s).split(' ') }; });
+    if (L.round !== songRound) { songRound = L.round; songTried = []; }
+    let root = $('#songUI');
+    if (!root || +root.dataset.r !== L.round) {
+      stage.innerHTML = `<div class="songUI" id="songUI" data-r="${L.round}">
+        <div class="songTop"><b id="sgRound"></b><span id="sgPts"></span></div>
+        <div class="songStages" id="sgStages"></div>
+        <div class="songStat" id="sgStat"></div>
+        <div class="songIn" id="sgBox"><input id="sgIn" type="search" enterkeyhint="go" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="🔎 Type a song or artist…"><button id="sgX" aria-label="Clear">✕</button></div>
+        <div class="songSug" id="sgSug"></div>
+        <div class="songTried" id="sgTried"></div>
+        <div class="songBtns" id="sgBtns"><button id="sgRep">🔁 Replay</button><button id="sgSkip">⏭ Skip · more music</button></div>
+        <div class="songHost" id="sgHost"></div></div>`;
+      root = $('#songUI');
+      const inp = $('#sgIn'), sug = $('#sgSug');
+      const pickSong = it => {
+        if (!layout || layout.name !== 'song' || layout.state !== 'guess') return;
+        sendMsg({ t: 'act', a: 'guess', i: it.i }); navigator.vibrate?.(25);
+        songTried.push(it.s); inp.value = ''; sug.innerHTML = ''; inp.blur();
+        layout.state = 'sent'; songUpdate(layout);
+      };
+      const draw = () => {
+        const list = songMatches(inp.value);
+        sug.innerHTML = list.map((it, k) => `<button data-k="${k}"><b>${esc(it.title)}</b><small>${esc(it.a)}</small></button>`).join('') || (inp.value.trim() ? '<div class="muted sgNone">No match — try the artist name</div>' : '');
+        sug.querySelectorAll('button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); pickSong(list[+b.dataset.k]); }));
+        sug._list = list;
+      };
+      inp.addEventListener('input', draw);
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const l = sug._list || []; if (l[0]) pickSong(l[0]); } });
+      $('#sgX').onclick = () => { inp.value = ''; draw(); inp.focus(); };
+      $('#sgRep').onclick = () => { sendMsg({ t: 'act', a: 'replay' }); navigator.vibrate?.(15); };
+      $('#sgSkip').onclick = () => { sendMsg({ t: 'act', a: 'skip' }); navigator.vibrate?.(15); inp.blur(); layout.state = 'skip'; songUpdate(layout); };
+    }
+    songUpdate(L);
+  }
+  function songUpdate(L) {
+    const st = L.state, live = st === 'guess';
+    $('#sgRound').textContent = L.round ? (L.total ? `🎵 Song ${L.round} / ${L.total}` : `🎵 Song ${L.round} · endless`) : '🎵 Song Guess';
+    $('#sgPts').textContent = `${L.pts || 0} pts`;
+    $('#sgStages').innerHTML = (L.stages || []).map((s, i) => `<span class="${i < L.stage ? 'past' : i === L.stage && st !== 'reveal' ? 'cur' : ''}">${s}s</span>`).join('');
+    const msg = {
+      load: '⏳ Next song coming…', guess: L.stage === 0 ? '👂 0.1 seconds… what is it?!' : `👂 Heard ${L.stages[L.stage]}s — what is it?`,
+      sent: '📨 Checking…', wrong: '❌ Not that one! More music is coming…', skip: '⏭ Skipped — listen to the next bit',
+      right: `✅ YOU GOT IT! ${L.mine || ''}`, reveal: `It was <b>${esc(L.answer || '')}</b><br>${esc(L.mine || '')}`,
+    }[st] || '';
+    const sEl = $('#sgStat'); sEl.innerHTML = st === 'reveal' ? msg : esc(msg); sEl.className = 'songStat ' + st;
+    const inp = $('#sgIn'); inp.disabled = !live; if (!live) { inp.value = ''; $('#sgSug').innerHTML = ''; }
+    $('#sgBox').style.display = st === 'right' || st === 'reveal' || st === 'load' ? 'none' : '';
+    $('#sgBtns').style.display = live ? '' : 'none';
+    $('#sgTried').innerHTML = songTried.length && st !== 'reveal' ? songTried.map(s => `<div>❌ <s>${esc(s)}</s></div>`).join('') : '';
+    const h = $('#sgHost');
+    h.innerHTML = st === 'reveal' && L.host ? `<button data-b="next">⏭ Next song</button><button data-b="end" class="end">🏁 End game</button>` : '';
+    h.querySelectorAll('button').forEach(b => b.onclick = () => sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }));
   }
   function renderButton(L) {
     stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p><p class="muted" style="font-size:13px">PC: Space</p></div>`;
