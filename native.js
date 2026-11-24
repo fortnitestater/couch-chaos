@@ -73,9 +73,9 @@ const NativeShell = {
 
 // ---------- a game running in C++ ----------
 class NativeGame {
-  constructor(c, id) { this.c = c; this.id = id; this.texts = []; this.ready = false; this.t = 0; }
+  constructor(c, id, min = 2) { this.c = c; this.id = id; this.min = min; this.texts = []; this.ready = false; this.t = 0; }
   start() {
-    this.ps = this.c.roster(2);
+    this.ps = this.c.roster(this.min);
     nativeLoad().then(m => {
       if (this.dead) return;
       m.game = this;
@@ -102,6 +102,7 @@ class NativeGame {
     }
     nativeBlit(g, this.texts);
   }
+  onPump(p, n) { const i = this.ps.indexOf(p); if (i >= 0 && this.ready) NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, 'pump', Math.max(1, +n || 1), 0]); }
   onAct(p, m) { const i = this.ps.indexOf(p); if (i >= 0 && this.ready) NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, String(m.a || ''), +m.i || 0, +m.p || 0]); }
   // ---- called from C++ ----
   layout(pid, json) { const L = JSON.parse(json); if (pid < 0) this.c.setLayout('all', L); else if (this.ps[pid]) this.c.setLayout(this.ps[pid], L); }

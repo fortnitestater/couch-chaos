@@ -1,6 +1,7 @@
 /* Couch Chaos — game catalog. ctrl: 'tap' (phone buttons only), 'move' (stick / tilt / keys), 'shake', 'talk' (play out loud) */
 const CATEGORIES = [
-  { id: 'sports', name: '🎾 Motion Sports' },
+  { id: 'classic', name: '⭐ Classics Everyone Knows' },
+  { id: 'sports', name: '🎾 Sports' },
   { id: 'winter', name: '❄️ Winter Games' },
   { id: 'table', name: '🃏 Cards & Table' },
   { id: 'party', name: '💣 Bombs & Party' },
@@ -8,6 +9,19 @@ const CATEGORIES = [
   { id: 'action', name: '⚡ Action' },
 ];
 const GAMES = [
+  // ⭐ classics everyone already knows (C++ / raylib)
+  { id: 'chairs', cat: 'classic', name: 'Musical Chairs', emoji: '🪑', art: ['#f783ac', '#a61e4d'], ctrl: 'move', players: '2-8', mins: 3,
+    desc: 'Walk around the chairs while the music plays. When it stops — SIT! One chair fewer every round.', how: ['Walk around with the joystick', 'Music stops = run to a free chair', 'No chair? You are out. Last one sitting wins'], make: c => new NativeGame(c, 'chairs', 4) },
+  { id: 'redlight', cat: 'classic', name: 'Red Light, Green Light', emoji: '🚦', art: ['#69db7c', '#c92a2a'], ctrl: 'move', players: '1-8', mins: 2,
+    desc: 'Run on green, FREEZE on red. Move while the doll is looking and you go back!', how: ['Hold RUN on GREEN LIGHT', 'Let go the moment it says RED LIGHT', 'First to the finish line wins'], make: c => new NativeGame(c, 'redlight', 3) },
+  { id: 'simon', cat: 'classic', name: 'Simon Says', emoji: '🙋', art: ['#ffe066', '#e67700'], ctrl: 'move', players: '1-8', mins: 2,
+    desc: 'Do what Simon says — but ONLY if Simon says it! Hands up, squat, jump, clap.', how: ['Push the stick or press JUMP / CLAP', 'Only do it when it starts with "Simon says"', 'Most right answers wins'], make: c => new NativeGame(c, 'simon', 3) },
+  { id: 'tug', cat: 'classic', name: 'Tug of War', emoji: '🪢', art: ['#ff8787', '#1971c2'], ctrl: 'tap', players: '2-8', mins: 2,
+    desc: 'Red team vs Blue team, one rope, one mud pit. Tap as fast as you can to pull!', how: ['Teams are picked for you', 'TAP your phone as fast as you can', 'Pull them into the mud — best of 3'], make: c => new NativeGame(c, 'tug', 2) },
+  { id: 'airhockey', cat: 'classic', name: 'Air Hockey', emoji: '🏒', art: ['#74c0fc', '#e03131'], ctrl: 'move', players: '2-8', mins: 3,
+    desc: 'The arcade classic. Slam the puck into the other goal. Red side vs blue side.', how: ['Move your mallet with the joystick', 'Hit the puck into their goal', 'First to 7 wins'], make: c => new NativeGame(c, 'airhockey', 2) },
+  { id: 'tag', cat: 'classic', name: 'Tag', emoji: '🏃', art: ['#8ce99a', '#e8590c'], ctrl: 'move', players: '2-8', mins: 2,
+    desc: "You're IT! Tag someone to pass it on. Whoever is IT the least wins.", how: ['Run with the joystick, DASH to escape', 'IT? Touch someone to pass it on', 'Least time as IT wins'], make: c => new NativeGame(c, 'tag', 4) },
   // 🎾 motion sports (swing the phone)
   { id: 'tennis', cat: 'sports', name: 'Smash Tennis', emoji: '🎾', art: ['#d8f5a2', '#2b8a3e'], ctrl: 'swing', players: '1-8', mins: 3,
     desc: 'Real 1:1 tennis in a roaring 3D stadium: toss and serve, forehands, backhands, aces, an announcer and a crowd. 1v1 = split screen!', how: ['SERVE: just swing — toss + hit happen for you', 'Swing when the ring closes · swing TOWARD where you want it', 'Purple ring = high ball: swing hard to SMASH! Tilt the racket up to LOB'], make: c => new SmashTennis(c) },

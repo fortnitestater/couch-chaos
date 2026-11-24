@@ -96,4 +96,10 @@ struct Game {
 std::unique_ptr<Game> MakeSkyBrawl();
 std::unique_ptr<Game> MakeSumo();
 std::unique_ptr<Game> MakeSnowball();
+std::unique_ptr<Game> MakeChairs();
+std::unique_ptr<Game> MakeRedLight();
+std::unique_ptr<Game> MakeSimon();
+std::unique_ptr<Game> MakeTug();
+std::unique_ptr<Game> MakeHockey();
+std::unique_ptr<Game> MakeTag();
 #include "json.h"

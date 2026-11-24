@@ -115,6 +115,12 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
   if (g == "skybrawl") game = MakeSkyBrawl();
   else if (g == "sumo") game = MakeSumo();
   else if (g == "snowball") game = MakeSnowball();
+  else if (g == "chairs") game = MakeChairs();
+  else if (g == "redlight") game = MakeRedLight();
+  else if (g == "simon") game = MakeSimon();
+  else if (g == "tug") game = MakeTug();
+  else if (g == "airhockey") game = MakeHockey();
+  else if (g == "tag") game = MakeTag();
   if (game) { game->ps = &players; game->Start(); }
 }
 EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {

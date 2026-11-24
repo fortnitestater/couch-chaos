@@ -24,7 +24,7 @@
   const light = c => /^#(ffd43b|fcc419|f1f3f5|fff|ffffff|94d82d|ffe066|e9ecef)$/i.test(c);
 
   // ---------- motion ----------
-  let lastSwing = 0, swingWin = null, curRot = 0, curAcc = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, tiltOn = store.get('cc_tilt') !== '0', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
+  let lastSwing = 0, swingWin = null, curRot = 0, curAcc = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, ctrlMode = store.get('cc_ctrl') === 'motion' ? 'motion' : 'stick', tiltOn = store.get('cc_ctrl') === 'motion', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
   // iPhone/iPad (Safari) only shows the motion popup when requestPermission() is called straight from a real
   // button tap ('click'). Anything else (auto-join, pointerdown, timers) is silently refused.
   const needPerm = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
@@ -76,7 +76,7 @@
   function motionGate() {
     let el = document.getElementById('motionGate');
     const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    const show = needPerm && touch && permState !== 'granted' && joined && !camMode;
+    const show = needPerm && touch && permState !== 'granted' && joined && !camMode && ctrlMode === 'motion';
     if (!show) { if (el) el.remove(); return; }
     const big = layout && (layout.name === 'swing' || layout.name === 'shake' || (layout.name === 'pad' && layout.stick));
     if (!el) { el = document.createElement('div'); el.id = 'motionGate'; document.body.appendChild(el); }
@@ -93,10 +93,11 @@
     const sk = el.querySelector('#mgSkip'); if (sk) sk.onclick = () => { el.remove(); motionGate.skipped = true; };
     if (motionGate.skipped && !big) el.remove();
   }
-  if (!needPerm) askMotion();
+  if (!needPerm && ctrlMode === 'motion') askMotion();
   function onMotion(e) {
     const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
-    if (!motionSeen) { motionSeen = true; updateTiltUI(); if (layout && layout.name === 'swing') setTimeout(() => render(layout), 0); }
+    if (!motionSeen) { motionSeen = true; updateTiltUI(); if (layout && layout.name === 'swing' && ctrlMode === 'motion') setTimeout(() => render(layout), 0); }
+    if (ctrlMode !== 'motion' && !calRun) return; // joystick mode: the phone's movement is ignored
     let ax = a.x, ay = a.y, az = a.z || 0; if (isIOS) { ax = -ax; ay = -ay; az = -az; }
     const ang = (((screen.orientation && screen.orientation.angle) ?? (window.orientation || 0)) % 360 + 360) % 360;
     let ux, uy;
@@ -125,11 +126,20 @@
   }
   const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || layout.name === 'swing');
   function updateTiltUI() {
-    const show = tiltApplies();
-    $('#tiltBtn').classList.toggle('hidden', !show); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
+    const show = tiltApplies() && ctrlMode === 'motion';
+    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
+    $('#tiltBtn').classList.add('hidden');
+    const kb = document.getElementById('calBtn'); if (kb) kb.classList.toggle('hidden', ctrlMode !== 'motion'); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
     $('#tiltBtn').textContent = tiltOn ? 'Tilt: ON' : 'Tilt: off'; $('#tiltBtn').classList.toggle('on', tiltOn);
     const tb = document.getElementById('tiltBadge'); if (tb) tb.classList.toggle('hidden', !(show && tiltOn));
   }
+  function setCtrl(mode) {
+    ctrlMode = mode; store.set('cc_ctrl', mode); tiltOn = mode === 'motion';
+    if (mode === 'motion') { askMotion(); neutral = grav ? { ...grav } : null; toast('📱 Motion on — tilt to steer, swing to hit'); }
+    else { if (calRun) endCalib(false); const mg = document.getElementById('motionGate'); if (mg) mg.remove(); toast('🕹️ Joystick on'); }
+    sendMsg({ t: 'ctrl', mode }); if (layout) render(layout); else updateTiltUI();
+  }
+  $('#ctrlBtn').onclick = () => setCtrl(ctrlMode === 'motion' ? 'stick' : 'motion');
   $('#tiltBtn').onclick = () => { tiltOn = !tiltOn; store.set('cc_tilt', tiltOn ? '1' : '0'); neutral = grav ? { ...grav } : null; updateTiltUI(); };
   $('#centerBtn').onclick = () => { neutral = grav ? { ...grav } : null; toast('Centered!'); };
   $('#flipBtn').onclick = () => { flip = -flip; store.set('cc_flip', flip < 0 ? '1' : '0'); toast('Tilt direction flipped'); };
@@ -236,7 +246,7 @@
     } else { const el = document.getElementById('calib'); if (el) el.remove(); sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); }
   }
   // start once motion is actually working (after the Enable-motion tap on iPhone)
-  function maybeCalib() { if (camMode) return; if (joined && !calDone && !calRun && motionSeen && (!needPerm || permState === 'granted')) startCalib(); }
+  function maybeCalib() { if (camMode || ctrlMode !== 'motion') return; if (joined && !calDone && !calRun && motionSeen && (!needPerm || permState === 'granted')) startCalib(); }
   setInterval(maybeCalib, 400);
 
   // ---------- input state ----------
@@ -400,6 +410,7 @@
   }
   function renderPad(L) {
     const xOnly = L.stick === 'x', noStick = !L.stick;
+    if (!noStick && ctrlMode !== 'motion') return renderJoy(L);
     stage.innerHTML = `<div class="pad ${noStick ? 'nostick' : ''}">
       ${noStick ? '' : `<div class="stickZone yokeZone" id="sz"><div class="tiltBadge hidden" id="tiltBadge">📱 Turn your phone like a steering wheel</div>
         <div class="yArrow l" id="yL">◀</div><div class="yArrow r" id="yR">▶</div>
@@ -424,6 +435,23 @@
     sz.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; if (xOnly) { stick.x = absX(e); stick.y = 0; flush(); return; } let dx = (e.clientX - ox) / 60, dy = (e.clientY - oy) / 60; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } stick.x = dx; stick.y = dy; flush(); });
     const end = e => { if (e.pointerId !== pid) return; pid = null; stick.active = false; stick.x = stick.y = 0; flush(); };
     sz.addEventListener('pointerup', end); sz.addEventListener('pointercancel', end);
+  }
+  // ---------- joystick pad: thumbstick on the left, big buttons on the right (works held sideways) ----------
+  function joyHtml(xOnly, hint) { return `<div class="joyZone ${xOnly ? 'xonly' : ''}" id="jz"><div class="jsBase" id="jsB"><div class="jsKnob" id="jsK"></div>${xOnly ? '<i class="jsAr l">◀</i><i class="jsAr r">▶</i>' : ''}</div><div class="jzHint">${esc(hint || '')}<br><small>Put your thumb anywhere here</small></div></div>`; }
+  function bindJoy(xOnly) {
+    const z = $('#jz'), base = $('#jsB'), knob = $('#jsK'); if (!z) return; let pid = null, cx = 0, cy = 0;
+    const R = () => Math.max(44, Math.min(80, z.clientHeight * 0.2));
+    const move = e => { const r = R(); let dx = e.clientX - cx, dy = xOnly ? 0 : e.clientY - cy; const l = Math.hypot(dx, dy); if (l > r) { dx *= r / l; dy *= r / l; } knob.style.transform = `translate(${dx}px,${dy}px)`; let x = dx / r, y = dy / r; if (Math.hypot(x, y) < 0.12) x = y = 0; stick.x = x; stick.y = y; flush(); };
+    z.addEventListener('pointerdown', e => { e.preventDefault(); if (pid != null) return; pid = e.pointerId; try { z.setPointerCapture(pid); } catch (_) {} const zr = z.getBoundingClientRect(); cx = e.clientX; cy = xOnly ? zr.top + zr.height / 2 : e.clientY; base.style.left = (cx - zr.left) + 'px'; base.style.top = (cy - zr.top) + 'px'; z.classList.add('on'); stick.active = true; move(e); navigator.vibrate?.(8); });
+    z.addEventListener('pointermove', e => { if (e.pointerId === pid) move(e); });
+    const end = e => { if (e.pointerId !== pid) return; pid = null; stick.active = false; stick.x = stick.y = 0; knob.style.transform = ''; base.style.left = base.style.top = ''; z.classList.remove('on'); flush(); };
+    z.addEventListener('pointerup', end); z.addEventListener('pointercancel', end);
+  }
+  function renderJoy(L) {
+    const xOnly = L.stick === 'x';
+    stage.innerHTML = `<div class="joyPad ${L.a || L.b ? '' : 'nobtn'}">${joyHtml(xOnly, L.hint)}<div class="joyBtns">${L.b ? `<button class="pbtn pb" data-b="b">${esc(L.b)}</button>` : ''}${L.a ? `<button class="pbtn pa" data-b="a">${esc(L.a)}</button>` : ''}</div></div>`;
+    stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
+    bindJoy(xOnly);
   }
   // ---------- swing (motion sports) ----------
   const SPORT = { tennis: ['🎾', 'a tennis racket'], bowling: ['🎳', 'a bowling arm'], bat: ['⚾', 'a baseball bat'] };
@@ -454,7 +482,14 @@
   // Motion sports are played with MOTION ONLY: tilt the phone to aim, swing it to hit.
   // Tap / drag only appear as a fallback when the device has no motion (PC, or motion blocked).
   function renderSwing(L) {
-    const [icon, noun] = SPORT[L.sport] || ['🏏', 'a bat'], motion = motionSeen && tiltOn;
+    const [icon, noun] = SPORT[L.sport] || ['🏏', 'a bat'], motion = motionSeen && tiltOn && ctrlMode === 'motion';
+    if (ctrlMode !== 'motion') {
+      // joystick mode: aim with the stick, press the big button to swing. No timing stress: the game helps you.
+      stage.innerHTML = `<div class="joyPad">${joyHtml(true, 'Aim left / right')}<div class="joyBtns"><button class="pbtn pa swingBtn" id="swB"><span>${icon}</span>${esc(L.sport === 'bowling' ? 'ROLL' : 'SWING')}</button></div></div>`;
+      bindJoy(true);
+      const sb = $('#swB'); sb.addEventListener('pointerdown', e => { e.preventDefault(); sb.classList.add('on'); swing(0.8, 'stick'); setTimeout(() => sb.classList.remove('on'), 120); });
+      return;
+    }
     stage.innerHTML = `<div class="swingPad ${motion ? 'motion' : ''}">
       <div class="aimBar" id="aimBar"><div class="aimTrack"><i id="aimDot"></i></div><small>${motion ? '📱 TILT your phone left / right to aim 🎯' : '⬅ drag here to aim ➡'}</small></div>
       <div class="swingZone" id="swz">
@@ -493,8 +528,8 @@
     bindHold($('#tap'), 'a');
   }
   function renderShake(L) {
-    stage.innerHTML = `<div class="center"><h2>${motionSeen ? '📳 SHAKE YOUR PHONE!' : '⌨️ MASH ← → (alternate)'}</h2><div class="shakeCount" id="shakeN">0</div>
-      <button class="tapBig" id="tap" style="font-size:30px">or TAP here</button><p class="muted">${esc(L.hint || '')}</p></div>`;
+    stage.innerHTML = `<div class="center"><h2>${motionSeen && ctrlMode === 'motion' ? '📳 SHAKE YOUR PHONE!' : '👆 TAP AS FAST AS YOU CAN!'}</h2><div class="shakeCount" id="shakeN">0</div>
+      <button class="tapBig" id="tap" style="font-size:30px">${motionSeen && ctrlMode === 'motion' ? 'or TAP here' : 'TAP!'}</button><p class="muted">${esc(L.hint || '')}</p></div>`;
     $('#tap').addEventListener('pointerdown', e => { e.preventDefault(); pump(); $('#tap').classList.add('on'); setTimeout(() => $('#tap') && $('#tap').classList.remove('on'), 80); });
   }
 
@@ -538,7 +573,7 @@
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong', ts: m.ts }); } catch (e) {} return; }
     if (m.t === 'welcome') {
-      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) });
+      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meName').textContent = `${m.avatar} ${m.name}`;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
@@ -605,7 +640,7 @@
     if (!name) { $('#nameIn').value = FUNNY[(Math.random() * FUNNY.length) | 0]; name = $('#nameIn').value; }
     store.set('cc_name', name);
     $('#joinBtn').disabled = true; $('#joinBtn').textContent = 'Connecting…'; $('#joinErr').textContent = '';
-    await askMotion(); await ICE_READY; connect();
+    if (ctrlMode === 'motion') await askMotion(); await ICE_READY; connect();
   }
   $('#joinBtn').onclick = doJoin;
   // returning player with the room link: join straight away

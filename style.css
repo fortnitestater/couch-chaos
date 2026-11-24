@@ -346,3 +346,25 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .pbtn2.big { flex-basis: 100%; min-height: 62px; font-family: 'Bungee', Impact, sans-serif; font-weight: 400; font-size: 19px; }
 .pbtn2:disabled { filter: grayscale(1); opacity: .45; }
 .pbtn2:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+
+/* ---------- joystick controls (default) ---------- */
+.ctrlBtn { font-size: 15px; padding: 8px 14px; background: #2b3a6b; border: 2px solid #4dabff; margin-left: auto; }
+.ctrlBtn.on { background: #5f3dc4; border-color: #b197fc; }
+.topbar .status { margin-left: 0; }
+.joyPad { height: 100%; display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+@media (orientation: landscape) { .joyPad { grid-template-columns: 1.15fr 1fr; grid-template-rows: 1fr; } .topbar { min-height: 38px; padding: 4px 12px; } }
+.joyZone { position: relative; touch-action: none; overflow: hidden; border-radius: 24px; margin: 10px; background: radial-gradient(circle at 50% 50%, rgba(77,171,255,.12), rgba(255,255,255,.03) 70%); border: 2px dashed rgba(255,255,255,.12); }
+.jsBase { position: absolute; left: 50%; top: 50%; width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.1), rgba(255,255,255,.04)); border: 3px solid rgba(255,255,255,.22); transition: opacity .15s; pointer-events: none; }
+.joyZone.xonly .jsBase { width: 210px; border-radius: 80px; margin-left: -105px; }
+.jsKnob { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #a5d8ff 40%, #1c7ed6); box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+.joyZone.on .jsBase { border-color: rgba(77,171,255,.8); }
+.jsAr { position: absolute; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 22px; color: rgba(255,255,255,.4); }
+.jsAr.l { left: 12px; } .jsAr.r { right: 12px; }
+.jzHint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 14px; pointer-events: none; padding: 0 8px; }
+.joyZone.on .jzHint { opacity: .3; }
+.joyBtns { display: flex; gap: 18px; align-items: center; justify-content: center; padding: 14px; flex-wrap: wrap; }
+@media (orientation: landscape) { .joyBtns { flex-direction: column-reverse; } .joyBtns .pbtn.pb { align-self: flex-start; margin-left: 10%; } }
+.swingBtn { width: 190px !important; height: 190px !important; font-size: 26px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.swingBtn span { font-size: 58px; line-height: 1; }
+.joyPad.nobtn { grid-template-columns: 1fr !important; grid-template-rows: 1fr !important; }
+.joyPad.nobtn .joyBtns { display: none; }

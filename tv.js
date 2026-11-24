@@ -85,6 +85,7 @@
       case 'random': if (isVip && S.state === 'home') surprise(); break;
       case 'nav': if (isVip) nav(m.d); break;
       case 'or': if (Array.isArray(m.q) && m.q.length === 4) { p.or = m.q; p.orT = Date.now(); } break;
+      case 'ctrl': p.ctrl = m.mode === 'motion' ? 'motion' : 'stick'; break;
       case 'calib': p.calYaw = clamp(+m.yaw || 35, 15, 80); break;
     }
   }

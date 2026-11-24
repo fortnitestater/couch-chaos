@@ -454,7 +454,8 @@ class SmashTennis extends Sport3D {
     }
     const to = opp.reduce((a, q) => (Math.abs(q.x - (c ? c.x : tx)) < Math.abs(a.x - (c ? c.x : tx)) ? q : a));
     // can they get there in time? real players: ~0.25 s to react, ~5.5 m/s sprint, ~1.3 m reach with the racket
-    const reach = c ? Math.hypot(c.x - to.x, c.z - to.z) <= 5.3 * Math.max(0, c.t - 0.3) + 1.25 : false;
+    const easy = to.p.ctrl !== 'motion' && !to.p.cam && !to.p.bot;
+    const reach = c ? easy || Math.hypot(c.x - to.x, c.z - to.z) <= 5.3 * Math.max(0, c.t - 0.3) + 1.25 : false;
     this.ball = { sim, t: 0, t1: b1 ? b1.t : 99, bx: b1 ? b1.x : tx, bz: b1 ? b1.z : tz, A: c ? c.t : sim.end, c: c || { x: tx, y: 1, z: to.z, t: sim.end }, rcv: to, by: from, kind, spin, kmh: Math.round(kmh),
       smash: kind === 'smash' || !!opt.fire, bounced: false, done: false, out: !!b1 && !sim.net && !inside, netT: sim.net ? sim.net.t : null, serve: kind === 'serve', reach, prevZ: S.z };
     // bots: they try to hit it on time, but like people they are sometimes a bit early / late
@@ -506,7 +507,8 @@ class SmashTennis extends Sport3D {
       return;
     }
     if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl || this.ball.netT != null || this.ball.out) return;
-    const b = this.ball, dt = b.t - this.latency(pl, lag) - b.A;
+    const b = this.ball, easy = pl.p.ctrl !== 'motion' && !pl.p.cam && !pl.p.bot; let dt = b.t - this.latency(pl, lag) - b.A;
+    if (easy) { if (dt < -0.7 || dt > 0.5) { if (dt < -0.7) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('WAIT FOR IT…', s.x, s.y, '#ff922b', 34, 0.7); pl.cool = 0.1; } return; } dt *= 0.35; } // joystick: forgiving timing
     if (dt < -0.38) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO EARLY!', s.x, s.y, '#ff922b', 36, 0.7); pl.cool = 0.15; return; }
     if (dt > 0.3) return; // too late — the ball is past you
     if (!b.reach) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO FAR!', s.x, s.y, '#ff922b', 34, 0.7); return; }
@@ -973,7 +975,7 @@ class HomeRunDerby extends Sport3D {
     for (const p of this.ps) {
       const s = P.swings.get(p); let d = 0, type = 'MISS';
       if (s) {
-        const e = Math.abs(s.at - P.T);
+        const e = Math.abs(s.at - P.T) * (p.ctrl !== 'motion' && !p.cam && !p.bot ? 0.45 : 1); // joystick = forgiving timing
         if (e < 0.17) { const q = 1 - e / 0.17; d = Math.round((q * 0.72 + s.pow * 0.28) * 150 + rnd(-6, 6)); type = d >= 115 ? 'HOME RUN' : e > 0.13 ? 'FOUL' : 'HIT'; if (type === 'FOUL') d = 0; }
         else type = s.at < P.T ? 'TOO EARLY' : 'TOO LATE';
       }
