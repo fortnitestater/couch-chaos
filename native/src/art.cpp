@@ -55,30 +55,114 @@ void Shadow(Rectangle r, float rad, float blur, Color c, float dy) {
 void Sky(Color top, Color bottom) { DrawRectangleGradientV(0, 0, W, H, top, bottom); }
 }
 
-// ---------- toon character ----------
+// ---------- toon character: a kid in a hooded onesie, big face, walking legs, a hat per player ----------
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc) {
-  float squash = 1 + 0.12f * sinf(t * 9) * (hop > 0.05f ? 1 : 0.25f);
-  Matrix base = MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
+  bool moving = hop > 0.02f;
+  float ph = t * 11.f, swing = moving ? sinf(ph) : 0.f;
+  float breath = sinf(t * 2.2f) * 0.015f;
+  float squash = 1 + breath + (moving ? 0.08f * cosf(ph * 2) : 0) + cheer * 0.04f * sinf(t * 12);
+  lit.Caster({ pos.x, pos.y, pos.z }, 0.62f * sc * (1 - fminf(hop, 1.2f) * 0.35f));
+  float lean = moving ? 0.12f : 0.f;
+  Matrix base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateX(lean)), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
   auto P = [&](const Mesh& m, Vector3 p, Vector3 r, Vector3 s, Color col) { lit.Draw(m, MatrixMultiply(TRS(p, r, s), base), col); };
-  Color dark = Shade(c, -0.3f), light = Shade(c, 0.25f);
-  P(prim.sphere, { -0.17f, 0.1f, 0.05f }, { 0, 0, 0 }, { 0.26f, 0.2f, 0.34f }, Hex(0x343a40));        // feet
-  P(prim.sphere, { 0.17f, 0.1f, 0.05f }, { 0, 0, 0 }, { 0.26f, 0.2f, 0.34f }, Hex(0x343a40));
-  P(prim.sphere, { 0, 0.62f, 0 }, { 0, 0, 0 }, { 0.78f, 0.86f * squash, 0.7f }, c);                    // body
-  P(prim.sphere, { 0, 0.55f, 0.24f }, { 0, 0, 0 }, { 0.5f, 0.55f * squash, 0.3f }, light);             // belly
-  float hy = 1.22f + (squash - 1) * 0.5f;
-  P(prim.sphere, { 0, hy, 0 }, { 0, 0, 0 }, { 0.66f, 0.62f, 0.62f }, Hex(0xffe0bd));                   // head
-  P(prim.sphere, { 0, hy + 0.2f, -0.03f }, { 0, 0, 0 }, { 0.7f, 0.36f, 0.68f }, dark);                 // beanie
-  P(prim.sphere, { 0, hy + 0.42f, -0.03f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, WHITE);                 // pom-pom
+  auto X = [&](Vector3 p) { return Vector3Transform(p, base); };
+  auto Lb = [&](Vector3 a, Vector3 b, float r, Color col) { Limb(X(a), X(b), r * sc, col); };
+  bool flash = c.r == 255 && c.g == 255 && c.b == 255;
+  Color dark = Shade(c, -0.35f), light = Shade(c, 0.35f), skin = Hex(0xffdcc0), ink = Hex(0x1c1633);
+  Color shoe = flash ? WHITE : Hex(0x2b2d42), glove = Hex(0xfdfdfd);
+  // legs + shoes
   for (int s = -1; s <= 1; s += 2) {
-    P(prim.sphere, { s * 0.12f, hy + 0.02f, 0.27f }, { 0, 0, 0 }, { 0.14f, 0.17f, 0.08f }, WHITE);    // eyes
-    P(prim.sphere, { s * 0.12f, hy + 0.01f, 0.31f }, { 0, 0, 0 }, { 0.07f, 0.09f, 0.04f }, Hex(0x1a1438));
-    P(prim.sphere, { s * 0.2f, hy - 0.12f, 0.24f }, { 0, 0, 0 }, { 0.1f, 0.06f, 0.04f }, Hex(0xff8fab, 200)); // cheeks
-    float up = cheer * (0.9f + 0.15f * sinf(t * 12 + s));
-    Vector3 hand = { s * (0.48f + 0.05f * cheer), 0.62f + up * 0.75f, 0.06f };
-    P(prim.sphere, { s * 0.38f, 0.66f + up * 0.35f, 0.02f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, c);    // arm
-    P(prim.sphere, hand, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, Hex(0xffe0bd));                            // hand
+    float sw = swing * s, lift = moving ? fmaxf(0, -sw) * 0.1f : 0;
+    Vector3 hip = { s * 0.16f, 0.46f, 0 }, foot = { s * 0.17f, 0.15f + lift, sw * 0.17f };
+    Lb(hip, foot, 0.085f, dark);
+    P(prim.sphere, { foot.x, foot.y - 0.03f, foot.z + 0.07f }, { 0, 0, 0 }, { 0.25f, 0.18f, 0.36f }, shoe);
+    P(prim.sphere, { foot.x, foot.y - 0.09f, foot.z + 0.07f }, { 0, 0, 0 }, { 0.27f, 0.07f, 0.38f }, Hex(0xf1f3f5));
   }
-  P(prim.sphere, { 0, hy - 0.16f, 0.28f }, { 0, 0, 0 }, { 0.16f, 0.06f + 0.05f * cheer, 0.04f }, Hex(0x862e2e)); // smile
+  // body (onesie) with a zip and a lighter tummy
+  float by = 0.8f;
+  P(prim.sphere, { 0, by, 0 }, { 0, 0, 0 }, { 0.76f, 0.84f * squash, 0.66f }, c);
+  P(prim.sphere, { 0, by - 0.06f, 0.2f }, { 0, 0, 0 }, { 0.48f, 0.56f * squash, 0.3f }, light);
+  P(prim.cube, { 0, by + 0.05f, 0.335f }, { 0.25f, 0, 0 }, { 0.025f, 0.34f, 0.02f }, dark);
+  // arms with white cartoon gloves
+  for (int s = -1; s <= 1; s += 2) {
+    float up = cheer * (0.9f + 0.15f * sinf(t * 12 + s));
+    float armSw = moving ? -swing * s * 0.18f : sinf(t * 2.2f + s) * 0.02f;
+    Vector3 sh = { s * 0.33f, by + 0.2f, 0 };
+    Vector3 hand = { s * (0.5f + 0.08f * up), by - 0.18f + up * 1.05f + (1 - up) * 0.02f, 0.05f + armSw };
+    Lb(sh, hand, 0.08f, c);
+    P(prim.sphere, hand, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, glove);
+    P(prim.sphere, { hand.x + s * 0.02f, hand.y + 0.06f, hand.z + 0.07f }, { 0, 0, 0 }, { 0.08f, 0.1f, 0.08f }, glove);  // thumb
+  }
+  // head: hood in the player colour, face peeking out
+  float hy = 1.4f + (squash - 1) * 0.6f + (moving ? 0.02f * fabsf(cosf(ph)) : 0);
+  P(prim.sphere, { 0, hy, -0.02f }, { 0, 0, 0 }, { 0.9f, 0.84f, 0.84f }, c);
+  P(prim.sphere, { 0, hy - 0.03f, 0.2f }, { 0, 0, 0 }, { 0.76f, 0.72f, 0.5f }, light);         // hood rim
+  P(prim.sphere, { 0, hy - 0.03f, 0.26f }, { 0, 0, 0 }, { 0.68f, 0.63f, 0.5f }, skin);          // face
+  // eyes: big, glossy, blink every few seconds, glance around
+  float bl = fmodf(t * 0.73f + 0.3f, 3.3f) < 0.11f ? 0.12f : 1.f;
+  float look = sinf(t * 0.6f) * 0.018f;
+  for (int s = -1; s <= 1; s += 2) {
+    P(prim.sphere, { s * 0.13f, hy + 0.02f, 0.465f }, { 0, 0, 0 }, { 0.17f, 0.23f * bl, 0.08f }, WHITE);
+    if (bl > 0.5f) {
+      P(prim.sphere, { s * 0.13f + look, hy + 0.0f, 0.5f }, { 0, 0, 0 }, { 0.115f, 0.155f, 0.04f }, ink);
+      P(prim.sphere, { s * 0.13f + look + 0.03f, hy + 0.05f, 0.52f }, { 0, 0, 0 }, { 0.04f, 0.045f, 0.02f }, WHITE);
+    }
+    if (cheer > 0.4f) P(prim.cube, { s * 0.14f, hy + 0.19f + cheer * 0.03f, 0.47f }, { 0, 0, s * 0.25f }, { 0.12f, 0.03f, 0.03f }, ink);  // eyebrows
+    P(prim.sphere, { s * 0.24f, hy - 0.1f, 0.42f }, { 0, 0, 0 }, { 0.12f, 0.07f, 0.04f }, Hex(0xff8fab, 200));                         // cheeks
+  }
+  // mouth: a D-shaped open smile that widens when cheering
+  float mo = 0.08f + 0.07f * cheer;
+  P(prim.hemi, { 0, hy - 0.13f, 0.47f }, { PI - 0.25f, 0, 0 }, { 0.17f + 0.05f * cheer, mo, 0.07f }, Hex(0x5c1626));
+  P(prim.sphere, { 0, hy - 0.13f - mo * 0.6f, 0.49f }, { 0, 0, 0 }, { 0.09f + 0.03f * cheer, 0.04f + 0.02f * cheer, 0.03f }, Hex(0xff6b81));
+  // accessory, picked from the colour so every player looks different
+  int acc = ((int)c.r * 7 + (int)c.g * 13 + (int)c.b * 29) % 8;
+  if (flash) acc = -1;
+  float top = hy + 0.4f;
+  switch (acc) {
+    case 0:  // beanie + pom-pom
+      P(prim.hemi, { 0, hy + 0.12f, -0.02f }, { -0.15f, 0, 0 }, { 0.93f, 0.6f, 0.88f }, dark);
+      P(prim.cyl, { 0, hy + 0.08f, -0.02f }, { -0.15f, 0, 0 }, { 0.95f, 0.11f, 0.9f }, light);
+      P(prim.sphere, { 0, top + 0.1f, -0.08f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, WHITE);
+      break;
+    case 1:  // baseball cap
+      P(prim.hemi, { 0, hy + 0.15f, -0.02f }, { -0.1f, 0, 0 }, { 0.9f, 0.55f, 0.86f }, dark);
+      P(prim.cyl, { 0, hy + 0.17f, 0.38f }, { 0.12f, 0, 0 }, { 0.6f, 0.03f, 0.42f }, dark);
+      P(prim.sphere, { 0, top + 0.02f, -0.05f }, { 0, 0, 0 }, { 0.08f, 0.05f, 0.08f }, light);
+      break;
+    case 2: {  // golden crown
+      Color gold = Hex(0xffc93c);
+      P(prim.cyl, { 0, top - 0.1f, -0.02f }, { 0, 0, 0 }, { 0.56f, 0.18f, 0.56f }, gold);
+      for (int k = 0; k < 5; k++) { float a = k * 2 * PI / 5; P(prim.cone, { sinf(a) * 0.24f, top + 0.07f, cosf(a) * 0.24f - 0.02f }, { 0, 0, 0 }, { 0.15f, 0.2f, 0.15f }, gold); }
+      P(prim.sphere, { 0, top - 0.01f, 0.27f }, { 0, 0, 0 }, { 0.09f, 0.09f, 0.05f }, Hex(0xe03131));
+    } break;
+    case 3:  // bunny ears on the hood
+      for (int s = -1; s <= 1; s += 2) {
+        float wob = sinf(t * 3 + s) * 0.08f + (moving ? 0.15f * sinf(ph) * s : 0);
+        P(prim.sphere, { s * 0.17f, top + 0.18f, -0.05f }, { -0.1f, 0, s * (0.18f + wob) }, { 0.17f, 0.5f, 0.12f }, c);
+        P(prim.sphere, { s * 0.17f, top + 0.18f, 0.0f }, { -0.1f, 0, s * (0.18f + wob) }, { 0.08f, 0.36f, 0.04f }, Hex(0xffb3c6));
+      }
+      break;
+    case 4:  // headphones
+      for (int k = 0; k <= 8; k++) { float a = -PI / 2 + k * PI / 8; P(prim.sphere, { sinf(a) * 0.47f, hy + 0.02f + cosf(a) * 0.45f, -0.04f }, { 0, 0, 0 }, { 0.09f, 0.09f, 0.09f }, ink); }
+      for (int s = -1; s <= 1; s += 2) P(prim.cyl, { s * 0.42f, hy - 0.02f, -0.02f }, { 0, 0, PI / 2 }, { 0.3f, 0.14f, 0.3f }, Hex(0xff4d6d));
+      break;
+    case 5:  // party hat
+      P(prim.cone, { 0.04f, top - 0.06f, -0.02f }, { 0, 0, -0.12f }, { 0.36f, 0.52f, 0.36f }, Hex(0xffd43b));
+      P(prim.cyl, { 0.03f, top + 0.06f, -0.02f }, { 0, 0, -0.12f }, { 0.29f, 0.05f, 0.29f }, Hex(0xff6b81));
+      P(prim.sphere, { -0.03f, top + 0.47f, -0.02f }, { 0, 0, 0 }, { 0.13f, 0.13f, 0.13f }, Hex(0x4dabf7));
+      break;
+    case 6: {  // bobbing antenna
+      float b = sinf(t * 4) * 0.05f;
+      P(prim.cyl, { 0, top - 0.05f, -0.04f }, { b, 0, 0 }, { 0.04f, 0.3f, 0.04f }, ink);
+      P(prim.sphere, { 0, top + 0.28f, -0.04f + b * 0.3f }, { 0, 0, 0 }, { 0.15f, 0.15f, 0.15f }, Hex(0xfff3bf));
+    } break;
+    case 7:  // sprout
+      P(prim.cyl, { 0, top - 0.05f, -0.04f }, { 0, 0, 0 }, { 0.035f, 0.22f, 0.035f }, Hex(0x2f9e44));
+      for (int s = -1; s <= 1; s += 2) P(prim.sphere, { s * 0.1f, top + 0.18f, -0.04f }, { 0, 0, s * 0.5f + sinf(t * 2) * 0.1f }, { 0.22f, 0.07f, 0.13f }, Hex(0x51cf66));
+      break;
+    default:  // bear ears on the hood
+      for (int s = -1; s <= 1; s += 2) P(prim.sphere, { s * 0.27f, top - 0.04f, -0.06f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.12f }, c);
+  }
 }
 
 // ---------- winter backdrop ----------
@@ -111,9 +195,12 @@ void WinterBG::Draw(const Camera3D& cam, bool sky) {
   }
   lit.Begin(cam, { 0.13f, 0.17f, 0.36f }, 0.011f);
   BeginMode3D(cam);
+  lit.Pattern(PAT_SNOW);
   lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 400, 1, 400 }), Hex(0xc9d6f2));
+  lit.Pattern(PAT_ICE);
   lit.Draw(prim.cyl, TRS({ 0, 0.01f, -6 }, { 0, 0, 0 }, { 26, 0.02f, 16 }), Hex(0x8fc7ff));        // frozen lake
   lit.Draw(prim.cyl, TRS({ 0, 0.015f, -6 }, { 0, 0, 0 }, { 20, 0.02f, 11 }), Hex(0xa5d8ff));
+  lit.Pattern(PAT_NONE);
   for (auto& h : hills) { lit.Draw(prim.cone, TRS({ h.x, -1, h.y }, { 0, h.x, 0 }, { h.z * 2, h.w, h.z * 2 }), Hex(0x8ea6d8)); lit.Draw(prim.cone, TRS({ h.x, -1 + h.w * 0.55f, h.y }, { 0, h.x, 0 }, { h.z * 0.9f, h.w * 0.45f, h.z * 0.9f }), Hex(0xf1f5ff)); }
   for (auto& tr : trees) {
     float s = tr.z, sway = sinf(t + tr.w) * 0.03f;

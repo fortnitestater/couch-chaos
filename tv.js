@@ -290,6 +290,10 @@
   function launch() {
     if (S.state !== 'intro') return;
     wipe(S.def.art[0], S.def.art[1]); SFX.whoosh(); SFX.musicOff && SFX.musicOff();
+    // in-game soundtrack by kind of game (sports have the crowd; Song Guess and Musical Chairs bring their own music)
+    const TR = { table: 'lounge', winter: 'winter', classic: 'party', party: 'party', action: 'party', brain: 'lounge' };
+    const tr = S.def.id === 'song' || S.def.id === 'chairs' ? null : TR[S.def.cat];
+    if (SFX.setTrack) { SFX.setTrack(tr || (S.def.id === 'chairs' ? 'party' : 'menu')); if (tr) setTimeout(() => S.state === 'game' && SFX.musicOn(), 900); }
     S.state = 'game'; show('game');
     try { S.game = S.def.make(makeCtx()); S.game.start(); }
     catch (e) { console.error(e); banner('Oops — that game crashed', 2000, '#ff4d6d'); toHome(); }
@@ -331,7 +335,7 @@
     const nxt = S.party && S.party.list[S.party.i + 1];
     $('#resFoot').textContent = nxt ? `Next up: ${nxt.emoji} ${nxt.name}…` : S.party ? 'And the party champion is…' : 'Back to the menu in a moment · VIP: OK to skip';
     if (S.res) S.res.foot = $('#resFoot').textContent;
-    show('results'); SFX.win(); confettiDom();
+    show('results'); SFX.musicOff && SFX.musicOff(); SFX.win(); confettiDom();
     clearTimeout(timer); timer = setTimeout(afterResults, 7000);
   }
   function renderPodium(top) {
@@ -355,7 +359,7 @@
     }
     toHome();
   }
-  function toHome() { if (SFX.crowdOff) SFX.crowdOff(); if (SFX.musicOn) setTimeout(() => S.state === 'home' && SFX.musicOn(), 600); try { speechSynthesis.cancel(); } catch (e) {}
+  function toHome() { if (SFX.crowdOff) SFX.crowdOff(); if (SFX.setTrack) SFX.setTrack('menu'); if (SFX.musicOn) setTimeout(() => S.state === 'home' && SFX.musicOn(), 600); try { speechSynthesis.cancel(); } catch (e) {}
     clearTimeout(timer); clearTimeout(launchT); launchT = null;
     if (S.state === 'game' || S.state === 'intro') S.party = null;
     S.state = 'home'; S.game = null; S.def = null;

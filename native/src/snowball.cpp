@@ -79,14 +79,14 @@ struct Snowball : Game {
       s.x += s.vx * dt; s.y += s.vy * dt; s.vh -= 9.0f * dt; s.h = fmaxf(0, s.h + s.vh * dt); s.life -= dt;
       if (s.h <= 0.05f) { s.life = 0; fx.Burst(W3(s.x, s.y, 0.1f), 10, WHITE, 4, 0.5f, 0.15f, 6); }
       if (s.x < BOX.x || s.x > BOX.x + BOX.width || s.y < BOX.y || s.y > BOX.y + BOX.height) s.life = 0;
-      for (auto& f : forts) if (s.life > 0 && hypotf(s.x - f.x, s.y - f.y) < f.r && s.h < f.r * SC * 1.1f) { s.life = 0; fx.Burst(W3(s.x, s.y, s.h), 14, WHITE, 6, 0.5f, 0.17f, 6); Sfx("tink"); }
+      for (auto& f : forts) if (s.life > 0 && hypotf(s.x - f.x, s.y - f.y) < f.r && s.h < f.r * SC * 1.1f) { s.life = 0; fx.Burst(W3(s.x, s.y, s.h), 14, WHITE, 6, 0.5f, 0.17f, 6); Sfx("snow"); }
       for (auto& b : k) {
         if (s.life <= 0 || b.pid == s.owner || b.inv > 0) continue;
         if (hypotf(s.x - b.x, s.y - b.y) < b.r + 10 && s.h < 2.2f) {
           s.life = 0; b.stun = 0.6f; b.inv = 0.8f; b.vx += s.vx * 0.5f; b.vy += s.vy * 0.5f; b.bonks++;
           k[s.owner].hits++;
           fx.Burst(W3(s.x, s.y, s.h), 28, WHITE, 8, 0.6f, 0.2f, 7); fx.Burst(W3(s.x, s.y, s.h), 6, P(s.owner).color, 5, 0.5f, 0.2f);
-          Sfx("bonk"); Shake(5); Buzz(b.pid, 120);
+          Sfx("bonk"); Sfx("snow"); Shake(5); Buzz(b.pid, 120);
         }
       }
     }
@@ -104,8 +104,10 @@ struct Snowball : Game {
     UI::Sky(Hex(0x9cc8f5), Hex(0xe3f1ff));
     lit.Begin(cam, { 0.86f, 0.92f, 1.0f }, 0.009f);
     BeginMode3D(cam);
+    lit.Pattern(PAT_SNOW);
     lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), Hex(0xeef5ff));
     lit.Draw(prim.cube, TRS({ 0, 0.03f, 0 }, { 0, 0, 0 }, { BOX.width * SC, 0.06f, BOX.height * SC }), Hex(0xffffff));
+    lit.Pattern(PAT_NONE);
     // fence posts
     for (int i = 0; i <= 36; i++) { float x = BOX.x + BOX.width * i / 36; for (float y : { BOX.y, BOX.y + BOX.height }) lit.Draw(prim.cyl, TRS(W3(x, y, 0), { 0, 0, 0 }, { 0.12f, 0.6f, 0.12f }), Hex(0x8d6e63)); }
     for (int i = 0; i <= 20; i++) { float y = BOX.y + BOX.height * i / 20; for (float x : { BOX.x, BOX.x + BOX.width }) lit.Draw(prim.cyl, TRS(W3(x, y, 0), { 0, 0, 0 }, { 0.12f, 0.6f, 0.12f }), Hex(0x8d6e63)); }

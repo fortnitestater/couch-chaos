@@ -112,7 +112,7 @@ struct Sumo : Game {
     lit.Begin(cam, fog, 0.012f);
     BeginMode3D(cam);
     // freezing sea with drifting ice chunks
-    lit.Draw(prim.plane, TRS({ 0, -0.6f, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), Hex(0x1864ab));
+    lit.Pattern(PAT_WATER); lit.Draw(prim.plane, TRS({ 0, -0.6f, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), Hex(0x1864ab)); lit.Pattern(PAT_NONE);
     for (int i = 0; i < 24; i++) {
       float a = i * 2.4f + time * 0.05f * (i % 2 ? 1 : -1), d = 14 + (i * 37 % 13);
       lit.Draw(prim.cyl, TRS({ cosf(a) * d, -0.62f + 0.05f * sinf(time + i), sinf(a) * d * 0.7f }, { 0, a, 0 }, { 1.2f + i % 3, 0.25f, 0.9f + i % 2 }), Hex(0xe7f5ff));
@@ -122,7 +122,7 @@ struct Sumo : Game {
     float rr = fmaxf(0.01f, R * SC);
     Color top = mod == 1 ? Hex(0xd0f0ff) : mod == 2 ? Hex(0xffc9e9) : Hex(0xf1f7ff);
     lit.Draw(prim.cyl, TRS({ 0, -1.0f, 0 }, { 0, 0, 0 }, { rr * 2, 0.88f, rr * 2 }), Hex(0x74c0fc));
-    lit.Draw(prim.cyl, TRS({ 0, -0.1f, 0 }, { 0, 0, 0 }, { rr * 2, 0.1f, rr * 2 }), top);
+    lit.Pattern(PAT_ICE); lit.Draw(prim.cyl, TRS({ 0, -0.1f, 0 }, { 0, 0, 0 }, { rr * 2, 0.1f, rr * 2 }), top); lit.Pattern(PAT_NONE);
     lit.Draw(prim.cyl, TRS({ 0, -0.1f, 0 }, { 0, 0, 0 }, { rr * 1.1f, 0.14f, rr * 1.1f }), mod == 2 ? Hex(0xfcc2d7) : Hex(0xd0ebff));
     // warning ring when it shrinks fast
     if (el > 30) DrawCircle3D({ 0, 0.03f, 0 }, rr - 0.3f, { 1, 0, 0 }, 90, Fade(RED, 0.4f + 0.4f * sinf(time * 8)));

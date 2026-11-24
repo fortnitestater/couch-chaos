@@ -254,7 +254,7 @@ struct SkyBrawl : Game {
     lit.Begin(cam, fogC, 0.0085f);
     BeginMode3D(cam);
     // ocean with gentle swell bands
-    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 400, 1, 400 }), met ? Hex(0xc0583a) : Hex(0x1c7ed6));
+    lit.Pattern(PAT_WATER); lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 400, 1, 400 }), met ? Hex(0xc0583a) : Hex(0x1c7ed6)); lit.Pattern(PAT_NONE);
     for (int i = -12; i <= 12; i++) {
       float z = i * 4.5f + fmodf(time * 0.8f, 4.5f);
       lit.Draw(prim.plane, TRS({ sinf(time * 0.3f + i) * 3, 0.01f, z }, { 0, 0.05f * sinf(i * 1.7f), 0 }, { 200, 1, 0.5f + 0.25f * sinf(time + i) }), met ? Hex(0xd9704f, 45) : Hex(0x74c0fc, 45));

@@ -4,24 +4,38 @@ const SFX = (() => {
   let ac = null, master = null, crowd = null, voiceOut = null, voiceBuf = null, voiceSrc = [];
   // recorded samples (ElevenLabs sound effects + music)
   const SAMPLE_FILES = { crowd: 'crowd', cheer: 'cheer', ooh: 'ooh', applause: 'applause', hit: 'hit', bounce: 'bounce', smash: 'smash', strike: 'strike', bat: 'bat', music: 'music' };
-  const S = {}, onset = {}; let crowdS = null, musicS = null, musicWanted = false, musicMuted = false;
+  // studio sound effects (ElevenLabs); each synth sound below falls back to its old beep if the file is missing
+  for (const k of ['ui', 'ding', 'buzz', 'win', 'card', 'dice', 'pickup', 'whoosh', 'bonk', 'splash', 'boom', 'go', 'tick', 'join', 'snow']) SAMPLE_FILES['x_' + k] = 'sfx_' + k;
+  // background music: one track per kind of game, loaded only when first needed
+  const TRACKS = { menu: 'music', party: 'music_party', lounge: 'music_lounge', winter: 'music_winter' };
+  const TRACK_VOL = { menu: 0.22, party: 0.13, lounge: 0.16, winter: 0.13 };
+  const S = {}, onset = {}; let crowdS = null, musicS = null, musicWanted = false, musicMuted = false, track = 'menu';
+  function loadTrack(name) {
+    const k = 'm_' + name; if (S[k] || S[k + '_loading'] || !ac) return;
+    S[k + '_loading'] = true;
+    fetch(`audio/${TRACKS[name]}.mp3`).then(r => (r.ok ? r.arrayBuffer() : Promise.reject())).then(b => ac.decodeAudioData(b)).then(buf => { S[k] = buf; if (musicWanted && track === name) SFX.musicOn(); }).catch(() => {});
+  }
   function loadSamples() {
     for (const [k, f] of Object.entries(SAMPLE_FILES)) {
+      if (k === 'music') continue;
       fetch(`audio/${f}.mp3`).then(r => (r.ok ? r.arrayBuffer() : Promise.reject())).then(b => ac.decodeAudioData(b)).then(buf => {
         S[k] = buf;
         // where the sound actually starts (first point above 40% of the peak) — used to sync hits
         const d = buf.getChannelData(0); let pk = 0; for (let i = 0; i < d.length; i += 8) pk = Math.max(pk, Math.abs(d[i]));
         let i0 = 0; while (i0 < d.length && Math.abs(d[i0]) < pk * 0.4) i0 += 8; onset[k] = Math.max(0, i0 / buf.sampleRate - 0.03);
         if (k === 'crowd' && crowd && crowd.want) startCrowdLoop(crowd.level);
-        if (k === 'music' && musicWanted) SFX.musicOn();
       }).catch(() => {});
     }
   }
-  function play(k, vol = 1, rate = 1, fromOnset = false) {
+  function play(k, vol = 1, rate = 1, fromOnset = false, maxDur = 0) {
     if (!ac || !S[k]) return false;
-    const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = S[k]; src.playbackRate.value = rate; g.gain.value = vol;
-    src.connect(g); g.connect(master); src.start(ac.currentTime, fromOnset ? onset[k] || 0 : 0); return true;
+    const src = ac.createBufferSource(), g = ac.createGain(), t = ac.currentTime; src.buffer = S[k]; src.playbackRate.value = rate; g.gain.value = vol;
+    src.connect(g); g.connect(master); src.start(t, fromOnset ? onset[k] || 0 : 0);
+    if (maxDur > 0) { g.gain.setValueAtTime(vol, t + maxDur * 0.7); g.gain.linearRampToValueAtTime(0.0001, t + maxDur); src.stop(t + maxDur + 0.05); }
+    return true;
   }
+  // a recorded effect, trimmed, with a little pitch variety so repeats do not sound robotic
+  const X = (k, vol = 1, maxDur = 0, vary = 0.06) => play('x_' + k, vol * 2.2, 1 + (Math.random() * 2 - 1) * vary, true, maxDur);
   function startCrowdLoop(level) {
     if (!S.crowd) return false;
     if (!crowdS) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = S.crowd; src.loop = true; g.gain.value = 0; src.connect(g); g.connect(master); src.start(); crowdS = { src, g }; }
@@ -62,23 +76,26 @@ const SFX = (() => {
     init,
     shoot() { ok('s', 50) && tone(880, 0.07, 'square', 0.06, 0.5); },
     hit() { ok('h', 40) && tone(220, 0.1, 'sawtooth', 0.15, 0.6); },
-    boom() { ok('bm', 60) && noise(0.8, 0.7, 1400); },
-    tink() { ok('t', 50) && tone(1800, 0.08, 'triangle', 0.15); },
-    pickup() { tone(660, 0.08, 'square', 0.15); tone(990, 0.14, 'square', 0.15, 1, 0.08); },
+    boom() { ok('bm', 60) && (X('boom', 1, 1.8, 0.08) || noise(0.8, 0.7, 1400)); },
+    tink() { ok('t', 50) && (X('ui', 0.7, 0.4, 0.15) || tone(1800, 0.08, 'triangle', 0.15)); },
+    pickup() { if (X('pickup', 0.8, 1.2)) return; tone(660, 0.08, 'square', 0.15); tone(990, 0.14, 'square', 0.15, 1, 0.08); },
     dash() { ok('d', 60) && tone(300, 0.15, 'sawtooth', 0.12, 2.5); },
-    bonk() { ok('b', 70) && tone(160, 0.14, 'sine', 0.5, 0.5); },
-    splash() { noise(0.6, 0.5, 700); tone(500, 0.5, 'sine', 0.2, 0.2); },
-    card() { noise(0.09, 0.3, 3500); },
-    blip() { tone(520, 0.06, 'square', 0.12); },
-    tick() { tone(700, 0.06, 'square', 0.12); },
-    go() { tone(523, 0.1, 'square', 0.2); tone(784, 0.3, 'square', 0.2, 1, 0.1); },
-    ding() { tone(1046, 0.18, 'triangle', 0.3); },
-    buzz() { tone(110, 0.35, 'sawtooth', 0.25); },
+    bonk() { ok('b', 70) && (X('bonk', 0.9, 1.0) || tone(160, 0.14, 'sine', 0.5, 0.5)); },
+    splash() { if (X('splash', 1, 1.6)) return; noise(0.6, 0.5, 700); tone(500, 0.5, 'sine', 0.2, 0.2); },
+    card() { ok('c', 40) && (X('card', 0.9, 0.6, 0.1) || noise(0.09, 0.3, 3500)); },
+    blip() { X('ui', 0.6, 0.4, 0.04) || tone(520, 0.06, 'square', 0.12); },
+    tick() { X('tick', 0.9, 0.35, 0) || tone(700, 0.06, 'square', 0.12); },
+    go() { if (X('go', 1, 1.5, 0)) return; tone(523, 0.1, 'square', 0.2); tone(784, 0.3, 'square', 0.2, 1, 0.1); },
+    ding() { ok('dg', 60) && (X('ding', 0.8, 1.4, 0.02) || tone(1046, 0.18, 'triangle', 0.3)); },
+    buzz() { ok('bz', 120) && (X('buzz', 0.8, 1.1, 0) || tone(110, 0.35, 'sawtooth', 0.25)); },
+    whistle() { X('go', 1, 1.5, 0) || tone(1800, 0.4, 'sine', 0.2); },
     alarm() { for (let i = 0; i < 3; i++) tone(880, 0.12, 'square', 0.14, 0.7, i * 0.18); },
-    win() { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.2, 'triangle', 0.25, 1, i * 0.12)); },
+    win() { if (X('win', 1, 3, 0)) return; [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.2, 'triangle', 0.25, 1, i * 0.12)); },
     zap() { noise(0.3, 0.4, 5000); tone(1500, 0.3, 'sawtooth', 0.15, 0.1); },
-    join() { tone(660, 0.08, 'triangle', 0.2); tone(880, 0.12, 'triangle', 0.2, 1, 0.08); },
-    whoosh() { noise(0.5, 0.35, 2500); },
+    join() { if (X('join', 0.9, 1.2, 0.03)) return; tone(660, 0.08, 'triangle', 0.2); tone(880, 0.12, 'triangle', 0.2, 1, 0.08); },
+    whoosh() { ok('wh', 80) && (X('whoosh', 0.7, 0.8, 0.08) || noise(0.5, 0.35, 2500)); },
+    dice() { ok('di', 150) && (X('dice', 0.9, 1.6, 0.05) || noise(0.3, 0.3, 2000)); },
+    snow() { ok('sn', 50) && (X('snow', 0.9, 0.8, 0.12) || noise(0.2, 0.4, 1200)); },
     // ---- sports / stadium ----
     pok(power = 0.7) { if (!ok('pk', 40)) return; if (play('hit', 1.4 + power, 0.9 + power * 0.25, true)) return; tone(320 + power * 180, 0.06, 'triangle', 0.5); noise(0.07, 0.5 + power * 0.3, 4200); }, // racket hits ball
     smash() { if (play('smash', 2.2, 1, true)) return; noise(0.25, 0.9, 6000); tone(180, 0.25, 'sawtooth', 0.3, 0.4); tone(90, 0.4, 'sine', 0.5, 0.5); },
@@ -96,7 +113,15 @@ const SFX = (() => {
     },
     crowdOff() { if (!ac) return; if (crowd) { crowd.want = false; if (crowd.g) crowd.g.gain.setTargetAtTime(0, ac.currentTime, 0.4); } if (crowdS) crowdS.g.gain.setTargetAtTime(0, ac.currentTime, 0.5); },
     // menu music (looping), M on the TV keyboard mutes it
-    musicOn() { musicWanted = true; if (!ac || musicMuted || !S.music) return; if (!musicS) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = S.music; src.loop = true; g.gain.value = 0; src.connect(g); g.connect(ac.destination); src.start(); musicS = { src, g }; } musicS.g.gain.setTargetAtTime(0.22, ac.currentTime, 0.6); },
+    musicOn() {
+      musicWanted = true; if (!ac || musicMuted) return;
+      const buf = S['m_' + track]; if (!buf) { loadTrack(track); return; }
+      if (musicS && musicS.name !== track) { const old = musicS; old.g.gain.setTargetAtTime(0, ac.currentTime, 0.35); setTimeout(() => { try { old.src.stop(); } catch (e) {} }, 2000); musicS = null; }
+      if (!musicS) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = buf; src.loop = true; g.gain.value = 0; src.connect(g); g.connect(ac.destination); src.start(); musicS = { src, g, name: track }; }
+      musicS.g.gain.cancelScheduledValues(ac.currentTime); musicS.g.gain.setTargetAtTime(TRACK_VOL[track] || 0.18, ac.currentTime, 0.6);
+    },
+    // pick the soundtrack: 'menu' | 'party' | 'lounge' | 'winter' (preloads it)
+    setTrack(name) { if (!TRACKS[name]) return; track = name; loadTrack(name); },
     musicStop() { musicWanted = false; if (musicS && ac) { musicS.g.gain.cancelScheduledValues(ac.currentTime); musicS.g.gain.setValueAtTime(0, ac.currentTime); } },
     audio() { if (!ac) init(); return ac; },
     musicOff() { musicWanted = false; if (musicS && ac) musicS.g.gain.setTargetAtTime(0, ac.currentTime, 0.4); },

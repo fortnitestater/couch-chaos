@@ -47,13 +47,60 @@ struct Table : Game {
     UI::Sky(Hex(0x24133d), Hex(0x4a2c1d));
     lit.Begin(cam, { 0.16f, 0.1f, 0.12f }, 0.012f);
     BeginMode3D(cam);
-    lit.Draw(prim.plane, TRS({ 0, -3.2f, 0 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(0x6b4226));
-    for (int i = -6; i <= 6; i++) lit.Draw(prim.cube, TRS({ i * 4.f, -3.19f, 0 }, { 0, 0, 0 }, { 0.05f, 0.01f, 120 }), Hex(0x4e2f1a));  // floorboards
+    lit.Pattern(PAT_WOOD);
+    lit.Draw(prim.plane, TRS({ 0, -3.2f, 0 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(0x7a4b2a));
+    lit.Pattern(PAT_RUG);
     lit.Draw(prim.sphere, TRS({ 0, -3.18f, 0.5f }, { 0, 0, 0 }, { 22, 0.02f, 15 }), Hex(0x9c2f3a));  // rug
+    lit.Pattern(PAT_NONE);
+    // back wall: plum wallpaper, wood panelling, a night window, shelves, pictures, a plant
+    float wz = -11.5f;
+    lit.Draw(prim.cube, TRS({ 0, 6, wz }, { 0, 0, 0 }, { 80, 19, 0.4f }), Hex(0x4a2f4f));
+    for (int i = -12; i <= 12; i++) lit.Draw(prim.cube, TRS({ i * 3.2f, 6, wz + 0.22f }, { 0, 0, 0 }, { 0.08f, 19, 0.05f }), Hex(0x3f2744));  // stripes
+    lit.Pattern(PAT_WOOD);
+    lit.Draw(prim.cube, TRS({ 0, -1.2f, wz + 0.35f }, { 0, 0, 0 }, { 80, 4.2f, 0.3f }), Hex(0x6b3f22));
+    lit.Pattern(PAT_NONE);
+    lit.Draw(prim.cube, TRS({ 0, 0.95f, wz + 0.55f }, { 0, 0, 0 }, { 80, 0.25f, 0.3f }), Hex(0x8a5a35));
+    // window with the moon outside
+    lit.Draw(prim.cube, TRS({ -9, 6.2f, wz + 0.3f }, { 0, 0, 0 }, { 6.4f, 5.4f, 0.3f }), Hex(0x8a5a35));
+    lit.Draw(prim.cube, TRS({ -9, 6.2f, wz + 0.42f }, { 0, 0, 0 }, { 5.6f, 4.6f, 0.1f }), Hex(0x1b2a6b));
+    lit.Draw(prim.sphere, TRS({ -7.6f, 7.4f, wz + 0.5f }, { 0, 0, 0 }, { 1.2f, 1.2f, 0.1f }), Hex(0xfff3bf));
+    for (int k = 0; k < 9; k++) lit.Draw(prim.sphere, TRS({ -11.3f + (k * 1.37f - floorf(k * 1.37f / 4.6f) * 4.6f), 4.5f + fmodf(k * 1.9f, 3.6f), wz + 0.5f }, { 0, 0, 0 }, { 0.09f, 0.09f, 0.05f }), WHITE);
+    lit.Draw(prim.cube, TRS({ -9, 6.2f, wz + 0.5f }, { 0, 0, 0 }, { 0.2f, 4.6f, 0.1f }), Hex(0x8a5a35));
+    lit.Draw(prim.cube, TRS({ -9, 6.2f, wz + 0.5f }, { 0, 0, 0 }, { 5.6f, 0.2f, 0.1f }), Hex(0x8a5a35));
+    // bookshelf
+    lit.Pattern(PAT_WOOD);
+    lit.Draw(prim.cube, TRS({ 9.5f, 3.4f, wz + 1.1f }, { 0, 0, 0 }, { 6.4f, 13.2f, 1.6f }), Hex(0x6b3f22));
+    lit.Pattern(PAT_NONE);
+    const unsigned bc[] = { 0xe03131, 0x1971c2, 0xf08c00, 0x2f9e44, 0x9c36b5, 0xfab005, 0x0c8599, 0xe64980 };
+    for (int shelf = 0; shelf < 4; shelf++) {
+      float y = -1.6f + shelf * 3.0f;
+      lit.Draw(prim.cube, TRS({ 9.5f, y + 2.6f, wz + 1.9f }, { 0, 0, 0 }, { 6.0f, 0.18f, 0.2f }), Hex(0x8a5a35));
+      float x = 7.0f;
+      for (int b = 0; b < 9 && x < 12.0f; b++) {
+        float bw = 0.35f + 0.25f * ((b * 7 + shelf * 3) % 3) / 2.f, bh = 1.7f + 0.5f * ((b * 5 + shelf) % 3) / 2.f;
+        float tilt = (b == 6 && shelf % 2 == 0) ? 0.25f : 0;
+        lit.Draw(prim.cube, TRS({ x + bw / 2, y + 0.3f + bh / 2, wz + 1.7f }, { 0, 0, tilt }, { bw, bh, 1.0f }), Hex(bc[(b + shelf * 3) % 8]));
+        x += bw + 0.06f;
+      }
+    }
+    // framed pictures
+    const unsigned pc[] = { 0xffd43b, 0x74c0fc, 0xff8787 };
+    for (int k = 0; k < 3; k++) {
+      float x = -1.5f + k * 3.0f, y = 6.2f + (k == 1 ? 0.8f : 0);
+      lit.Draw(prim.cube, TRS({ x, y, wz + 0.3f }, { 0, 0, 0 }, { 2.2f, 2.8f, 0.2f }), Hex(0xc9a227));
+      lit.Draw(prim.cube, TRS({ x, y, wz + 0.42f }, { 0, 0, 0 }, { 1.8f, 2.4f, 0.05f }), Hex(pc[k]));
+      lit.Draw(prim.sphere, TRS({ x, y - 0.3f, wz + 0.46f }, { 0, 0, 0 }, { 1.0f, 1.0f, 0.05f }), Shade(Hex(pc[k]), -0.35f));
+    }
+    // potted plant
+    lit.Draw(prim.cyl, TRS({ 4.2f, -3.2f, wz + 1.5f }, { 0, 0, 0 }, { 1.4f, 1.4f, 1.4f }), Hex(0xd9480f));
+    for (int k = 0; k < 7; k++) { float a = k * 0.9f; lit.Draw(prim.sphere, TRS({ 4.2f + cosf(a) * 0.5f, -1.0f + (k % 3) * 0.7f, wz + 1.5f + sinf(a) * 0.3f }, { 0, 0, cosf(a) * 0.6f }, { 0.5f, 1.6f, 0.4f }), Hex(k % 2 ? 0x2f9e44 : 0x40c057)); }
     if (!table) return;
     lit.Draw(prim.cyl, TRS({ 0, -3.2f, 0 }, { 0, 0, 0 }, { 1.6f, 2.9f, 1.6f }), Shade(wood, -0.3f));
+    lit.Pattern(PAT_WOOD);
     lit.Draw(prim.cyl, TRS({ 0, -0.45f, 0 }, { 0, 0, 0 }, { 13.6f, 0.42f, 11.2f }), wood);
+    lit.Pattern(PAT_FELT);
     lit.Draw(prim.cyl, TRS({ 0, -0.06f, 0 }, { 0, 0, 0 }, { 12.4f, 0.08f, 10.1f }), felt);
+    lit.Pattern(PAT_NONE);
   }
   void Seats(std::function<bool(int)> hot = nullptr, std::function<float(int)> cheer = nullptr) {
     for (int i = 0; i < N(); i++) {
@@ -334,7 +381,7 @@ struct Snakes : Table {
   }
   void Roll(int i) {
     Pawn& p = pw[i]; if (p.rolled || phase != "roll") return;
-    p.rolled = true; p.roll = irand(1, 6); p.rollT = 0.9f; p.steps = p.roll; p.dir = 1; p.stepT = 0.9f; Sfx("card");
+    p.rolled = true; p.roll = irand(1, 6); p.rollT = 0.9f; p.steps = p.roll; p.dir = 1; p.stepT = 0.9f; Sfx("dice");
     if (!P(i).bot) Layout(i, Msg("🎲", "You rolled a " + std::to_string(p.roll) + "!", "Watch your piece move"));
   }
   void Update(float dt) override {
@@ -602,7 +649,7 @@ struct DicePoker : Table {
   void Act(int p, const std::string& k, int i, float) override {
     if (phase != "roll" || p < 0 || p >= N()) return; S& s = st[p]; if (s.done) return;
     if (k == "hold" && i >= 0 && i < 5) s.held[i] = !s.held[i];
-    else if (k == "roll" && s.left > 0) { for (int q = 0; q < 5; q++) if (!s.held[q]) s.d[q] = irand(1, 6); s.left--; s.shake = 1; Sfx("card"); if (!s.left) s.done = true; }
+    else if (k == "roll" && s.left > 0) { for (int q = 0; q < 5; q++) if (!s.held[q]) s.d[q] = irand(1, 6); s.left--; s.shake = 1; Sfx("dice"); if (!s.left) s.done = true; }
     else if (k == "done") s.done = true;
     Push(p);
     bool all = true; for (auto& x : st) all &= x.done; if (all) t = fminf(t, 0.6f);

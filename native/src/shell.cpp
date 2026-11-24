@@ -303,7 +303,7 @@ EMSCRIPTEN_KEEPALIVE void cc_shell_frame(float dt) {
   float a = EaseOut(fade);
   hits.clear();
   bg.Update(dt);
-  BeginDrawing();
+  PostBegin();
   rlEnableDepthMask(); ClearBackground(Hex(0x070b24));
   if (shown == "results") DrawResults(a, dt);
   else {
@@ -316,6 +316,7 @@ EMSCRIPTEN_KEEPALIVE void cc_shell_frame(float dt) {
     else if (shown == "home") { DrawTopBar(a); DrawHero(a, dt); DrawJoin(a); DrawRows(a, dt); }
     else if (shown == "intro") DrawIntro(a, dt);
   }
-  EndDrawing();
+  PostEnd();
+  lit.EndFrame(dt);
 }
 }

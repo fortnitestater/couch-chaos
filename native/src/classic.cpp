@@ -23,18 +23,63 @@ void Separate(Mover& a, Mover& b, float r) {
 
 // sky + ground + a ring of pine trees around the play area
 struct Scenery {
-  std::vector<Vector4> trees; bool snow = true;
+  std::vector<Vector4> trees, props, peaks; bool snow = true;
   void Init(float rx, float rz, bool snowy, int n = 60) {
-    snow = snowy;
+    snow = snowy; trees.clear(); props.clear(); peaks.clear();
     for (int i = 0; i < n; i++) { float a = frand(0, 2 * PI); trees.push_back({ cosf(a) * frand(rx, rx + 16), sinf(a) * frand(rz, rz + 12), frand(1.3f, 2.7f), frand(0, 6) }); }
+    // rocks, bushes, snowmen / flowers scattered between the play area and the trees
+    for (int i = 0; i < 46; i++) { float a = frand(0, 2 * PI); float k = frand(0.0f, 1.0f); props.push_back({ cosf(a) * (rx - 1 + k * 7), sinf(a) * (rz - 1 + k * 6), frand(0.5f, 1.2f), (float)(rand() % 4) }); }
+    // a ring of far-off mountains for the horizon
+    for (int i = 0; i < 22; i++) { float a = PI + 0.1f + i * (PI - 0.2f) / 21; float d = frand(85, 110); peaks.push_back({ cosf(a) * d, sinf(a) * d * 0.8f, frand(18, 30), frand(14, 26) }); }
   }
   void Begin(Camera3D& cam) {
     if (snow) UI::Sky(Hex(0x9cc8f5), Hex(0xe3f1ff)); else UI::Sky(Hex(0x4dabf7), Hex(0xd0ebff));
     lit.Begin(cam, snow ? Vector3{ 0.86f, 0.92f, 1.0f } : Vector3{ 0.75f, 0.88f, 1.0f }, 0.008f);
     BeginMode3D(cam);
+    lit.Pattern(snow ? PAT_SNOW : PAT_GRASS);
     lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), snow ? Hex(0xeef5ff) : Hex(0x69b35a));
+    lit.Pattern(PAT_NONE);
+    for (auto& p : peaks) {
+      lit.Draw(prim.cone, TRS({ p.x, -2, p.y }, { 0, p.x, 0 }, { p.z * 2, p.w, p.z * 2 }), snow ? Hex(0x9fb4dc) : Hex(0x6c8fb8));
+      lit.Draw(prim.cone, TRS({ p.x, -2 + p.w * 0.58f, p.y }, { 0, p.x, 0 }, { p.z * 0.84f, p.w * 0.42f, p.z * 0.84f }), Hex(0xf8fbff));
+    }
+  }
+  void Props(float t) {
+    for (auto& p : props) {
+      float s = p.z; int k = (int)p.w;
+      if (k == 0) {  // mossy / snowy rock
+        lit.Pattern(PAT_STONE);
+        lit.Draw(prim.sphere, TRS({ p.x, 0.1f * s, p.y }, { 0.3f, p.x, 0.2f }, { 1.3f * s, 0.75f * s, s }), Hex(0x8d96a6));
+        lit.Pattern(PAT_NONE);
+        if (snow) lit.Draw(prim.sphere, TRS({ p.x, 0.36f * s, p.y }, { 0.3f, p.x, 0.2f }, { 1.0f * s, 0.32f * s, 0.8f * s }), WHITE);
+      } else if (k == 1) {  // round bush
+        Color g = snow ? Hex(0x2b8a3e) : Hex(0x37b24d);
+        for (int j = 0; j < 3; j++) lit.Draw(prim.sphere, TRS({ p.x + (j - 1) * 0.35f * s, 0.35f * s, p.y + (j == 1 ? 0.15f : 0) * s }, { 0, 0, 0 }, { 0.8f * s, 0.7f * s, 0.8f * s }), Shade(g, j * 0.08f));
+        if (snow) lit.Draw(prim.sphere, TRS({ p.x, 0.62f * s, p.y }, { 0, 0, 0 }, { 1.1f * s, 0.25f * s, 0.7f * s }), WHITE);
+        else for (int j = 0; j < 4; j++) lit.Draw(prim.sphere, TRS({ p.x + sinf(j * 2.1f) * 0.4f * s, 0.55f * s, p.y + cosf(j * 2.1f) * 0.3f * s }, { 0, 0, 0 }, { 0.12f, 0.12f, 0.12f }), Hex(0xff6b6b));
+      } else if (k == 2 && snow) {  // snowman
+        float b = sinf(t * 1.5f + p.x) * 0.03f;
+        lit.Draw(prim.sphere, TRS({ p.x, 0.45f, p.y }, { 0, 0, 0 }, { 1.0f, 0.9f, 1.0f }), Hex(0xf8fbff));
+        lit.Draw(prim.sphere, TRS({ p.x, 1.15f, p.y }, { 0, 0, b }, { 0.7f, 0.66f, 0.7f }), Hex(0xf8fbff));
+        lit.Draw(prim.sphere, TRS({ p.x, 1.68f, p.y }, { 0, 0, 0 }, { 0.5f, 0.48f, 0.5f }), Hex(0xf8fbff));
+        lit.Draw(prim.cone, TRS({ p.x, 1.68f, p.y + 0.22f }, { PI / 2, 0, 0 }, { 0.1f, 0.3f, 0.1f }), Hex(0xff922b));
+        lit.Draw(prim.cyl, TRS({ p.x, 1.88f, p.y }, { 0, 0, 0 }, { 0.42f, 0.36f, 0.42f }), Hex(0x212529));
+        lit.Draw(prim.cyl, TRS({ p.x, 1.4f, p.y }, { 0, 0, 0 }, { 0.62f, 0.1f, 0.62f }), Hex(0xe03131));
+      } else {  // flowers / pebbles
+        for (int j = 0; j < 5; j++) {
+          float ox = sinf(j * 2.4f + p.x) * 0.6f * s, oz = cosf(j * 1.7f + p.y) * 0.6f * s;
+          if (snow) lit.Draw(prim.sphere, TRS({ p.x + ox, 0.05f, p.y + oz }, { 0, 0, 0 }, { 0.25f, 0.12f, 0.2f }), Hex(0xb0bccc));
+          else {
+            lit.Draw(prim.cyl, TRS({ p.x + ox, 0, p.y + oz }, { 0, 0, 0 }, { 0.04f, 0.35f, 0.04f }), Hex(0x2f9e44));
+            const unsigned fc[] = { 0xffd43b, 0xff8787, 0xffffff, 0xda77f2, 0x74c0fc };
+            lit.Draw(prim.sphere, TRS({ p.x + ox, 0.38f, p.y + oz }, { 0, 0, 0 }, { 0.18f, 0.1f, 0.18f }), Hex(fc[j]));
+          }
+        }
+      }
+    }
   }
   void Trees(float t) {
+    Props(t);
     for (auto& tr : trees) {
       float s = tr.z, sw = sinf(t + tr.w) * 0.03f;
       lit.Draw(prim.cyl, TRS({ tr.x, 0, tr.y }, { 0, 0, 0 }, { 0.22f * s, 0.5f * s, 0.22f * s }), Hex(0x5c3d2e));
@@ -71,7 +116,7 @@ struct Classic : Game {
   void Hint(const std::string& s, Color c = WHITE) { float w = Measure(s, 26, TS_HEAVY) + 60; UI::Box({ 800 - w / 2, 832, w, 50 }, 25, Hex(0x0b1020, 170)); Text(800, 857, 26, c, s, 0, TS_HEAVY | TS_PLAIN); }
   std::vector<int> Sorted(std::function<float(int)> key) { std::vector<int> o; for (int i = 0; i < N(); i++) o.push_back(i); std::stable_sort(o.begin(), o.end(), [&](int a, int b) { return key(a) > key(b); }); return o; }
   void FinishOrder(const std::vector<int>& o, std::function<std::string(int)> stat) { std::string r; for (int i : o) r += std::to_string(i) + ":" + stat(i) + ";"; Finish(r); }
-  void Shadow(Vector3 p, float s) { lit.Draw(prim.cyl, TRS({ p.x + 0.1f, 0.04f, p.z + 0.1f }, { 0, 0, 0 }, { s, 0.01f, s }), Hex(0x24324d, 60)); }
+  void Shadow(Vector3, float) {}  // characters cast soft contact shadows by themselves now
 };
 
 // =====================================================================================
@@ -168,7 +213,7 @@ struct Chairs : Classic {
     cam.position = { sinf(time * 0.12f) * 1.5f, 19, 17 }; cam.target = { 0, 0, 0.6f };
     sc.Begin(cam);
     lit.Draw(prim.cyl, TRS({ 0, 0.02f, 0 }, { 0, 0, 0 }, { 23, 0.03f, 23 }), Hex(0xc2255c));
-    lit.Draw(prim.cyl, TRS({ 0, 0.035f, 0 }, { 0, 0, 0 }, { 20, 0.03f, 20 }), Hex(0xf783ac));
+    lit.Pattern(PAT_TILE); lit.Draw(prim.cyl, TRS({ 0, 0.035f, 0 }, { 0, 0, 0 }, { 20, 0.03f, 20 }), Hex(0xf783ac)); lit.Pattern(PAT_NONE);
     lit.Draw(prim.cyl, TRS({ 0, 0.05f, 0 }, { 0, 0, 0 }, { 6, 0.03f, 6 }), Hex(0xffd43b));
     sc.Trees(time);
     const unsigned pal[] = { 0x4dabf7, 0xff922b, 0x51cf66, 0xcc5de8, 0xffd43b, 0xff6b6b, 0x20c997 };
@@ -440,7 +485,7 @@ struct Tug : Classic {
     sc.Begin(cam);
     // mud pit + team mats
     lit.Draw(prim.cyl, TRS({ 0, 0.02f, 0 }, { 0, 0, 0 }, { 5, 0.05f, 5.5f }), Hex(0x5c3d1e));
-    lit.Draw(prim.cyl, TRS({ 0, 0.04f, 0 }, { 0, 0, 0 }, { 4, 0.05f, 4.5f }), Hex(0x7a5230));
+    lit.Pattern(PAT_WOOD); lit.Draw(prim.cyl, TRS({ 0, 0.04f, 0 }, { 0, 0, 0 }, { 4, 0.05f, 4.5f }), Hex(0x7a5230)); lit.Pattern(PAT_NONE);
     lit.Draw(prim.cube, TRS({ -10, 0.02f, 0 }, { 0, 0, 0 }, { 14, 0.04f, 4 }), Hex(0xffc9c9));
     lit.Draw(prim.cube, TRS({ 10, 0.02f, 0 }, { 0, 0, 0 }, { 14, 0.04f, 4 }), Hex(0xd0ebff));
     for (int s = -1; s <= 1; s += 2) { lit.Draw(prim.cyl, TRS({ s * 6.f, 0, 2.3f }, { 0, 0, 0 }, { 0.12f, 2.2f, 0.12f }), Hex(0x868e96)); lit.Draw(prim.cube, TRS({ s * 6.f + 0.45f * -s, 1.9f, 2.3f }, { 0, 0, 0 }, { 0.9f, 0.55f, 0.05f }), s < 0 ? Hex(0xfa5252) : Hex(0x339af0)); }

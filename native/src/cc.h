@@ -38,14 +38,26 @@ inline Color Shade(Color c, float k) { auto f = [&](unsigned char v) { return (u
 Color ParseColor(const std::string& hex);
 
 // ---------- lit 3D rendering ----------
+// surface patterns for Lit::Draw (set with lit.Pattern(...); every lit.Begin resets it to PAT_NONE)
+enum { PAT_NONE = 0, PAT_GRASS, PAT_WOOD, PAT_FELT, PAT_SNOW, PAT_ICE, PAT_TILE, PAT_WATER, PAT_RUG, PAT_STONE };
 struct Lit {
-  Shader shader{}; Material mat{}; int locLight, locCam, locFog, locFogD, locAmb;
+  Shader shader{}; Material mat{}; int locLight, locCam, locFog, locFogD, locAmb, locPat, locCast, locNCast, locTime, locSun, locSky;
+  std::vector<Vector4> cast, castPrev;  // soft contact shadows (x, groundY, z, radius), drawn one frame late
+  float time = 0;
   void Init();
   void Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity);
   void Draw(const Mesh& m, Matrix t, Color c);
+  void Pattern(int p);
+  void Caster(Vector3 ground, float radius) { if (cast.size() < 24) cast.push_back({ ground.x, ground.y, ground.z, radius }); }
+  void EndFrame(float dt) { castPrev.swap(cast); cast.clear(); time += dt; }
 };
+// whole-frame post processing: bloom, grade, vignette, FXAA
+void PostBegin();
+void PostEnd();
 extern Lit lit;
-struct Prims { Mesh cube, sphere, cyl, cone, plane; void Init(); };
+struct Prims { Mesh cube, sphere, cyl, cone, plane, torus, hemi; void Init(); };
+// a rounded limb from a to b (cylinder + ball ends)
+void Limb(Vector3 a, Vector3 b, float r, Color c);
 extern Prims prim;
 Matrix TRS(Vector3 pos, Vector3 rotEuler, Vector3 scale);
 
