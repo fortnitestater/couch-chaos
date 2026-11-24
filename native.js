@@ -31,7 +31,7 @@ function nativeLoad() {
 const NIMG = {};
 function nativeImg(k) {
   let im = NIMG[k];
-  if (!im) { im = NIMG[k] = new Image(); im.decoding = 'async'; im.src = NATIVE.base + 'covers/' + k + '.jpg?v=' + NATIVE.v; im.onerror = () => { im.bad = true; }; }
+  if (!im) { im = NIMG[k] = new Image(); im.decoding = 'async'; im.src = NATIVE.base + 'covers/' + k.replace(/^_/, 'q-') + '.jpg?v=' + NATIVE.v; im.onerror = () => { im.bad = true; }; }
   return im.complete && im.naturalWidth && !im.bad ? im : null;
 }
 function nRgba(c) { return `rgba(${c >>> 24},${(c >> 16) & 255},${(c >> 8) & 255},${(c & 255) / 255})`; }

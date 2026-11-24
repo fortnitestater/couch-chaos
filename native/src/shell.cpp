@@ -168,7 +168,8 @@ void ConnectPanel(float a) {
   UI::Box(ph, 22, A(Hex(0x070d22, 230), a), A(Hex(0x070d22, 230), a), 90, A(Hex(0x3a4a78), a), 2);
   std::string code = D["code"].str(), spaced; for (char ch : code) { spaced += ch; spaced += ' '; }
   Text(cx, ph.y + 36, 36, A(CREAM, a), spaced, 0, TS_DISPLAY | TS_PLAIN);
-  Text(cx, ph.y + 70, 12, A(Hex(0x9aa6c8), a), D["url"].str(), 0, TS_PLAIN | TS_LIGHT);
+  { std::string url = D["url"].str(); float us = 12; while (us > 8 && Measure(url, us, TS_PLAIN | TS_LIGHT) > ph.width - 24) us -= 0.5f;
+    Text(cx, ph.y + 70, us, A(Hex(0x9aa6c8), a), url, 0, TS_PLAIN | TS_LIGHT); }
   DrawRectangleRounded({ cx - 30, ph.y + ph.height - 10, 60, 4 }, 1, 6, A(Hex(0x9aa6c8, 160), a));
 }
 void PlayerBar(float a) {
