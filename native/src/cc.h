@@ -25,7 +25,10 @@ void Shake(float amount);
 void Finish(const std::string& ranking);
 void Banner(const std::string& text, int ms = 1600, const char* color = "#ffffff");
 void Buzz(int pid, int ms);
-void Send(int pid, const std::string& json);  // any message straight to one phone        // "pid:stat;pid:stat" best first
+void Send(int pid, const std::string& json);
+// overlay drawing (website canvas, above the GL frame): cover art by key, rounded rects with gradient / gold rim
+void Img(const std::string& key, float x, float y, float w, float h, float radius, float alpha, float pan = 0, float zoom = 1);
+void RRect(float x, float y, float w, float h, float radius, Color fill, Color fill2, Color stroke, float lw, bool gradient = false, bool goldStroke = false);  // any message straight to one phone        // "pid:stat;pid:stat" best first
 
 // ---------- players ----------
 struct Player { int id; std::string name; Color color; bool bot; Vector2 stick{}; bool a = false, b = false, pa = false, pb = false; };

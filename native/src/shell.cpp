@@ -22,7 +22,7 @@ int lastFocusR = -1;
 
 Color C(const J& j, Color d = Hex(0x888888)) { return j.t == J::STR ? ParseColor(j.s) : d; }
 Color A(Color c, float a) { c.a = (unsigned char)Clamp(c.a * a, 0, 255); return c; }
-const Color INK = Hex(0xf4f6ff), MUTED = Hex(0xa7b0d6), GLASS = Hex(0x0e1433, 175), EDGE = Hex(0xffffff, 34);
+const Color INK = Hex(0xf4f6ff), MUTED = Hex(0xa7b0d6), GLASS = Hex(0x0e1433, 175), EDGE = Hex(0xd9aa5a, 120);
 
 void Glass(Rectangle r, float rad, float a = 1) {
   UI::Shadow(r, rad, 34, A(Hex(0x02040f, 150), a), 14);
@@ -54,125 +54,239 @@ void DrawBoot(float a) {
   Text(800, 770, 20, A(MUTED, a), "or click · F = fullscreen · phones join on the next screen", 0, TS_PLAIN | TS_LIGHT);
 }
 
-// ---------------- HOME ----------------
-void DrawTopBar(float a) {
-  Text(48, 50, 38, A(INK, a), "COUCH", -1, TS_DISPLAY);
-  float w = Measure("COUCH", 38, TS_DISPLAY);
-  Text(48 + w + 8, 50, 38, A(Hex(0xff4d8d), a), "CHAOS", -1, TS_DISPLAY);
-  float w2 = Measure("CHAOS", 38, TS_DISPLAY);
-  Chip(48 + w + w2 + 30, 50, "❄️ Winter Edition", Hex(0xffffff, 26), MUTED, 15, a);
-  // right: avatars · room · clock
-  float x = 1552;
-  std::string clock = D["clock"].str();
-  Text(x, 50, 26, A(INK, a), clock, 1, TS_PLAIN | TS_HEAVY); x -= Measure(clock, 26, TS_PLAIN) + 22;
-  std::string room = "Room  " + D["code"].str(); float rw = ChipW(room, 17);
-  Chip(x - rw, 50, room, Hex(0xffffff, 30), INK, 17, a); x -= rw + 18;
-  const J& ps = D["players"];
-  for (int i = (int)ps.size() - 1; i >= 0; i--) {
-    const J& p = ps[i]; Color c = C(p["c"]); bool away = p["away"].yes();
-    float cx = x - 22, pop = 1 + 0.06f * sinf(T * 3 + i);
-    UI::Shadow({ cx - 21, 29, 42, 42 }, 21, 10, A(Hex(0x000000, 90), a), 3);
-    UI::Box({ cx - 21 * pop, 50 - 21 * pop, 42 * pop, 42 * pop }, 21 * pop, A(Shade(c, 0.15f), away ? a * 0.35f : a), A(Shade(c, -0.2f), away ? a * 0.35f : a), 90, A(Hex(0xffffff, 120), a), 2);
-    Text(cx, 51, 22, A(WHITE, away ? a * 0.4f : a), p["cam"].yes() ? "📷" : p["av"].str(), 0, TS_PLAIN);
-    if (p["vip"].yes()) Text(cx, 24, 16, A(WHITE, a), "👑", 0, TS_PLAIN);
-    x -= 50;
+// ---------------- HOME (gold & midnight console) ----------------
+const Color GOLDN = Hex(0xf2c66d), GOLDN_D = Hex(0xb8873a), NAVY = Hex(0x0a1633), CREAM = Hex(0xfff3d6);
+constexpr int TS_GOLD = 32, TS_SPACED = 64, TS_SILVER = 128;
+struct Spark { float x, y, s, ph, sp; };
+std::vector<Spark> sparks;
+Spring tabX, tabW, rowIn, carousel, descIn; std::vector<float> rowMemoScroll;
+int lastRow = -1, lastCol = -1; std::string lastDescId;
+
+void NightSky(float a) {
+  DrawRectangleGradientV(0, 0, W, H, Hex(0x0b1b42), Hex(0x050c22));
+  // soft blue haze in the middle + darker corners
+  DrawCircleGradient(800, 380, 820, Hex(0x1a3570, 120), Hex(0x0b1b42, 0));
+  DrawCircleGradient(260, 760, 420, Hex(0x14295a, 150), Hex(0x14295a, 0));
+  DrawCircleGradient(1380, 800, 460, Hex(0x14295a, 150), Hex(0x14295a, 0));
+  // drifting clouds at the bottom corners
+  for (int i = 0; i < 9; i++) {
+    float cx = (i < 5 ? 60 + i * 95.f : 1250 + (i - 5) * 110.f) + sinf(T * 0.08f + i) * 14, cy = 800 - (i % 3) * 28 + cosf(T * 0.1f + i) * 5;
+    DrawCircleGradient((int)cx, (int)cy, 150 + (i % 3) * 30.f, Hex(0x1d3466, 95), Hex(0x1d3466, 0));
   }
-}
-void DrawHero(float a, float dt) {
-  const J& h = D["hero"]; std::string id = h["id"].str();
-  if (id != heroId) { heroId = id; heroIn.x = 0; heroIn.v = 0; }
-  heroIn.To(1, dt, 120, 17); float k = Clamp(heroIn.x, 0, 1.2f);
-  Rectangle card = { 48, 100, 1080, 330 };
-  Glass(card, 30, a);
-  Color a1 = C(h["a1"], Hex(0x4dabff)), a2 = C(h["a2"], Hex(0x1864ab));
-  Rectangle art = { 48, 100, 380, 330 };
-  UI::Box(art, 30, A(a1, a), A(a2, a), 120);
-  BeginScissorMode((int)art.x, (int)art.y, (int)art.width, (int)art.height);
-  Rays({ art.x + 190, art.y + 165 }, 420, T * 0.25f, A(Hex(0xffffff, 26), a));
-  EndScissorMode();
-  UI::Box({ art.x, art.y + 220, art.width, 110 }, 30, A(Hex(0x000000, 0), a), A(Hex(0x000000, 60), a));
-  float bob = sinf(T * 2.2f) * 8, sc = 0.6f + 0.4f * EaseBack(k);
-  Text(art.x + 190, art.y + 165 + bob, 150 * sc, A(WHITE, a), h["e"].str(), 0, TS_PLAIN | TS_SHADOW);
-  float ox = (1 - k) * 30, ia = a * Clamp(k, 0, 1);
-  float tx = 470 + ox;
-  Text(tx, 140, 17, A(Shade(a1, 0.45f), ia), h["cat"].str(), -1, TS_PLAIN | TS_HEAVY);
-  Text(tx, 190, 58, A(INK, ia), h["n"].str(), -1, TS_DISPLAY);
-  Text(tx, 240, 22, A(MUTED, ia), h["d"].str(), -1, TS_PLAIN | TS_LIGHT, 610);
-  float bx = tx; const char* keys[] = { "ctrl", "pl", "mins" };
-  for (auto key : keys) { std::string s = h[key].str(); if (s.empty()) continue; Chip(bx, 330, s, Hex(0xffffff, 26), INK, 16, ia); bx += ChipW(s, 16) + 10; }
-  // buttons
-  playPulse.To(1, dt); float pp = 1 + 0.025f * sinf(T * 4);
-  Rectangle play = { tx, 362, 170 * pp, 52 * pp };
-  UI::Shadow(play, 26, 18, A(a1, ia * 0.8f), 6);
-  UI::Box(play, 26, A(WHITE, ia), A(Hex(0xe3e9ff), ia));
-  Text(play.x + play.width / 2, play.y + play.height / 2 + 1, 22, A(Hex(0x111632), ia), "▶  Play", 0, TS_PLAIN | TS_HEAVY);
-  hits.push_back({ play, 2 });
-  Rectangle party = { tx + 190, 362, 210, 52 };
-  UI::Box(party, 26, A(Hex(0xffffff, 22), ia), A(Hex(0xffffff, 22), ia), 90, A(Hex(0xffffff, 70), ia), 1.5f);
-  Text(party.x + party.width / 2, party.y + 27, 20, A(INK, ia), "🎉  Party Mode", 0, TS_PLAIN | TS_HEAVY);
-  hits.push_back({ party, 3 });
-}
-void DrawJoin(float a) {
-  Rectangle r = { 1152, 100, 400, 330 };
-  Glass(r, 30, a);
-  Text(r.x + 200, 128, 19, A(INK, a), "📱  Join with your phone", 0, TS_PLAIN | TS_HEAVY);
-  // QR code drawn natively from the module bitmap
-  const J& q = D["qr"]; int n = q["n"].i(); const std::string& m = q["m"].str();
-  Rectangle qr = { r.x + 200 - 84, 148, 168, 168 };
-  UI::Box(qr, 18, A(WHITE, a));
-  if (n > 0 && (int)m.size() >= n * n) {
-    float cell = 148.f / n, ox = qr.x + 10, oy = qr.y + 10;
-    for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (m[y * n + x] == '1') DrawRectangleRec({ ox + x * cell, oy + y * cell, cell + 0.6f, cell + 0.6f }, A(Hex(0x0a1024), a));
-  } else Text(qr.x + 84, qr.y + 84, 18, A(Hex(0x445), a), "…", 0, TS_PLAIN);
-  std::string code = D["code"].str(); std::string spaced; for (char ch : code) { spaced += ch; spaced += ' '; }
-  Text(r.x + 200, 352, 42, A(INK, a), spaced, 0, TS_DISPLAY);
-  Text(r.x + 200, 384, 14, A(MUTED, a), D["url"].str(), 0, TS_PLAIN | TS_LIGHT);
-  std::string net = D["net"].str();
-  Text(r.x + 200, 410, 14, A(Hex(0x8ce99a), a), net, 0, TS_PLAIN | TS_HEAVY);
-}
-void DrawRows(float a, float dt) {
-  const J& rows = D["rows"]; int fr = D["f"][0].i(), fc = D["f"][1].i();
-  const float top = 470, rowH = 196, tw = 226, th = 136, gap = 20, x0 = 48;
-  if (colScroll.size() != rows.size()) colScroll.assign(rows.size(), Spring{});
-  rowScroll.To(fmaxf(0, fr - 0.0f) * rowH, dt, 150, 22);
-  BeginScissorMode(0, (int)top - 8, W, (int)(H - top - 30));
-  TextClip(0, top - 8, W, H - top - 30);
-  for (size_t r = 0; r < rows.size(); r++) {
-    float y = top + r * rowH - rowScroll.x;
-    if (y < top - rowH || y > H) continue;
-    bool frow = (int)r == fr;
-    const J& items = rows[r]["items"];
-    int c0 = frow ? fc : 0; float want = fmaxf(0, (c0 - 4) * (tw + gap) + (frow && c0 >= 5 ? (tw + gap) * 0.5f : 0));
-    colScroll[r].To(frow ? want : colScroll[r].x, dt, 150, 22);
-    float ra = a * (frow ? 1 : 0.62f);
-    Text(x0, y + 12, 22, A(INK, ra), rows[r]["name"].str(), -1, TS_PLAIN | TS_HEAVY);
-    for (size_t c = 0; c < items.size(); c++) {
-      const J& it = items[c]; std::string key = std::to_string(r) + ":" + it["id"].str();
-      bool foc = frow && (int)c == fc;
-      Spring& s = tileS[key]; if (s.x == 0) s.x = 1; s.To(foc ? 1.09f : 1, dt, 260, 20);
-      float x = x0 + c * (tw + gap) - colScroll[r].x, cy = y + 40 + th / 2 - (foc ? 6 : 0) * (s.x - 1) / 0.09f;
-      if (x > W + 20 || x + tw < -20) continue;
-      float w = tw * s.x, hh = th * s.x; Rectangle tr = { x + tw / 2 - w / 2, cy - hh / 2, w, hh };
-      Color a1 = C(it["a1"]), a2 = C(it["a2"]);
-      if (foc) UI::Shadow(tr, 24, 34, A(a1, a * 0.9f), 10); else UI::Shadow(tr, 24, 16, A(Hex(0x000000, 120), ra), 6);
-      UI::Box(tr, 24, A(Shade(a1, 0.05f), ra), A(a2, ra), 125, foc ? A(WHITE, a) : A(Hex(0xffffff, 40), ra), foc ? 4.f : 1.f);
-      // gloss + special shimmer
-      UI::Box({ tr.x, tr.y, tr.width, tr.height * 0.5f }, 24, A(Hex(0xffffff, 34), ra), A(Hex(0xffffff, 0), ra));
-      if (it["sp"].yes()) { float sx = fmodf(T * 260 + c * 120, tr.width + 200) - 100; BeginScissorMode((int)tr.x, (int)tr.y, (int)tr.width, (int)tr.height); BeginBlendMode(BLEND_ADDITIVE); DrawRectangleGradientH((int)(tr.x + sx), (int)tr.y, 60, (int)tr.height, Hex(0xffffff, 0), Hex(0xffffff, 70)); EndBlendMode(); EndScissorMode(); BeginScissorMode(0, (int)top - 8, W, (int)(H - top - 30)); }
-      float eb = foc ? sinf(T * 5) * 4 : 0;
-      Text(tr.x + tr.width - 52 * s.x, tr.y + tr.height * 0.42f + eb, 58 * s.x, A(WHITE, ra), it["e"].str(), 0, TS_PLAIN | TS_SHADOW);
-      Text(tr.x + 16, tr.y + tr.height - 24 * s.x, 20 * s.x, A(WHITE, ra), it["n"].str(), -1, TS_PLAIN | TS_HEAVY | TS_SHADOW, tr.width - 70);
-      std::string cl = it["ctrl"].str();
-      if (!cl.empty()) Chip(tr.x + 12, tr.y + 22 * s.x, cl, Hex(0x000000, 70), Hex(0xffffff, 230), 12 * s.x, ra);
-      if (it["rec"].yes()) Chip(tr.x + tr.width - 12, tr.y + 22 * s.x, "For you", Hex(0xffffff, 215), Hex(0x111632), 11 * s.x, ra, 1);
-      hits.push_back({ tr, 1000 + (int)r * 100 + (int)c });
+  // luminous gold wave sweeping across the horizon
+  BeginBlendMode(BLEND_ADDITIVE);
+  for (int pass = 0; pass < 2; pass++) {
+    float amp = pass ? 30 : 46, off = pass ? 26 : 0, sp = pass ? 0.11f : 0.07f;
+    Vector2 prev{};
+    for (int x = -20; x <= W + 20; x += 10) {
+      float y = 700 + off + amp * sinf(x * 0.0024f + T * sp + pass * 1.7f) + 0.00011f * (x - 800) * (x - 800) * (pass ? -0.4f : -0.6f);
+      Vector2 p = { (float)x, y };
+      if (x > -20) {
+        float edge = 1 - fabsf(x - 800) / 900.f; edge = Clamp(edge, 0, 1);
+        unsigned char k = (unsigned char)(255 * edge * a);
+        DrawLineEx(prev, p, 16, Fade(Hex(0xf2b84b), 0.05f * k / 255 * (pass ? 0.6f : 1)));
+        DrawLineEx(prev, p, 5, Fade(Hex(0xf6c96a), 0.18f * k / 255 * (pass ? 0.6f : 1)));
+        DrawLineEx(prev, p, 1.6f, Fade(Hex(0xfff0c8), 0.75f * k / 255 * (pass ? 0.5f : 1)));
+      }
+      prev = p;
     }
   }
+  // gold bokeh sparkles drifting upwards, twinkling
+  if (sparks.empty()) for (int i = 0; i < 90; i++) sparks.push_back({ frand(0, W), frand(0, H), frand(1.2f, 3.4f), frand(0, 6.28f), frand(4, 14) });
+  for (auto& s : sparks) {
+    float y = fmodf(s.y - T * s.sp + H * 10, H), tw = 0.45f + 0.55f * sinf(T * 1.3f + s.ph);
+    Color c = Hex(0xf5cf7a, (unsigned char)(160 * tw * a));
+    DrawCircleGradient((int)s.x, (int)y, s.s * 5, Fade(c, 0.22f * tw), Fade(c, 0));
+    DrawCircleV({ s.x, y }, s.s * 0.7f, c);
+  }
+  EndBlendMode();
+  // thin gold frame
+  DrawRectangleRoundedLinesEx({ 44, 40, 1512, 820 }, 0.045f, 12, 1.4f, Hex(0xd9aa5a, (unsigned char)(110 * a)));
+}
+void Logo(float x, float y, float sc, float a, bool center = false) {
+  float s = 64 * sc;
+  float wc = Measure("couch", s, TS_DISPLAY), wh = Measure("chaos", s, TS_DISPLAY), wo = Measure("os", s, TS_DISPLAY);
+  float x0 = center ? x - (wh + wo + 14 * sc) / 2 : x;
+  Text(x0, y, s, A(WHITE, a), "couch", -1, TS_DISPLAY | TS_PLAIN | TS_GOLD | TS_SHADOW);
+  Text(x0, y + s * 0.86f, s, A(WHITE, a), "chaos", -1, TS_DISPLAY | TS_PLAIN | TS_SILVER | TS_SHADOW);
+  Text(x0 + wh + 14 * sc, y + s * 0.86f, s, A(WHITE, a), "os", -1, TS_DISPLAY | TS_PLAIN | TS_GOLD | TS_SHADOW);
+  for (int i = 0; i < 3; i++) DrawCircleV({ x0 + wc + 18 * sc + i * 13 * sc, y - 8 * sc + (i == 1 ? -9 : 0) * sc }, (i == 1 ? 4.5f : 3.2f) * sc, A(GOLDN, a * (0.6f + 0.4f * sinf(T * 2 + i))));
+  Text(x0 + (wh + wo + 14 * sc) / 2, y + s * 1.55f, 17 * sc, A(Hex(0xc9d2ea), a), "gaming console", 0, TS_PLAIN | TS_LIGHT);
+}
+std::string Upper(std::string s) { for (auto& ch : s) if (ch >= 'a' && ch <= 'z') ch -= 32; return s; }
+void Icon(int kind, float cx, float cy, float s, Color c) {
+  if (kind == 0) {  // gamepad
+    DrawRectangleRoundedLinesEx({ cx - s, cy - s * 0.55f, s * 2, s * 1.1f }, 0.9f, 10, 2, c);
+    DrawLineEx({ cx - s * 0.62f, cy }, { cx - s * 0.25f, cy }, 2, c); DrawLineEx({ cx - s * 0.435f, cy - s * 0.18f }, { cx - s * 0.435f, cy + s * 0.18f }, 2, c);
+    DrawCircleV({ cx + s * 0.4f, cy - s * 0.1f }, 2.4f, c); DrawCircleV({ cx + s * 0.6f, cy + s * 0.1f }, 2.4f, c);
+  } else if (kind == 1) {  // touch
+    float k = s * 0.35f;
+    for (int i = 0; i < 4; i++) { float sx = i % 2 ? 1 : -1, sy = i / 2 ? 1 : -1; Vector2 c0 = { cx + sx * s, cy + sy * s }; DrawLineEx(c0, { c0.x - sx * k, c0.y }, 2, c); DrawLineEx(c0, { c0.x, c0.y - sy * k }, 2, c); }
+    DrawCircleV({ cx, cy - s * 0.15f }, s * 0.18f, c); DrawLineEx({ cx, cy - s * 0.15f }, { cx, cy + s * 0.5f }, 2.4f, c);
+  } else if (kind == 2) {  // phone
+    DrawRectangleRoundedLinesEx({ cx - s * 0.55f, cy - s, s * 1.1f, s * 2 }, 0.3f, 8, 2, c);
+    DrawLineEx({ cx - s * 0.2f, cy + s * 0.75f }, { cx + s * 0.2f, cy + s * 0.75f }, 2, c);
+  } else if (kind == 3) {  // wifi
+    for (int i = 0; i < 3; i++) DrawRing({ cx, cy + s * 0.6f }, s * (0.35f + i * 0.33f), s * (0.35f + i * 0.33f) + 2.2f, 225, 315, 20, c);
+    DrawCircleV({ cx, cy + s * 0.6f }, 2.6f, c);
+  } else if (kind == 4) {  // speaker
+    DrawRectangleV({ cx - s * 0.8f, cy - s * 0.25f }, { s * 0.35f, s * 0.5f }, c);
+    DrawTriangle({ cx - s * 0.45f, cy - s * 0.25f }, { cx - s * 0.45f, cy + s * 0.25f }, { cx - s * 0.05f, cy + s * 0.6f }, c);
+    DrawTriangle({ cx - s * 0.45f, cy - s * 0.25f }, { cx - s * 0.05f, cy + s * 0.6f }, { cx - s * 0.05f, cy - s * 0.6f }, c);
+    for (int i = 0; i < 2; i++) DrawRing({ cx, cy }, s * (0.35f + i * 0.3f), s * (0.35f + i * 0.3f) + 2, -50, 50, 16, c);
+  } else if (kind == 5) {  // people
+    DrawCircleV({ cx - s * 0.3f, cy - s * 0.3f }, s * 0.26f, c); DrawCircleV({ cx + s * 0.3f, cy - s * 0.3f }, s * 0.26f, c);
+    DrawCircleSector({ cx - s * 0.3f, cy + s * 0.45f }, s * 0.45f, 180, 360, 16, c); DrawCircleSector({ cx + s * 0.3f, cy + s * 0.45f }, s * 0.45f, 180, 360, 16, c);
+  }
+}
+void ConnectPanel(float a) {
+  Rectangle r = { 1214, 96, 292, 596 };
+  UI::Shadow(r, 30, 40, A(Hex(0x000000, 150), a), 16);
+  UI::Box(r, 30, A(Hex(0x1a2647, 235), a), A(Hex(0x0d1530, 240), a), 90, A(Hex(0xd9aa5a, 150), a), 1.4f);
+  float cx = r.x + r.width / 2;
+  Text(cx, r.y + 36, 15, A(Hex(0xe6e9f5), a), "CONNECT CONTROLLER", 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
+  DrawLineEx({ r.x + 1, r.y + 64 }, { r.x + r.width - 1, r.y + 64 }, 1.2f, A(Hex(0xd9aa5a, 90), a));
+  Icon(0, cx - 86, r.y + 104, 22, A(Hex(0xc9d2ea), a));
+  Icon(1, cx, r.y + 104, 20, A(GOLDN, a));
+  Icon(2, cx + 86, r.y + 104, 22, A(Hex(0xc9d2ea), a));
+  // QR on a white card with a glowing gold rim
+  Rectangle qr = { cx - 104, r.y + 146, 208, 208 };
+  float glow = 0.55f + 0.45f * sinf(T * 1.6f);
+  UI::Shadow(qr, 26, 26, A(Hex(0xf2c66d, (unsigned char)(110 * glow)), a), 0);
+  UI::Box({ qr.x - 5, qr.y - 5, qr.width + 10, qr.height + 10 }, 28, A(Hex(0xf7d98d), a), A(Hex(0xb8873a), a), 90);
+  UI::Box(qr, 24, A(WHITE, a));
+  const J& q = D["qr"]; int n = q["n"].i(); const std::string& m = q["m"].str();
+  if (n > 0 && (int)m.size() >= n * n) {
+    float cell = 180.f / n, ox = qr.x + 14, oy = qr.y + 14;
+    for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (m[y * n + x] == '1') DrawRectangleRec({ ox + x * cell, oy + y * cell, cell + 0.6f, cell + 0.6f }, A(Hex(0x0a1024), a));
+  } else Text(qr.x + 104, qr.y + 104, 18, A(Hex(0x445566), a), "…", 0, TS_PLAIN);
+  Text(cx, r.y + 392, 21, A(WHITE, a), "/  SCAN TO JOIN!  /", 0, TS_PLAIN | TS_HEAVY | TS_GOLD);
+  Text(cx, r.y + 424, 15, A(Hex(0xdfe4f2), a), "Use your phone as a controller", 0, TS_PLAIN);
+  Text(cx, r.y + 446, 15, A(Hex(0xdfe4f2), a), "and motion sensor.", 0, TS_PLAIN);
+  // room code in a little phone frame
+  Rectangle ph = { r.x + 26, r.y + 476, r.width - 52, 98 };
+  UI::Box(ph, 22, A(Hex(0x070d22, 230), a), A(Hex(0x070d22, 230), a), 90, A(Hex(0x3a4a78), a), 2);
+  std::string code = D["code"].str(), spaced; for (char ch : code) { spaced += ch; spaced += ' '; }
+  Text(cx, ph.y + 36, 36, A(CREAM, a), spaced, 0, TS_DISPLAY | TS_PLAIN);
+  Text(cx, ph.y + 70, 12, A(Hex(0x9aa6c8), a), D["url"].str(), 0, TS_PLAIN | TS_LIGHT);
+  DrawRectangleRounded({ cx - 30, ph.y + ph.height - 10, 60, 4 }, 1, 6, A(Hex(0x9aa6c8, 160), a));
+}
+void PlayerBar(float a) {
+  Rectangle bar = { 100, 712, 1400, 100 };
+  UI::Box(bar, 50, A(Hex(0x0c1532, 170), a), A(Hex(0x0a1129, 190), a), 90, A(Hex(0xffffff, 18), a), 1);
+  UI::Box({ 132, 734, 56, 56 }, 28, A(Hex(0x1d2a52), a), A(Hex(0x141e3e), a), 90, A(Hex(0xd9aa5a, 120), a), 1.4f);
+  Icon(5, 160, 763, 17, A(GOLDN, a));
+  const J& ps = D["players"]; float x = 250;
+  for (size_t i = 0; i < ps.size() && i < 9; i++) {
+    const J& p = ps[i]; Color c = C(p["c"]); bool away = p["away"].yes(), vip = p["vip"].yes();
+    float pa = away ? a * 0.4f : a, bob = sinf(T * 1.8f + i) * 1.5f, cy = 752 + bob;
+    if (vip) { float g = 0.6f + 0.4f * sinf(T * 2.4f); UI::Shadow({ x - 34, cy - 34, 68, 68 }, 34, 22, A(Hex(0xf2c66d, (unsigned char)(140 * g)), pa), 0); }
+    UI::Box({ x - 33, cy - 33, 66, 66 }, 33, A(vip ? Hex(0xf7d98d) : Shade(c, 0.1f), pa), A(vip ? Hex(0xb8873a) : Shade(c, -0.3f), pa), 90);
+    UI::Box({ x - 29, cy - 29, 58, 58 }, 29, A(Shade(c, 0.25f), pa), A(Shade(c, -0.25f), pa), 120);
+    Text(x, cy + 1, 30, A(WHITE, pa), p["cam"].yes() ? "📷" : p["av"].str(), 0, TS_PLAIN);
+    if (!away) { DrawCircleV({ x + 24, cy - 24 }, 7, A(Hex(0x0a1129), a)); DrawCircleV({ x + 24, cy - 24 }, 5, A(Hex(0x8ce99a), a)); }
+    if (vip) Text(x, cy - 44, 16, A(WHITE, a), "👑", 0, TS_PLAIN);
+    Text(x, 800, 15, A(vip ? CREAM : Hex(0xb9c2dc), pa), p["n"].str(), 0, TS_PLAIN | (vip ? TS_HEAVY : 0));
+    x += 112;
+  }
+  // add player
+  float cy = 752;
+  for (int k = 0; k < 24; k++) { float a0 = k * PI / 12 + T * 0.15f; DrawRing({ x, cy }, 31, 33, a0 * RAD2DEG, a0 * RAD2DEG + 8, 4, A(Hex(0x8090b8), a)); }
+  DrawLineEx({ x - 9, cy }, { x + 9, cy }, 2.6f, A(Hex(0xc9d2ea), a)); DrawLineEx({ x, cy - 9 }, { x, cy + 9 }, 2.6f, A(Hex(0xc9d2ea), a));
+  Text(x, 800, 15, A(Hex(0x8f9bbd), a), ps.size() ? "Add Player" : "Scan to join", 0, TS_PLAIN);
+  // status icons + clock
+  bool music = D["music"].yes();
+  Icon(4, 1318, 762, 15, A(music ? Hex(0xdfe4f2) : Hex(0x6b7699), a));
+  Icon(3, 1370, 760, 15, A(Hex(0xdfe4f2), a));
+  Text(1462, 762, 22, A(Hex(0xeef1fa), a), D["clock"].str(), 0, TS_PLAIN | TS_HEAVY);
+}
+void Cards(float a, float dt) {
+  const J& rows = D["rows"]; int fr = D["f"][0].i(), fc = D["f"][1].i();
+  if (fr < 0 || fr >= (int)rows.size()) return;
+  // ---- category tabs ----
+  float tx = 120, ty = 262; float fx = 0, fw = 0;
+  for (size_t r = 0; r < rows.size(); r++) {
+    std::string s = rows[r]["short"].str(); float w = Measure(s, 17, TS_PLAIN | TS_HEAVY);
+    bool on = (int)r == fr;
+    Text(tx, ty, 17, on ? A(CREAM, a) : A(Hex(0x8592b5), a), s, -1, TS_PLAIN | TS_HEAVY | (on ? TS_GOLD : 0));
+    hits.push_back({ { tx - 10, ty - 20, w + 20, 40 }, 500 + (int)r });
+    if (on) { fx = tx; fw = w; }
+    tx += w + 34;
+  }
+  if (tabX.x == 0) { tabX.x = fx; tabW.x = fw; }
+  tabX.To(fx, dt, 170, 26); tabW.To(fw, dt, 170, 26);
+  DrawRectangleRounded({ tabX.x, ty + 18, tabW.x, 3 }, 1, 6, A(GOLDN, a));
+  BeginBlendMode(BLEND_ADDITIVE); DrawRectangleRounded({ tabX.x - 4, ty + 15, tabW.x + 8, 9 }, 1, 6, A(Hex(0xf2c66d, 50), a)); EndBlendMode();
+  // ---- cards carousel ----
+  if (fr != lastRow) { rowIn.x = 0; rowIn.v = 0; lastRow = fr; carousel.x = fmaxf(0, (fc - 1)) * 292; carousel.v = 0; }
+  rowIn.To(1, dt, 90, 19);
+  const J& items = rows[fr]["items"];
+  const float cw = 262, ch = 360, gap = 30, x0 = 120, top = 304;
+  float want = fmaxf(0, fminf((float)fc - 1, (float)items.size() - 3.6f)) * (cw + gap);
+  carousel.To(want, dt, 150, 24.5f);
+  BeginScissorMode(60, 230, 1140, 470); TextClip(60, 230, 1140, 470);
+  for (size_t c = 0; c < items.size(); c++) {
+    const J& it = items[c]; bool foc = (int)c == fc;
+    std::string key = std::to_string(fr) + ":" + it["id"].str();
+    Spring& s = tileS[key]; if (s.x == 0) s.x = 1;
+    s.To(foc ? 1.065f : 1, dt, 230, 26);
+    float stag = Clamp(rowIn.x * 1.25f - c * 0.07f, 0, 1), ia = a * stag;
+    float x = x0 + c * (cw + gap) - carousel.x + (1 - stag) * 60;
+    if (x > 1220 || x + cw < 40 || ia < 0.01f) continue;
+    float w = cw * s.x, h = ch * s.x, lift = (s.x - 1) / 0.065f * 8;
+    Rectangle r = { x + cw / 2 - w / 2, top + ch / 2 - h / 2 - lift, w, h };
+    float fk = Clamp((s.x - 1) / 0.065f, 0, 1);
+    // glow + shadow (GL layer)
+    UI::Shadow(r, 26, 30, A(Hex(0x000000, 160), ia), 14);
+    if (fk > 0.02f) UI::Shadow(r, 26, 46, A(Hex(0xf2c66d, (unsigned char)(150 * fk)), ia), 0);
+    Color a1 = C(it["a1"]), a2 = C(it["a2"]);
+    UI::Box(r, 24, A(a1, ia), A(a2, ia), 120);
+    Text(r.x + r.width / 2, r.y + r.height * 0.4f, 90 * s.x, A(WHITE, ia), it["e"].str(), 0, TS_PLAIN | TS_SHADOW);
+    // overlay: cover art, legibility gradient, gold rim, title
+    float pan = foc ? sinf(T * 0.22f) * 0.55f : 0;
+    Img(it["id"].str(), r.x, r.y, r.width, r.height, 24, ia, pan, foc ? 1.04f + 0.02f * sinf(T * 0.3f) : 1.0f);
+    RRect(r.x, r.y + r.height * 0.42f, r.width, r.height * 0.58f, 24, Hex(0x081230, 0), Hex(0x081230, (unsigned char)(240 * ia)), BLANK, 0, true);
+    RRect(r.x, r.y, r.width, r.height, 24, BLANK, BLANK, A(Hex(0xf2c66d, foc ? 255 : 120), ia), foc ? 3.2f : 1.4f, false, true);
+    std::string name = Upper(it["n"].str());
+    float fs = 30 * s.x; while (fs > 17 && Measure(name, fs, TS_DISPLAY) > r.width - 30) fs -= 1;
+    bool two = Measure(name, fs, TS_DISPLAY) > r.width - 30;
+    Text(r.x + r.width / 2, r.y + r.height - (two ? 84 : 62) * s.x, fs, A(WHITE, ia), name, 0, TS_DISPLAY | TS_PLAIN | TS_GOLD | TS_SHADOW, two ? r.width - 26 : 0);
+    std::string sub = it["k"].str() + "  •  " + it["pl"].str() + " PLAYERS";
+    Text(r.x + r.width / 2, r.y + r.height - 28 * s.x, 12.5f * s.x, A(Hex(0xd5dbeb), ia), sub, 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
+    if (it["rec"].yes()) { float bw = Measure("FOR YOU", 11, TS_PLAIN | TS_HEAVY) + 26; RRect(r.x + r.width - bw - 14, r.y + 14, bw, 26, 13, Hex(0xf7d98d), Hex(0xc9963f), BLANK, 0, true); Text(r.x + r.width - 14 - bw / 2, r.y + 27, 11, A(Hex(0x3a2508), ia), "FOR YOU", 0, TS_PLAIN | TS_HEAVY | TS_SPACED); }
+    hits.push_back({ r, 1000 + fr * 100 + (int)c });
+  }
   EndScissorMode(); TextUnclip();
-  // row indicator dots
-  for (size_t r = 0; r < rows.size(); r++) DrawCircle(1578, (int)(480 + r * 18), (int)r == fr ? 5 : 3, A(Hex(0xffffff, (int)r == fr ? 220 : 80), a));
-  UI::Box({ 0, H - 44, W, 44 }, 0, A(Hex(0x060918, 0), a), A(Hex(0x060918, 200), a));
-  Text(800, H - 20, 16, A(MUTED, a), "🎮  The 👑 VIP's phone is the remote  ·  ← → ↑ ↓ + OK  ·  keyboard and mouse work too  ·  P = party  ·  R = surprise", 0, TS_PLAIN);
+  // edge fades hint that the row scrolls
+  if (carousel.x > 4) DrawRectangleGradientH(60, 280, 70, 420, A(Hex(0x0a1838, 230), a), Hex(0x0a1838, 0));
+  if (items.size() > 4 && carousel.x < (items.size() - 3.6f) * (cw + gap) - 4) DrawRectangleGradientH(1130, 280, 70, 420, Hex(0x0a1838, 0), A(Hex(0x0a1838, 230), a));
+  // ---- focused game: one line of description ----
+  if (fc >= 0 && fc < (int)items.size()) {
+    const J& it = items[fc]; std::string id = it["id"].str();
+    if (id != lastDescId) { lastDescId = id; descIn.x = 0; descIn.v = 0; }
+    descIn.To(1, dt, 120, 22); float k = Clamp(descIn.x, 0, 1);
+    std::string line = it["d"].str();
+    Text(120 + (1 - k) * 16, 682, 18, A(Hex(0xc3cbe3), a * k), line, -1, TS_PLAIN, 1060);
+  }
+}
+void DrawHome(float a, float dt) {
+  NightSky(a);
+  Logo(120, 112, 1, a);
+  Text(1180, 112, 14, A(Hex(0x8f9bbd), a), "← → choose   ↑ ↓ category   OK play", 1, TS_PLAIN | TS_SPACED);
+  Cards(a, dt);
+  ConnectPanel(a);
+  PlayerBar(a);
+}
+void DrawBootGold(float a) {
+  NightSky(a);
+  float bob = sinf(T * 1.4f) * 5;
+  Logo(800, 300 + bob, 1.9f, a, true);
+  float p = 0.6f + 0.4f * sinf(T * 2.6f);
+  Rectangle b = { 640, 620, 320, 64 };
+  UI::Shadow(b, 32, 30, A(Hex(0xf2c66d, (unsigned char)(120 * p)), a), 0);
+  UI::Box(b, 32, A(Hex(0xf7d98d), a), A(Hex(0xc9963f), a));
+  Text(800, 653, 22, A(Hex(0x2a1a05), a), "▶  Press any key", 0, TS_PLAIN | TS_HEAVY);
+  Text(800, 730, 16, A(Hex(0x9aa6c8), a), "or click  ·  F = fullscreen  ·  phones join on the next screen", 0, TS_PLAIN | TS_LIGHT);
 }
 
 // ---------------- INTRO ----------------
@@ -190,7 +304,10 @@ void DrawIntro(float a, float dt) {
   EndScissorMode();
   float pop = EaseBack(Clamp((t - 0.15f) * 2.2f, 0, 1));
   Text(art.x + 350, art.y + 370 + sinf(T * 2) * 14, 260 * pop + 1, A(WHITE, a), in["e"].str(), 0, TS_PLAIN | TS_SHADOW);
-  UI::Box({ art.x, art.y + 640, art.width, 180 }, 40, A(Hex(0x000000, 0), a), A(Hex(0x000000, 90), a));
+  Img(in["id"].str(), art.x, art.y, art.width, art.height, 40, a * EaseOut(t * 2.5f), sinf(T * 0.18f) * 0.8f, 1.06f + 0.04f * sinf(T * 0.25f));
+  RRect(art.x, art.y + art.height * 0.55f, art.width, art.height * 0.45f, 40, Hex(0x081230, 0), Hex(0x081230, (unsigned char)(235 * a)), BLANK, 0, true);
+  RRect(art.x, art.y, art.width, art.height, 40, BLANK, BLANK, A(Hex(0xf2c66d), a), 3, false, true);
+  Text(art.x + 350, art.y + 690, 54, A(WHITE, a), Upper(in["n"].str()), 0, TS_DISPLAY | TS_PLAIN | TS_GOLD | TS_SHADOW, 640);
   Text(art.x + 350, art.y + 760, 22, A(Hex(0xffffff, 220), a), in["cat"].str(), 0, TS_PLAIN | TS_HEAVY);
   // right: info card
   float rx = 790, k = EaseOut(Clamp((t - 0.1f) * 2.4f, 0, 1)), ca = a * k;
@@ -307,14 +424,9 @@ EMSCRIPTEN_KEEPALIVE void cc_shell_frame(float dt) {
   rlEnableDepthMask(); ClearBackground(Hex(0x070b24));
   if (shown == "results") DrawResults(a, dt);
   else {
-    cam.fovy = 50;
-    cam.position = { sinf(T * 0.05f) * 5, 6.5f + sinf(T * 0.1f) * 0.4f, 24 }; cam.target = { sinf(T * 0.05f) * 2, 4.5f, -10 };
-    bg.Draw(cam);
-    // legibility veil
-    UI::Box({ 0, 0, W, H }, 0, Hex(0x060918, 40), Hex(0x060918, shown == "home" ? 170 : 120));
-    if (shown == "boot") DrawBoot(a);
-    else if (shown == "home") { DrawTopBar(a); DrawHero(a, dt); DrawJoin(a); DrawRows(a, dt); }
-    else if (shown == "intro") DrawIntro(a, dt);
+    if (shown == "boot") DrawBootGold(a);
+    else if (shown == "home") DrawHome(a, dt);
+    else if (shown == "intro") { NightSky(1); DrawIntro(a, dt); }
   }
   PostEnd();
   lit.EndFrame(dt);

@@ -28,12 +28,41 @@ function nativeLoad() {
   NATIVE.loading.catch(() => { NATIVE.loading = null; });
   return NATIVE.loading;
 }
+const NIMG = {};
+function nativeImg(k) {
+  let im = NIMG[k];
+  if (!im) { im = NIMG[k] = new Image(); im.decoding = 'async'; im.src = NATIVE.base + 'covers/' + k + '.jpg?v=' + NATIVE.v; im.onerror = () => { im.bad = true; }; }
+  return im.complete && im.naturalWidth && !im.bad ? im : null;
+}
+function nRgba(c) { return `rgba(${c >>> 24},${(c >> 16) & 255},${(c >> 8) & 255},${(c & 255) / 255})`; }
+function nGold(g, y0, y1, a = 1) {
+  const gr = g.createLinearGradient(0, y0, 0, y1);
+  gr.addColorStop(0, `rgba(255,243,206,${a})`); gr.addColorStop(0.45, `rgba(242,198,109,${a})`); gr.addColorStop(0.75, `rgba(196,140,58,${a})`); gr.addColorStop(1, `rgba(246,215,139,${a})`);
+  return gr;
+}
 function nativeWrap(g, s, maxW) { const out = []; let line = ''; for (const w of String(s).split(' ')) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } if (line) out.push(line); return out; }
 // draws the native frame + its text list onto a 2D canvas (in 1600x900 space)
 function nativeBlit(g, texts) {
   g.drawImage(NATIVE.cv, 0, 0, 1600, 900);
   let clipped = false;
   for (const t of texts) {
+    if (t[0] === 'img') {
+      const [, k, x, y, w, h, r, a, pan, zoom] = t, im = nativeImg(k); if (!im) continue;
+      g.save(); g.globalAlpha = Math.min(1, a); g.beginPath(); g.roundRect(x, y, w, h, r); g.clip();
+      const sc = Math.max(w / im.naturalWidth, h / im.naturalHeight) * (zoom || 1), dw = im.naturalWidth * sc, dh = im.naturalHeight * sc;
+      g.drawImage(im, x - (dw - w) * (0.5 + (pan || 0) * 0.5), y - (dh - h) * 0.42, dw, dh);
+      g.restore(); continue;
+    }
+    if (t[0] === 'rr') {
+      const [, x, y, w, h, r, f1, f2, st, lw, grad, gold] = t;
+      g.save(); g.beginPath(); g.roundRect(x, y, w, h, r);
+      if (f1 || f2) {
+        if (grad) { const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, nRgba(f1)); gr.addColorStop(1, nRgba(f2)); g.fillStyle = gr; } else g.fillStyle = nRgba(f1);
+        g.fill();
+      }
+      if (lw > 0 && (st & 255)) { g.lineWidth = lw; g.strokeStyle = gold ? nGold(g, y, y + h, (st & 255) / 255) : nRgba(st); g.beginPath(); g.roundRect(x + lw / 2, y + lw / 2, w - lw, h - lw, Math.max(0, r - lw / 2)); g.stroke(); }
+      g.restore(); continue;
+    }
     if (t[0] === 'clip') {
       if (clipped) { g.restore(); clipped = false; }
       if (t[3] > 0) { g.save(); g.beginPath(); g.rect(t[1], t[2], t[3], t[4]); g.clip(); clipped = true; }
@@ -44,10 +73,14 @@ function nativeBlit(g, texts) {
     if (!style) { txt(g, str, x, y, s, col, al < 0 ? 'left' : al > 0 ? 'right' : 'center', 'Nunito'); continue; }
     g.save();
     g.font = nativeFont(s, style); g.textAlign = al < 0 ? 'left' : al > 0 ? 'right' : 'center'; g.textBaseline = 'middle';
-    const lines = w > 0 ? nativeWrap(g, str, w) : [str], lh = s * 1.3;
-    if (style & 4) { g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = s * 0.35; g.shadowOffsetY = s * 0.08; }
-    if (!(style & 2)) { g.lineJoin = 'round'; g.lineWidth = Math.max(3, s / 6); g.strokeStyle = 'rgba(14,10,36,.8)'; }
-    g.fillStyle = col;
+    if (style & 64) g.letterSpacing = (s * 0.14).toFixed(1) + 'px';
+    const lines = w > 0 ? nativeWrap(g, str, w) : [str], lh = s * (style & 1 ? 1.05 : 1.3);
+    if (style & 4) { g.shadowColor = `rgba(0,0,0,${(0.45 * (c & 255) / 255).toFixed(3)})`; g.shadowBlur = s * 0.35; g.shadowOffsetY = s * 0.08; }
+    if (!(style & 2)) { g.lineJoin = 'round'; g.lineWidth = Math.max(3, s / 6); g.strokeStyle = `rgba(14,10,36,${(0.8 * (c & 255) / 255).toFixed(3)})`; }
+    const al1 = (c & 255) / 255;
+    if (style & 32) { g.fillStyle = nGold(g, y - s * 0.5, y + s * 0.5 + (lines.length - 1) * lh, al1); if (style & 4) { g.shadowColor = `rgba(242,180,80,${0.35 * al1})`; g.shadowBlur = s * 0.45; g.shadowOffsetY = 0; } }
+    else if (style & 128) { const gr = g.createLinearGradient(0, y - s * 0.5, 0, y + s * 0.5); gr.addColorStop(0, `rgba(255,255,255,${al1})`); gr.addColorStop(0.6, `rgba(214,222,240,${al1})`); gr.addColorStop(1, `rgba(160,172,204,${al1})`); g.fillStyle = gr; }
+    else g.fillStyle = col;
     lines.forEach((ln, i) => { const yy = y + i * lh; if (!(style & 2)) g.strokeText(ln, x, yy); g.fillText(ln, x, yy); });
     g.restore();
   }

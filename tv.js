@@ -167,9 +167,11 @@
     { id: '_party', name: 'Party Mode', emoji: '🎉', art: ['#ffd43b', '#ff4d6d'], desc: '6 random games in a row, one from every category. Trophies decide the champion!', how: [], ctrl: 'tap', players: '1-8', mins: 15, cat: 'quick' },
     { id: '_random', name: 'Surprise Me', emoji: '🎲', art: ['#63e6be', '#7048e8'], desc: 'Let fate pick a game that fits how many of you are playing.', how: [], ctrl: 'tap', players: '1-8', mins: 3, cat: 'quick' },
   ];
+  const colMemo = {};
   let rowsData = [], focus = { r: 0, c: 0 }, heroDef = null, idleT = 0, heroCycle = 0;
   function buildRows() {
-    rowsData = [{ name: '🔥 Quick Play', items: QUICK.concat(recommended()) }, ...CATEGORIES.map(c => ({ name: c.name, items: GAMES.filter(gm => gm.cat === c.id) }))];
+    const SHORT = { classic: 'Classics', sports: 'Sports', winter: 'Winter', table: 'Cards & Board', party: 'Party', brain: 'Brain', action: 'Action' };
+    rowsData = [{ name: '🔥 Quick Play', short: 'Quick Play', items: QUICK.concat(recommended()) }, ...CATEGORIES.map(c => ({ name: c.name, short: SHORT[c.id] || c.name, items: GAMES.filter(gm => gm.cat === c.id) }))];
     $('#rows').innerHTML = rowsData.map((row, r) => `<div class="row"><h3>${row.name}</h3><div class="track">${row.items.map((gm, c) =>
       `<button class="tile ${gm.id[0] === '_' ? 'special' : ''}" data-r="${r}" data-c="${c}" style="--a1:${gm.art[0]};--a2:${gm.art[1]}"><span class="tc">${CTRL_LABEL[gm.ctrl] || ''}</span><span class="te">${gm.emoji}</span><span class="tn">${esc(gm.name)}</span></button>`).join('')}</div></div>`).join('');
     $('#rows').querySelectorAll('.tile').forEach(t => {
@@ -209,8 +211,7 @@
     if (S.state !== 'home') return;
     if (d === 'left') focus.c = Math.max(0, focus.c - 1);
     else if (d === 'right') focus.c = Math.min(rowsData[focus.r].items.length - 1, focus.c + 1);
-    else if (d === 'up') { focus.r = Math.max(0, focus.r - 1); focus.c = Math.min(focus.c, rowsData[focus.r].items.length - 1); }
-    else if (d === 'down') { focus.r = Math.min(rowsData.length - 1, focus.r + 1); focus.c = Math.min(focus.c, rowsData[focus.r].items.length - 1); }
+    else if (d === 'up' || d === 'down') { colMemo[focus.r] = focus.c; focus.r = d === 'up' ? Math.max(0, focus.r - 1) : Math.min(rowsData.length - 1, focus.r + 1); focus.c = Math.min(colMemo[focus.r] || 0, rowsData[focus.r].items.length - 1); }
     else if (d === 'ok') return activate();
     SFX.blip(); applyFocus();
   }
@@ -375,14 +376,16 @@
     o.players = S.players.filter(p => p.connected || !p.cam).map(p => ({ n: p.name, c: p.color, av: p.avatar, vip: p === v, away: !p.connected, cam: !!p.isCam }));
     if (st === 'home') {
       o.qr = S.qr || null;
-      o.rows = rowsData.map(r => ({ name: r.name, items: r.items.map(gm => ({ id: gm.id, n: gm.name, e: gm.emoji, a1: gm.art[0], a2: gm.art[1], ctrl: CTRL_LABEL[gm.ctrl] || '', sp: gm.id[0] === '_', rec: !!gm._rec })) }));
+      const KW = { move: 'JOYSTICK', tap: 'TAP', swing: 'SWING', type: 'TYPE', shake: 'SHAKE', tilt: 'TILT', draw: 'DRAW', vote: 'VOTE', camera: 'CAMERA' };
+      o.rows = rowsData.map(r => ({ name: r.name, short: r.short || r.name, items: r.items.map(gm => ({ id: gm.id, n: gm.name, e: gm.emoji, a1: gm.art[0], a2: gm.art[1], ctrl: CTRL_LABEL[gm.ctrl] || '', k: KW[gm.ctrl] || 'MULTIPLAYER', pl: gm.players, d: gm.desc, sp: gm.id[0] === '_', rec: !!gm._rec })) }));
+      o.music = !(SFX.musicMuted && SFX.musicMuted());
       o.f = [focus.r, focus.c];
       const d = heroDef;
       if (d) o.hero = { id: d.id, n: d.name, e: d.emoji, d: d.desc, a1: d.art[0], a2: d.art[1], cat: d.cat === 'quick' ? 'QUICK PLAY' : ((CATEGORIES.find(c => c.id === d.cat) || {}).name || '').toUpperCase(), ctrl: CTRL_LABEL[d.ctrl] || '', pl: `👥 ${d.players} players`, mins: `⏱️ ~${d.mins} min` };
     }
     if (st === 'intro' && S.def) {
       const d = S.def;
-      o.intro = { n: d.name, e: d.emoji, a1: d.art[0], a2: d.art[1], ctrl: CTRL_LABEL[d.ctrl] || '', how: d.how,
+      o.intro = { id: d.id, n: d.name, e: d.emoji, a1: d.art[0], a2: d.art[1], ctrl: CTRL_LABEL[d.ctrl] || '', how: d.how,
         cat: (S.party ? `🎉 Party game ${S.party.i + 1} of ${S.party.list.length} · ` : '') + ((CATEGORIES.find(c => c.id === d.cat) || {}).name || ''),
         ready: humans().filter(p => !p.cam || camFits()).map(p => ({ n: p.name, c: p.color, av: p.cam ? '📷' : p.avatar, ok: p.cam || S.ready.has(p) })), left: Math.max(0, Math.round(introLeft * 4) / 4) };
     }
@@ -404,6 +407,7 @@
     if (S.state !== 'home') return;
     const { x, y } = toGame(e), k = NativeShell.pick(x, y);
     if (k >= 1000) { focus = { r: ((k - 1000) / 100) | 0, c: (k - 1000) % 100 }; applyFocus(true); activate(); }
+    else if (k >= 500 && k < 600) { colMemo[focus.r] = focus.c; const r = k - 500; focus = { r, c: Math.min(colMemo[r] || 0, rowsData[r].items.length - 1) }; SFX.blip(); applyFocus(true); }
     else if (k === 2) $('#heroPlay').click();
     else if (k === 3) startParty();
   });

@@ -16,6 +16,12 @@ EM_JS(void, js_shake, (float a), { if (Module.game) Module.game.c.shake(a); });
 EM_JS(void, js_banner, (const char* s, int ms, const char* c), { if (Module.game) Module.game.banner(UTF8ToString(s), ms, UTF8ToString(c)); });
 EM_JS(void, js_buzz, (int pid, int ms), { if (Module.game) Module.game.buzz(pid, ms); });
 EM_JS(void, js_send, (int pid, const char* s), { if (Module.game && Module.game.sendTo) Module.game.sendTo(pid, UTF8ToString(s)); });
+EM_JS(void, js_img, (const char* k, float x, float y, float w, float h, float r, float a, float pan, float zoom), {
+  if (Module.game) Module.game.texts.push(['img', UTF8ToString(k), x, y, w, h, r, a, pan, zoom]);
+});
+EM_JS(void, js_rr, (float x, float y, float w, float h, float r, int f1, int f2, int st, float lw, int grad, int gold), {
+  if (Module.game) Module.game.texts.push(['rr', x, y, w, h, r, f1 >>> 0, f2 >>> 0, st >>> 0, lw, grad, gold]);
+});
 EM_JS(void, js_finish, (const char* s), { if (Module.game) Module.game.finish(UTF8ToString(s)); });
 
 void Text(float x, float y, float size, Color c, const std::string& s, int align, int style, float w) { if (c.a == 0 || s.empty()) return; js_text(x, y, size, (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a), s.c_str(), align, style, w); }
@@ -29,6 +35,9 @@ void Finish(const std::string& r) { js_finish(r.c_str()); }
 void Banner(const std::string& s, int ms, const char* c) { js_banner(s.c_str(), ms, c); }
 void Buzz(int pid, int ms) { js_buzz(pid, ms); }
 void Send(int pid, const std::string& json) { js_send(pid, json.c_str()); }
+static int RGBA(Color c) { return (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a); }
+void Img(const std::string& k, float x, float y, float w, float h, float r, float a, float pan, float zoom) { if (a > 0.005f) js_img(k.c_str(), x, y, w, h, r, a, pan, zoom); }
+void RRect(float x, float y, float w, float h, float r, Color f1, Color f2, Color st, float lw, bool grad, bool gold) { js_rr(x, y, w, h, r, RGBA(f1), RGBA(f2), RGBA(st), lw, grad, gold); }
 
 Color ParseColor(const std::string& hex) { unsigned v = 0x888888; if (hex.size() >= 7 && hex[0] == '#') v = (unsigned)strtoul(hex.substr(1, 6).c_str(), nullptr, 16); return Hex(v); }
 

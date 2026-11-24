@@ -125,6 +125,7 @@ const SFX = (() => {
     musicStop() { musicWanted = false; if (musicS && ac) { musicS.g.gain.cancelScheduledValues(ac.currentTime); musicS.g.gain.setValueAtTime(0, ac.currentTime); } },
     audio() { if (!ac) init(); return ac; },
     musicOff() { musicWanted = false; if (musicS && ac) musicS.g.gain.setTargetAtTime(0, ac.currentTime, 0.4); },
+    musicMuted() { return musicMuted; },
     toggleMusic() { musicMuted = !musicMuted; if (musicMuted) { const w = musicWanted; SFX.musicOff(); musicWanted = w; } else if (musicWanted) SFX.musicOn(); return !musicMuted; },
     cheer(k = 1) { if (play('cheer', 1.4 * Math.min(1.3, k + 0.3))) return; bandNoise(2.2 * k + 0.6, 0.55 * k, 1100, 0.7, 0.35); bandNoise(1.6 * k, 0.3 * k, 2600, 1.2, 0.2); },
     ooh() { if (!ac) return; if (play('ooh', 1.6)) return; for (let i = 0; i < 6; i++) tone(180 + Math.random() * 120, 0.9, 'sine', 0.05, 0.75, i * 0.02); bandNoise(0.9, 0.18, 500, 1.5, 0.2); },
