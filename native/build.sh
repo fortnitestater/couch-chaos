@@ -18,6 +18,6 @@ fi
 echo "building games..."
 em++ src/*.cpp -o ../native-games.js -std=c++17 -O2 -I$RL -Lbuild -lraylib \
   -DPLATFORM_WEB -sUSE_GLFW=3 -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_NAME=CCNative \
-  -sEXPORTED_FUNCTIONS=_cc_init,_cc_start,_cc_input,_cc_act,_cc_frame,_cc_stop,_cc_shell,_cc_shell_pick,_cc_shell_frame,_main \
+  -sEXPORTED_FUNCTIONS=_cc_init,_cc_start,_cc_input,_cc_act,_cc_frame,_cc_stop,_cc_shell,_cc_shell_pick,_cc_shell_frame,_cc_dbg,_main \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap -sENVIRONMENT=web -sFILESYSTEM=0 -sGL_ENABLE_GET_PROC_ADDRESS=1
 ls -la ../native-games.*

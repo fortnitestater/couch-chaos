@@ -2,6 +2,7 @@
 #include "cc.h"
 #include <emscripten/emscripten.h>
 #include <sstream>
+#include "rlgl.h"
 
 // ---------- JS side of the bridge (Module.game is the NativeGame adapter in tv.js) ----------
 EM_JS(void, js_text, (float x, float y, float size, int rgba, const char* s, int align, int style, float w), {
@@ -40,7 +41,7 @@ precision mediump float;
 varying vec3 vN; varying vec3 vW; varying vec2 vUV;
 uniform sampler2D texture0; uniform vec4 colDiffuse; uniform vec3 lightDir; uniform vec3 camPos; uniform vec3 fogColor; uniform float fogDensity; uniform float ambient;
 void main() {
-  vec4 tc = texture2D(texture0, vUV) * colDiffuse;
+  vec4 tc = colDiffuse; // untextured: never depends on whatever texture is bound
   vec3 n = normalize(vN); vec3 L = normalize(-lightDir);
   float d = max(dot(n, L), 0.0);
   vec3 V = normalize(camPos - vW); vec3 Hh = normalize(V + L);
@@ -62,7 +63,7 @@ void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
   SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCam, &cam.position, SHADER_UNIFORM_VEC3);
   SetShaderValue(shader, locFog, &fogColor, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locFogD, &fogDensity, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locAmb, &amb, SHADER_UNIFORM_FLOAT);
 }
-void Lit::Draw(const Mesh& m, Matrix t, Color c) { mat.maps[MATERIAL_MAP_DIFFUSE].color = c; DrawMesh(m, mat, t); }
+void Lit::Draw(const Mesh& m, Matrix t, Color c) { mat.maps[MATERIAL_MAP_DIFFUSE].color = c; rlDisableBackfaceCulling(); DrawMesh(m, mat, t); }
 void Prims::Init() { cube = GenMeshCube(1, 1, 1); sphere = GenMeshSphere(0.5f, 14, 18); cyl = GenMeshCylinder(0.5f, 1, 18); cone = GenMeshCone(0.5f, 1, 18); plane = GenMeshPlane(1, 1, 1, 1); }
 Matrix TRS(Vector3 pos, Vector3 r, Vector3 s) {
   Matrix m = MatrixScale(s.x, s.y, s.z);
@@ -72,29 +73,32 @@ Matrix TRS(Vector3 pos, Vector3 r, Vector3 s) {
 
 // ---------- particles ----------
 void Particles3D::Burst(Vector3 at, int n, Color c, float sp, float life, float size, float grav) {
-  for (int i = 0; i < n && l.size() < 1400; i++) {
+  for (int i = 0; i < n && l.size() < 700; i++) {
     Vector3 d = Vector3Normalize({ frand(-1, 1), frand(-1, 1), frand(-1, 1) });
     l.push_back({ at, Vector3Scale(d, sp * frand(0.25f, 1)), life * frand(0.6f, 1.1f), life, size * frand(0.6f, 1.3f), c, 2.2f, grav });
   }
 }
-void Particles3D::Puff(Vector3 at, Color c, float size, float life, Vector3 v) { if (l.size() < 1400) l.push_back({ at, v, life, life, size, c, 1.0f, -0.6f }); }
+void Particles3D::Puff(Vector3 at, Color c, float size, float life, Vector3 v) { if (l.size() < 700) l.push_back({ at, v, life, life, size, c, 1.0f, -0.6f }); }
 void Particles3D::Update(float dt) {
   for (auto& p : l) { float k = expf(-p.drag * dt); p.v = Vector3Scale(p.v, k); p.v.y -= p.grav * dt; p.p = Vector3Add(p.p, Vector3Scale(p.v, dt)); p.life -= dt; }
   l.erase(std::remove_if(l.begin(), l.end(), [](const Particle& p) { return p.life <= 0; }), l.end());
 }
 void Particles3D::Draw() {
-  for (auto& p : l) { float t = p.life / p.max; Color c = p.c; c.a = (unsigned char)(c.a * fminf(1, t * 1.6f)); DrawSphereEx(p.p, p.size * (0.4f + 0.6f * t), 5, 6, c); }
+  for (auto& p : l) { float t = p.life / p.max; Color c = p.c; c.a = (unsigned char)(c.a * fminf(1, t * 1.6f)); float r = p.size * (0.4f + 0.6f * t) * 2; lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(r, r, r), MatrixTranslate(p.p.x, p.p.y, p.p.z)), c); }
 }
 
 // ---------- registry + exported API ----------
 static std::vector<Player> players;
 static std::unique_ptr<Game> game;
 
+int g_dbg = 0;
 extern "C" {
+EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) { g_dbg = m; }
 EMSCRIPTEN_KEEPALIVE void cc_init() {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
   InitWindow(W, H, "Couch Chaos");
   lit.Init(); prim.Init(); UI::Init();
+  rlSetClipPlanes(0.3, 600); // better depth precision = no z-fighting
 }
 // players: "name|#rrggbb|bot;name|#rrggbb|bot;..."
 EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
@@ -109,6 +113,8 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
   std::string g = id;
   game.reset();
   if (g == "skybrawl") game = MakeSkyBrawl();
+  else if (g == "sumo") game = MakeSumo();
+  else if (g == "snowball") game = MakeSnowball();
   if (game) { game->ps = &players; game->Start(); }
 }
 EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {
@@ -122,6 +128,7 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   game->Update(dt);
   for (auto& p : players) { p.pa = p.a; p.pb = p.b; }
   BeginDrawing();
+  rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)
   game->Draw();
   EndDrawing();
 }

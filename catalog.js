@@ -17,7 +17,7 @@ const GAMES = [
     desc: 'Everyone bats at the same pitch! Time your swing to blast it out of the stadium.', how: ['TILT to aim at left / right field 🎯', 'SWING the phone as the ring closes on the plate', 'Farthest total distance wins'], make: c => new HomeRunDerby(c) },
   // ❄️ winter
   { id: 'snowball', cat: 'winter', name: 'Snowball Fight', emoji: '☃️', art: ['#74c0fc', '#1864ab'], ctrl: 'move', players: '2-8', mins: 2,
-    desc: 'Pelt your family with snowballs and hide behind snow forts.', how: ['Move with the stick, tilt or WASD', 'THROW fires where you aim', 'Most hits in 75 seconds wins'], make: c => new SnowballFight(c) },
+    desc: 'Pelt your family with snowballs and hide behind snow forts.', how: ['Move with the stick, tilt or WASD', 'THROW fires where you aim', 'Most hits in 75 seconds wins'], make: c => new NativeGame(c, 'snowball') },
   { id: 'ski', cat: 'winter', name: 'Ski Slalom', emoji: '⛷️', art: ['#a5d8ff', '#4263eb'], ctrl: 'move', players: '1-8', mins: 1,
     desc: 'Race downhill through the flag gates — dodge the pine trees!', how: ['Steer left / right', 'Pass between the flags for points', 'Trees knock you over'], make: c => new SkiSlalom(c) },
   { id: 'hockey', cat: 'winter', name: 'Ice Hockey', emoji: '🏒', art: ['#4dabf7', '#c92a2a'], ctrl: 'move', players: '2-8', mins: 2,
@@ -25,7 +25,7 @@ const GAMES = [
   { id: 'curling', cat: 'winter', name: 'Snow Curling', emoji: '🥌', art: ['#e7f5ff', '#1c7ed6'], ctrl: 'tap', players: '2-8', mins: 3,
     desc: 'Take turns sliding stones to the target. Knock others away!', how: ['Tap to lock your aim', 'Tap again to set the power', 'Tap like crazy to SWEEP'], make: c => new SnowCurling(c) },
   { id: 'sumo', cat: 'winter', name: 'Iceberg Sumo', emoji: '🧊', art: ['#99e9f2', '#0b7285'], ctrl: 'move', players: '2-8', mins: 2,
-    desc: 'Shove everyone off a melting iceberg into the freezing sea.', how: ['Move to push, DASH to ram', 'Hold HEAVY to become unpushable', 'Last one standing wins the round'], make: c => new Sumo(c) },
+    desc: 'Shove everyone off a melting iceberg into the freezing sea.', how: ['Move to push, DASH to ram', 'Hold HEAVY to become unpushable', 'Last one standing wins the round'], make: c => new NativeGame(c, 'sumo') },
   { id: 'frozen', cat: 'winter', name: 'Frozen Lake', emoji: '🌊', art: ['#d0ebff', '#0b4f8a'], ctrl: 'move', players: '2-8', mins: 2,
     desc: 'The ice is cracking! Red tiles break — stay on solid ice.', how: ['Move around the lake', 'Red cracked tiles are about to break', 'Last one dry wins'], make: c => new FrozenLake(c) },
   { id: 'sled', cat: 'winter', name: 'Sled Dash', emoji: '🛷', art: ['#ffffff', '#5c7cfa'], ctrl: 'shake', players: '1-8', mins: 1,

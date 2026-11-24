@@ -3,6 +3,7 @@
 #include "cc.h"
 #include <emscripten/emscripten.h>
 #include <map>
+#include "rlgl.h"
 
 namespace {
 J D;                          // latest snapshot
@@ -303,7 +304,7 @@ EMSCRIPTEN_KEEPALIVE void cc_shell_frame(float dt) {
   hits.clear();
   bg.Update(dt);
   BeginDrawing();
-  ClearBackground(Hex(0x070b24));
+  rlEnableDepthMask(); ClearBackground(Hex(0x070b24));
   if (shown == "results") DrawResults(a, dt);
   else {
     cam.fovy = 50;

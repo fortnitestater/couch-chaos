@@ -94,4 +94,6 @@ struct Game {
   virtual void Act(int pid, const std::string& kind, int i, float p) {}
 };
 std::unique_ptr<Game> MakeSkyBrawl();
+std::unique_ptr<Game> MakeSumo();
+std::unique_ptr<Game> MakeSnowball();
 #include "json.h"
