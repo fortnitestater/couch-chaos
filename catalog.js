@@ -79,7 +79,7 @@ const GAMES = [
     desc: 'Fast sums for the whole family. Gets harder each round.', how: ['Solve the sum on the TV', 'Tap the answer', 'Fastest wins'], make: c => new QuickMath(c) },
   // ⚡ action
   { id: 'sky', cat: 'action', name: 'Sky Brawl', emoji: '✈️', art: ['#4dabff', '#1864ab'], ctrl: 'move', players: '1-8', mins: 2,
-    desc: 'Fighter-plane dogfight with power-ups and crazy sky events.', how: ['Steer left / right (tilt works great)', 'FIRE and BOOST', 'Most knockouts wins'], make: c => new SkyBrawl(c) },
+    desc: 'Fighter-plane dogfight with power-ups and crazy sky events.', how: ['Steer left / right (tilt works great)', 'FIRE and BOOST', 'Most knockouts wins'], make: c => new NativeGame(c, 'skybrawl') },
   { id: 'trails', cat: 'action', name: 'Light Trails', emoji: '🏍️', art: ['#22d3ee', '#05030f'], ctrl: 'move', players: '2-8', mins: 2,
     desc: 'Neon bikes leave walls behind them. Trap your family!', how: ['Steer left / right', 'Never touch any trail', 'Last rider wins the round'], make: c => new LightTrails(c) },
   { id: 'paint', cat: 'action', name: 'Paint Wars', emoji: '🖌️', art: ['#ff8787', '#7048e8'], ctrl: 'move', players: '2-8', mins: 1,
