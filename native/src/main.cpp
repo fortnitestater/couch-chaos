@@ -4,9 +4,11 @@
 #include <sstream>
 
 // ---------- JS side of the bridge (Module.game is the NativeGame adapter in tv.js) ----------
-EM_JS(void, js_text, (float x, float y, float size, int rgba, const char* s, int align), {
-  if (Module.game) Module.game.texts.push([x, y, size, rgba >>> 0, UTF8ToString(s), align]);
+EM_JS(void, js_text, (float x, float y, float size, int rgba, const char* s, int align, int style, float w), {
+  if (Module.game) Module.game.texts.push([x, y, size, rgba >>> 0, UTF8ToString(s), align, style, w]);
 });
+EM_JS(void, js_clip, (float x, float y, float w, float h), { if (Module.game) Module.game.texts.push(['clip', x, y, w, h]); });
+EM_JS(float, js_measure, (const char* s, float size, int style), { return Module.measure ? Module.measure(UTF8ToString(s), size, style) : UTF8ToString(s).length * size * 0.55; });
 EM_JS(void, js_layout, (int pid, const char* json), { if (Module.game) Module.game.layout(pid, UTF8ToString(json)); });
 EM_JS(void, js_sfx, (const char* s), { if (Module.game) Module.game.sfx(UTF8ToString(s)); });
 EM_JS(void, js_shake, (float a), { if (Module.game) Module.game.c.shake(a); });
@@ -14,7 +16,10 @@ EM_JS(void, js_banner, (const char* s, int ms, const char* c), { if (Module.game
 EM_JS(void, js_buzz, (int pid, int ms), { if (Module.game) Module.game.buzz(pid, ms); });
 EM_JS(void, js_finish, (const char* s), { if (Module.game) Module.game.finish(UTF8ToString(s)); });
 
-void Text(float x, float y, float size, Color c, const std::string& s, int align) { js_text(x, y, size, (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a), s.c_str(), align); }
+void Text(float x, float y, float size, Color c, const std::string& s, int align, int style, float w) { if (c.a == 0 || s.empty()) return; js_text(x, y, size, (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a), s.c_str(), align, style, w); }
+float Measure(const std::string& s, float size, int style) { return js_measure(s.c_str(), size, style); }
+void TextClip(float x, float y, float w, float h) { js_clip(x, y, w, h); }
+void TextUnclip() { js_clip(-1, -1, -1, -1); }
 void Layout(int pid, const std::string& json) { js_layout(pid, json.c_str()); }
 void Sfx(const char* name) { js_sfx(name); }
 void Shake(float a) { js_shake(a); }
@@ -89,7 +94,7 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE void cc_init() {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
   InitWindow(W, H, "Couch Chaos");
-  lit.Init(); prim.Init();
+  lit.Init(); prim.Init(); UI::Init();
 }
 // players: "name|#rrggbb|bot;name|#rrggbb|bot;..."
 EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {

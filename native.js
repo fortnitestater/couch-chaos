@@ -1,7 +1,15 @@
-/* Couch Chaos — bridge to the native games (C++ / raylib compiled to WebAssembly, native-games.wasm).
-   The C++ side draws the game into its own WebGL canvas; we copy it onto the TV canvas each frame,
-   then draw the C++ text requests with the site fonts (so emoji + names look right). */
-const NATIVE = (() => { const src = (document.currentScript && document.currentScript.src) || ''; return { mod: null, loading: null, cv: null, base: src.replace(/[?#].*$/, '').replace(/[^/]*$/, ''), v: (src.match(/[?&]v=(\w+)/) || [])[1] || Date.now() }; })();
+/* Couch Chaos — bridge to the native engine (C++ / raylib compiled to WebAssembly, native-games.wasm).
+   C++ draws the console shell and the games into its own WebGL canvas; we copy that onto the TV canvas,
+   then draw C++'s text requests with the site fonts (emoji + names look right). */
+const NATIVE = (() => {
+  const src = (document.currentScript && document.currentScript.src) || '';
+  return { mod: null, loading: null, cv: null, base: src.replace(/[?#].*$/, '').replace(/[^/]*$/, ''), v: (src.match(/[?&]v=(\w+)/) || [])[1] || Date.now() };
+})();
+const _mctx = document.createElement('canvas').getContext('2d');
+function nativeFont(size, style) {
+  const w = style & 16 ? 800 : style & 8 ? 500 : 700;
+  return style & 1 ? `700 ${size}px Fredoka, Inter, system-ui, sans-serif` : `${w} ${size}px Inter, system-ui, sans-serif`;
+}
 function nativeLoad() {
   if (NATIVE.loading) return NATIVE.loading;
   const cv = NATIVE.cv = document.createElement('canvas');
@@ -11,13 +19,59 @@ function nativeLoad() {
   NATIVE.loading = new Promise((ok, bad) => {
     const s = document.createElement('script'); s.src = NATIVE.base + 'native-games.js?v=' + NATIVE.v;
     s.onload = () => CCNative({ canvas: cv, print() {}, printErr: e => console.warn('[native]', e), locateFile: f => NATIVE.base + f + '?v=' + NATIVE.v })
-      .then(m => { NATIVE.mod = m; m._cc_init(); ok(m); }, bad);
+      .then(m => {
+        m.measure = (s, size, style) => { _mctx.font = nativeFont(size, style); return _mctx.measureText(s).width; };
+        NATIVE.mod = m; m._cc_init(); ok(m);
+      }, bad);
     s.onerror = bad; document.head.appendChild(s);
   });
   NATIVE.loading.catch(() => { NATIVE.loading = null; });
   return NATIVE.loading;
 }
+function nativeWrap(g, s, maxW) { const out = []; let line = ''; for (const w of String(s).split(' ')) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } if (line) out.push(line); return out; }
+// draws the native frame + its text list onto a 2D canvas (in 1600x900 space)
+function nativeBlit(g, texts) {
+  g.drawImage(NATIVE.cv, 0, 0, 1600, 900);
+  let clipped = false;
+  for (const t of texts) {
+    if (t[0] === 'clip') {
+      if (clipped) { g.restore(); clipped = false; }
+      if (t[3] > 0) { g.save(); g.beginPath(); g.rect(t[1], t[2], t[3], t[4]); g.clip(); clipped = true; }
+      continue;
+    }
+    const [x, y, s, c, str, al, style = 0, w = 0] = t;
+    const col = `rgba(${c >>> 24},${(c >> 16) & 255},${(c >> 8) & 255},${(c & 255) / 255})`;
+    if (!style) { txt(g, str, x, y, s, col, al < 0 ? 'left' : al > 0 ? 'right' : 'center', 'Nunito'); continue; }
+    g.save();
+    g.font = nativeFont(s, style); g.textAlign = al < 0 ? 'left' : al > 0 ? 'right' : 'center'; g.textBaseline = 'middle';
+    const lines = w > 0 ? nativeWrap(g, str, w) : [str], lh = s * 1.3;
+    if (style & 4) { g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = s * 0.35; g.shadowOffsetY = s * 0.08; }
+    if (!(style & 2)) { g.lineJoin = 'round'; g.lineWidth = Math.max(3, s / 6); g.strokeStyle = 'rgba(14,10,36,.8)'; }
+    g.fillStyle = col;
+    lines.forEach((ln, i) => { const yy = y + i * lh; if (!(style & 2)) g.strokeText(ln, x, yy); g.fillText(ln, x, yy); });
+    g.restore();
+  }
+  if (clipped) g.restore();
+}
 
+// ---------- the console shell ----------
+const NativeShell = {
+  texts: [], last: '',
+  ready: () => !!NATIVE.mod,
+  frame(dt, snapshot, g) {
+    const m = NATIVE.mod; if (!m) return false;
+    const js = JSON.stringify(snapshot);
+    m.game = this;
+    if (js !== this.last) { this.last = js; m.ccall('cc_shell', null, ['string'], [js]); }
+    this.texts.length = 0;
+    m._cc_shell_frame(dt);
+    nativeBlit(g, this.texts);
+    return true;
+  },
+  pick(x, y) { return NATIVE.mod ? NATIVE.mod._cc_shell_pick(x, y) : 0; },
+};
+
+// ---------- a game running in C++ ----------
 class NativeGame {
   constructor(c, id) { this.c = c; this.id = id; this.texts = []; this.ready = false; this.t = 0; }
   start() {
@@ -46,9 +100,7 @@ class NativeGame {
       g.beginPath(); g.arc(800, 540, 26, this.t * 5, this.t * 5 + 4); g.stroke();
       return;
     }
-    g.drawImage(NATIVE.cv, 0, 0, 1600, 900);
-    for (const [x, y, s, c, str, al] of this.texts)
-      txt(g, str, x, y, s, `rgba(${c >>> 24},${(c >> 16) & 255},${(c >> 8) & 255},${(c & 255) / 255})`, al < 0 ? 'left' : al > 0 ? 'right' : 'center', 'Nunito');
+    nativeBlit(g, this.texts);
   }
   onAct(p, m) { const i = this.ps.indexOf(p); if (i >= 0 && this.ready) NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, String(m.a || ''), +m.i || 0, +m.p || 0]); }
   // ---- called from C++ ----

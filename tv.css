@@ -122,3 +122,8 @@ body.tv { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transparen
 
 /* AI camera picture-in-picture */
 #camView { position: fixed; right: 1.5vw; bottom: 4.5vh; width: 22vw; aspect-ratio: 4/3; height: auto; z-index: 6; border-radius: 1.6vh; border: 2px solid rgba(165,216,255,.4); box-shadow: 0 1vh 4vh rgba(0,0,0,.5); }
+
+/* native C++ console shell takes over the menus */
+body.nativeOS #home, body.nativeOS #intro, body.nativeOS #results, body.nativeOS #snow { display: none !important; }
+body.nativeOS #cv { display: block !important; }
+body.nativeOS #start { opacity: 0; }

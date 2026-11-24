@@ -13,7 +13,12 @@
 constexpr int W = 1600, H = 900;
 
 // ---------- bridge to the website ----------
-void Text(float x, float y, float size, Color c, const std::string& s, int align = 0); // align: 0 center, -1 left, 1 right
+// Text is drawn by the website with real fonts (emoji, names). align: 0 center, -1 left, 1 right. wrapW > 0 wraps lines.
+enum { TS_DISPLAY = 1, TS_PLAIN = 2, TS_SHADOW = 4, TS_LIGHT = 8, TS_HEAVY = 16 };
+void Text(float x, float y, float size, Color c, const std::string& s, int align = 0, int style = 0, float wrapW = 0);
+float Measure(const std::string& s, float size, int style = 0);
+void TextClip(float x, float y, float w, float h);
+void TextUnclip();
 void Layout(int pid, const std::string& json);  // pid -1 = everyone: what each phone shows
 void Sfx(const char* name);
 void Shake(float amount);
@@ -53,6 +58,31 @@ struct Particles3D {
   void Draw();
 };
 
+// ---------- UI kit (art.cpp) ----------
+namespace UI {
+  void Init();
+  void Box(Rectangle r, float rad, Color c1, Color c2, float angleDeg = 90, Color border = BLANK, float bw = 0);
+  inline void Box(Rectangle r, float rad, Color c) { Box(r, rad, c, c); }
+  void Shadow(Rectangle r, float rad, float blur, Color c, float dy = 0);
+  void Sky(Color top, Color bottom);
+}
+struct Spring { float x = 0, v = 0; void To(float t, float dt, float k = 190, float d = 21) { int n = 4; float h = dt / n; for (int i = 0; i < n; i++) { v += (k * (t - x) - d * v) * h; x += v * h; } } };
+inline float EaseOut(float t) { t = Clamp(t, 0, 1); return 1 - (1 - t) * (1 - t) * (1 - t); }
+inline float EaseBack(float t) { t = Clamp(t, 0, 1); float c = 1.7f; return 1 + (c + 1) * powf(t - 1, 3) + c * powf(t - 1, 2); }
+// cartoon character: hop = jump height, cheer 0..1 raises arms
+void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop = 0, float cheer = 0, float scale = 1);
+struct WinterBG {
+  struct Flake { Vector3 p; float s, w; };
+  std::vector<Flake> snow; std::vector<Vector4> trees, hills; float t = 0;
+  void Init(); void Update(float dt); void Draw(const Camera3D& cam, bool sky = true);
+};
+struct Confetti {
+  struct C { Vector3 p, v, r, w; Color c; float life; };
+  std::vector<C> l;
+  void Spawn(Vector3 at, int n, float spread, float up);
+  void Update(float dt); void Draw();
+};
+
 // ---------- games ----------
 struct Game {
   std::vector<Player>* ps = nullptr;
@@ -64,3 +94,4 @@ struct Game {
   virtual void Act(int pid, const std::string& kind, int i, float p) {}
 };
 std::unique_ptr<Game> MakeSkyBrawl();
+#include "json.h"

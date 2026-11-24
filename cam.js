@@ -36,7 +36,7 @@ window.CCCam = (() => {
     try {
       const vision = await import(MP + '/vision_bundle.mjs');
       const fs = await vision.FilesetResolver.forVisionTasks(MP + '/wasm');
-      const opts = (delegate) => ({ baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: 'VIDEO', numPoses: 4, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5 });
+      const opts = (delegate) => ({ baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: 'IMAGE', numPoses: 4, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
       try { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('GPU')); } catch (e) { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('CPU')); }
       if (!st.camErr) stat('Looking for players…');
     } catch (e) { console.error(e); stat('⚠️ Could not load the AI. Check the internet and try again.'); return; }
@@ -63,26 +63,37 @@ window.CCCam = (() => {
     if (!st || !st.run) return;
     requestAnimationFrame(loop);
     const v = st.v, now = performance.now();
-    if (!st.lm || v.readyState < 2 || now - st.lastT < 45) return; // ~20 fps is plenty and saves battery
+    if (!st.lm || v.readyState < 2 || now - st.lastT < 55) return; // ~18 fps; every frame is a full multi-person detection
     const dt = Math.min(0.2, (now - (st.lastT || now)) / 1000) || 0.05; st.lastT = now;
-    let res; try { res = st.lm.detectForVideo(v, now); } catch (e) { return; }
+    let res; try { res = st.lm.detect(v); } catch (e) { return; }
     st.frames++; if (now - st.fpsT > 1000) { st.fps = st.frames; st.frames = 0; st.fpsT = now; }
     track(res.landmarks || [], dt, now);
     draw();
   }
   // ---- turn bodies into controls ----
   function track(list, dt, now) {
-    const people = list.map(L => {
-      if (!L[11] || !L[12] || !L[23] || !L[24]) return null;
-      const sc = mid(L[11], L[12]), hc = mid(L[23], L[24]), torso = Math.max(0.06, dist(sc, hc));
-      return { L, sc, hc, torso, cx: (sc.x + hc.x) / 2 };
-    }).filter(Boolean).sort((a, b) => a.cx - b.cx);
+    const vis = l => l && (l.visibility == null || l.visibility > 0.35);
+    let people = list.map(L => {
+      if (!L[11] || !L[12] || !L[15] || !L[16]) return null;
+      const sc = mid(L[11], L[12]), sw = dist(L[11], L[12]);
+      // hips are often hidden (couch, table, other player): fall back to shoulder width
+      const hipsOk = vis(L[23]) && vis(L[24]);
+      const hc = hipsOk ? mid(L[23], L[24]) : { x: sc.x, y: sc.y + sw * 1.5 };
+      const torso = Math.max(0.05, hipsOk ? dist(sc, hc) : sw * 1.5);
+      return { L, sc, hc, torso, sw, cx: sc.x };
+    }).filter(Boolean);
+    // the detector sometimes reports one person twice: drop overlapping copies
+    people = people.filter((p, i) => !people.some((q, j) => j < i && Math.abs(q.cx - p.cx) < Math.max(0.04, Math.min(p.sw, q.sw) * 0.5) && Math.abs(q.sc.y - p.sc.y) < 0.08));
+    people.sort((a, b) => a.cx - b.cx);
     st.slots.forEach(s => (s.hit = false));
+    const pairs = [];
+    for (const p of people) for (const s of st.slots) { const d = Math.hypot(s.cx - p.cx, (s.cy || 0) - p.sc.y); if (d < 0.25) pairs.push({ p, s, d }); }
+    pairs.sort((a, b) => a.d - b.d);
+    for (const { p, s } of pairs) if (!p.slot && !s.hit) { p.slot = s; s.hit = true; }
     for (const p of people) { // keep the same slot for the same person (nearest by position)
-      let best = null, bd = 0.2;
-      for (const s of st.slots) { if (s.hit) continue; const d = Math.abs(s.cx - p.cx); if (d < bd) { bd = d; best = s; } }
+      let best = p.slot || null;
       if (!best) { const used = new Set(st.slots.map(s => s.id)); const id = [0, 1, 2, 3].find(i => !used.has(i)); if (id == null) continue; best = { id, aim: 0, lean: 0, lastSwing: 0, lastPump: 0, prev: null, vEma: [0, 0] }; st.slots.push(best); }
-      best.hit = true; best.seen = now; best.cx = p.cx; best.p = p;
+      best.hit = true; best.seen = now; best.cx = p.cx; best.cy = p.sc.y; best.p = p;
     }
     st.slots = st.slots.filter(s => now - s.seen < 1500);
     const out = [];

@@ -50,7 +50,8 @@
     $('#code').textContent = S.code; $('#codeSmall').textContent = S.code;
     $('#joinUrl').textContent = joinUrl().replace(/^https?:\/\//, '');
     const q = $('#qr'); q.innerHTML = '';
-    if (window.QRCode) new QRCode(q, { text: joinUrl(), width: 256, height: 256, colorDark: '#0a1024', colorLight: '#ffffff' });
+    if (window.QRCode) { const qc = new QRCode(q, { text: joinUrl(), width: 256, height: 256, colorDark: '#0a1024', colorLight: '#ffffff' });
+      try { const m = qc._oQRCode, n = m.getModuleCount(); let bits = ''; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) bits += m.isDark(r, c) ? '1' : '0'; S.qr = { n, m: bits }; } catch (e) {} }
   }
   function send(p, m) { if (p && !p.bot && p.conn && p.conn.open) { try { p.conn.send(m); } catch (e) {} } }
   // players = connected phones + people seen by the AI camera (the camera phone itself is not a player)
@@ -324,9 +325,11 @@
     $('#resKicker').textContent = S.party ? `🎉 PARTY GAME ${S.party.i + 1} OF ${S.party.list.length}` : 'RESULTS';
     $('#resTitle').textContent = `${S.def.emoji} ${S.def.name}`;
     renderPodium(results.slice(0, 3).map(r => ({ p: r.p, sub: r.stat })));
+    S.res = { k: $('#resKicker').textContent, title: `${S.def.emoji} ${S.def.name}`, pod: results.slice(0, 3).map(r => ({ n: r.p.name, av: r.p.avatar || '', c: r.p.color, sub: r.stat || '' })), list: results.slice(3).map(r => ({ n: r.p.name, av: r.p.avatar || '', c: r.p.color, st: r.stat || '' })) };
     $('#resList').innerHTML = results.slice(3).map((r, i) => `<li style="--c:${r.p.color}"><span class="pl">#${i + 4}</span><span>${r.p.avatar || ''} ${esc(r.p.name)}</span><span class="st">${esc(r.stat || '')}</span><span class="aw"></span></li>`).join('');
     const nxt = S.party && S.party.list[S.party.i + 1];
     $('#resFoot').textContent = nxt ? `Next up: ${nxt.emoji} ${nxt.name}…` : S.party ? 'And the party champion is…' : 'Back to the menu in a moment · VIP: OK to skip';
+    if (S.res) S.res.foot = $('#resFoot').textContent;
     show('results'); SFX.win(); confettiDom();
     clearTimeout(timer); timer = setTimeout(afterResults, 7000);
   }
@@ -345,6 +348,7 @@
       renderPodium(ranked.slice(0, 3).map(([p, v]) => ({ p, sub: `${v} party trophies` })));
       $('#resList').innerHTML = ranked.slice(3).map(([p, v], i) => `<li style="--c:${p.color}"><span class="pl">#${i + 4}</span><span>${p.avatar} ${esc(p.name)}</span><span class="st">${v} trophies</span><span></span></li>`).join('');
       $('#resFoot').textContent = 'What a party! Back to the menu soon…';
+      S.res = { k: '🎉 PARTY MODE COMPLETE', title: '👑 PARTY CHAMPION', pod: ranked.slice(0, 3).map(([p, v]) => ({ n: p.name, av: p.avatar, c: p.color, sub: `${v} party trophies` })), list: ranked.slice(3).map(([p, v]) => ({ n: p.name, av: p.avatar, c: p.color, st: `${v} trophies` })), foot: 'What a party! Back to the menu soon…', id: Date.now() };
       S.party = null; SFX.win(); timer = setTimeout(toHome, 9000);
       return;
     }
@@ -357,6 +361,49 @@
     show('home'); renderPlayers(); sendLobby();
   }
 
+  // ---------- native console shell (C++) ----------
+  nativeLoad().catch(e => console.warn('native shell unavailable, using the HTML menu', e));
+  function shellSnap() {
+    const st = S.state === 'boot' ? 'boot' : S.state;
+    const o = { st, code: S.code || '····', url: S.code ? joinUrl().replace(/^https?:\/\//, '') : '', net: ($('#netStatus') || {}).textContent || '', clock: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    const v = vip();
+    o.players = S.players.filter(p => p.connected || !p.cam).map(p => ({ n: p.name, c: p.color, av: p.avatar, vip: p === v, away: !p.connected, cam: !!p.isCam }));
+    if (st === 'home') {
+      o.qr = S.qr || null;
+      o.rows = rowsData.map(r => ({ name: r.name, items: r.items.map(gm => ({ id: gm.id, n: gm.name, e: gm.emoji, a1: gm.art[0], a2: gm.art[1], ctrl: CTRL_LABEL[gm.ctrl] || '', sp: gm.id[0] === '_', rec: !!gm._rec })) }));
+      o.f = [focus.r, focus.c];
+      const d = heroDef;
+      if (d) o.hero = { id: d.id, n: d.name, e: d.emoji, d: d.desc, a1: d.art[0], a2: d.art[1], cat: d.cat === 'quick' ? 'QUICK PLAY' : ((CATEGORIES.find(c => c.id === d.cat) || {}).name || '').toUpperCase(), ctrl: CTRL_LABEL[d.ctrl] || '', pl: `👥 ${d.players} players`, mins: `⏱️ ~${d.mins} min` };
+    }
+    if (st === 'intro' && S.def) {
+      const d = S.def;
+      o.intro = { n: d.name, e: d.emoji, a1: d.art[0], a2: d.art[1], ctrl: CTRL_LABEL[d.ctrl] || '', how: d.how,
+        cat: (S.party ? `🎉 Party game ${S.party.i + 1} of ${S.party.list.length} · ` : '') + ((CATEGORIES.find(c => c.id === d.cat) || {}).name || ''),
+        ready: humans().filter(p => !p.cam || camFits()).map(p => ({ n: p.name, c: p.color, av: p.cam ? '📷' : p.avatar, ok: p.cam || S.ready.has(p) })), left: Math.max(0, Math.round(introLeft * 4) / 4) };
+    }
+    if (st === 'results') o.res = S.res;
+    return o;
+  }
+  const toGame = e => { const r = cv.getBoundingClientRect(), dpr = cv.width / r.width; return { x: ((e.clientX - r.left) * dpr - view.ox) / view.s, y: ((e.clientY - r.top) * dpr - view.oy) / view.s }; };
+  let lastHover = 0;
+  cv.addEventListener('mousemove', e => {
+    if (S.state !== 'home' || !NativeShell.ready()) return;
+    const { x, y } = toGame(e), k = NativeShell.pick(x, y);
+    if (k >= 1000 && k !== lastHover) { lastHover = k; focus = { r: ((k - 1000) / 100) | 0, c: (k - 1000) % 100 }; applyFocus(true); }
+  });
+  cv.addEventListener('click', e => {
+    if (!NativeShell.ready()) return;
+    if (S.state === 'boot') return boot();
+    if (S.state === 'intro') return nav('ok');
+    if (S.state === 'results') return nav('ok');
+    if (S.state !== 'home') return;
+    const { x, y } = toGame(e), k = NativeShell.pick(x, y);
+    if (k >= 1000) { focus = { r: ((k - 1000) / 100) | 0, c: (k - 1000) % 100 }; applyFocus(true); activate(); }
+    else if (k === 2) $('#heroPlay').click();
+    else if (k === 3) startParty();
+  });
+
+  if (/[?&]debug/.test(location.search)) window.CCDBG = { S, startIntro, launch, endGame, toHome, humans, makeCtx };
   // ---------- render loop ----------
   function fit() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -384,7 +431,15 @@
       introLeft -= dt; $('#introTimer').textContent = `Starting in ${Math.max(0, Math.ceil(introLeft))}s`;
       if (introLeft <= 0) launchSoon(0);
     }
-    if (S.game && (S.state === 'game' || S.state === 'results')) {
+    const shellOn = NativeShell.ready() && (S.state === 'boot' || S.state === 'home' || S.state === 'intro' || (S.state === 'results' && S.res));
+    document.body.classList.toggle('nativeOS', NativeShell.ready());
+    if (shellOn) {
+      try {
+        g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+        g.setTransform(view.s, 0, 0, view.s, view.ox, view.oy);
+        NativeShell.frame(dt, shellSnap(), g);
+      } catch (err) { console.error(err); }
+    } else if (S.game && (S.state === 'game' || S.state === 'results')) {
       try {
         if (S.state === 'game') S.game.update(dt);
         g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
