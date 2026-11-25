@@ -1,6 +1,7 @@
 // SKY BRAWL — 3D dogfight over a tropical archipelago (raylib).
 // Simulation runs on a flat 1600x900 field (same feel as before); everything is drawn in 3D.
 #include "cc.h"
+#include "touch.h"
 #include <map>
 
 namespace {
@@ -31,6 +32,20 @@ struct SkyBrawl : Game {
   float T = 120, itemT = 3, eventT, evLeft = 0, rockT = 0, time = 0, camShake = 0; Ev ev = EV_NONE; bool done = false;
 
   Player& P(int pid) { return (*ps)[pid]; }
+  SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    std::vector<TouchObj> base;
+    for (auto& is : isles) base.push_back({ (is.p.x * 20 + 800) / 1600, (is.p.z * 20 + 450) / 900, is.r * 20 / 1600, Hex(0xe9d8a6), 11 });
+    for (auto& it : items) if (!it.dead) base.push_back({ it.x / 1600, it.y / 900, 22.f / 1600, ITEMS[it.k].c, 4 });
+    for (auto& r : rocks) if (r.hp > 0) base.push_back({ r.x / 1600, r.y / 900, r.r / 1600, Hex(0x8d6e63), 9 });
+    int ns = 0; for (auto& sh : shots) if (ns++ < 60) base.push_back({ sh.x / 1600, sh.y / 900, 4.f / 1600, sh.c, 12 });
+    for (auto& me : pl) {
+      if (P(me.pid).bot) continue; std::vector<TouchObj> o = base;
+      for (auto& q : pl) if (q.alive) o.push_back({ q.x / 1600, q.y / 900, 20 * Scale(q) / 1600, P(q.pid).color, q.pid == me.pid ? 1 : 3 });
+      SendSnap(me.pid, o, me.alive ? "✈️ " + std::to_string(me.kills) + " hits · " + std::string(me.hp >= 3 ? "❤️❤️❤️" : me.hp >= 2 ? "❤️❤️" : "❤️") : "💥 Shot down! Back in a moment…");
+    }
+  }
   float Scale(const Plane& p) { return 1.0f * (p.pow == MEGA ? 1.8f : 1) * (ev == TINY ? 0.55f : 1); }
   void Feed_(const std::string& s) { feed.insert(feed.begin(), { s, 4 }); if (feed.size() > 5) feed.resize(5); }
 
@@ -41,7 +56,7 @@ struct SkyBrawl : Game {
     // archipelago
     for (int i = 0; i < 40 && isles.size() < 7; i++) { Vector3 c = { frand(-44, 44), 0, frand(-26, 26) }; bool ok = true; for (auto& o : isles) if (Vector3Distance(c, o.p) < 16) ok = false; if (ok) isles.push_back({ c, frand(2.8f, 5.5f), frand(1.2f, 3.5f), (int)frand(1, 4.9f), frand(0, 100) }); }
     for (int i = 0; i < 8; i++) clouds.push_back({ { frand(-60, 60), frand(1.0f, 2.5f), frand(-30, 30) }, frand(1.6f, 3.0f), frand(0.6f, 1.6f) });
-    Layout(-1, R"({"name":"pad","stick":"x","a":"FIRE","b":"BOOST","hint":"Tilt, drag, or ← → to steer"})");
+    Layout(-1, TouchLayout("sea", 1600.f / 900.f, "go", "FIRE", "Tap where to fly. Your plane shoots by itself!", -1, "BOOST"));
     Banner("✈️ SKY BRAWL!", 1600, "#ffffff");
     cam.fovy = 46; cam.up = { 0, 1, 0 }; cam.projection = CAMERA_PERSPECTIVE;
   }
@@ -98,7 +113,7 @@ struct SkyBrawl : Game {
 
   void Update(float dt) override {
     if (done) return;
-    T -= dt; time += dt; fx.Update(dt); camShake = fmaxf(0, camShake - dt);
+    T -= dt; time += dt; fx.Update(dt); camShake = fmaxf(0, camShake - dt); Snap(dt);
     if (T <= 0) { End(); return; }
     for (auto& c : clouds) { c.p.x += c.s * dt; if (c.p.x > 62) { c.p.x = -62; c.p.z = frand(-35, 35); } }
     for (auto& f : feed) f.t -= dt;
@@ -122,6 +137,12 @@ struct SkyBrawl : Game {
       if (!p.alive) { p.respawn -= dt; if (p.respawn <= 0) Spawn(p); continue; }
       Player& who = P(p.pid);
       In in = who.bot ? Bot(p) : In{ who.stick.x, who.a, who.b };
+      if (!who.bot) {
+        if (who.touch) { Vector2 s = TouchAt(who); float tx = s.x * 1600, ty = s.y * 900; if (hypotf(tx - p.x, ty - p.y) > 20) in.x = Clamp(angDiff(p.ang, atan2f(ty - p.y, tx - p.x)) * 2.2f, -1, 1) * (ev == REVERSE ? -1 : 1); }
+        // auto-fire when someone is right in front of you
+        Plane* t = Nearest(p.x, p.y, p.pid);
+        if (t && hypotf(t->x - p.x, t->y - p.y) < 650 && fabsf(angDiff(p.ang, atan2f(t->y - p.y, t->x - p.x))) < 0.22f) in.a = true;
+      }
       float turn = Clamp(in.x, -1, 1); if (ev == REVERSE) turn = -turn;
       // soft arena edge: gently turn back toward the middle instead of teleporting
       float ox = fmaxf(0, fabsf(p.x - 800) - 720), oy = fmaxf(0, fabsf(p.y - 450) - 390);

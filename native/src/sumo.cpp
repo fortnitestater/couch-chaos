@@ -1,5 +1,6 @@
 // SUMO BLOBS — shove everyone off a shrinking ice floe into the freezing sea (3 rounds: normal, ice, mega bounce).
 #include "cc.h"
+#include "touch.h"
 
 namespace {
 constexpr float SC = 1 / 40.f;   // field px -> world units
@@ -10,10 +11,21 @@ struct Sumo : Game {
   int round = 0, mod = 0; float R = 420, t = 0, el = 0, time = 0, lastTick = 4, bannerT = 0; std::string phase;
   Player& P(int i) { return (*ps)[i]; }
   Vector3 W3(float x, float y, float h = 0) { return { (x - 800) * SC, h, (y - 480) * SC }; }
+  TouchBox TB{ 350, 30, 1250, 930 }; SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    for (size_t i = 0; i < ps->size(); i++) {
+      if (P((int)i).bot) continue; std::vector<TouchObj> o; Vector2 c = TB.P(800, 480);
+      o.push_back({ c.x, c.y, TB.R(R), Hex(0xe7f5ff), 11 });
+      for (auto& b : bl) if (b.alive) { Vector2 q = TB.P(b.x, b.y); o.push_back({ q.x, q.y, TB.R(b.r), b.heavy ? Shade(P(b.pid).color, -0.35f) : P(b.pid).color, b.pid == (int)i ? 1 : 3 }); }
+      bool me = false; for (auto& b : bl) if (b.pid == (int)i) me = b.alive;
+      SendSnap((int)i, o, "ROUND " + std::to_string(round) + " / 3 · " + (me ? "push them into the sea!" : "splash! wait for the next round"));
+    }
+  }
 
   void Start() override {
     pts.assign(ps->size(), 0);
-    Layout(-1, R"({"name":"pad","stick":"xy","a":"HEAVY","b":"DASH","hint":"Move: tilt / drag. Hold HEAVY to become a rock."})");
+    Layout(-1, TouchLayout("sea", 1, "go", "HEAVY", "Tap where to slide. DASH = shove, hold HEAVY = rock.", -1, "DASH"));
     cam.up = { 0, 1, 0 }; cam.fovy = 42; cam.projection = CAMERA_PERSPECTIVE;
     Next();
   }
@@ -34,7 +46,7 @@ struct Sumo : Game {
     return { dx, dy, false, t && bd < 140 && frand(0, 1) < 0.04f };
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     for (auto& b : bl) if (!b.alive) { b.sink += dt; b.x += b.vx * dt * 0.3f; b.y += b.vy * dt * 0.3f; }
     if (phase == "count") {
       t -= dt;
@@ -50,6 +62,13 @@ struct Sumo : Game {
       if (!b.alive) continue;
       Player& p = P(b.pid);
       In in = p.bot ? Bot(b) : In{ p.stick.x, p.stick.y, p.a, p.b };
+      if (!p.bot && p.touch) {  // slide toward the finger: steer the velocity so you stop on the spot
+        Vector2 t = TB.W(TouchAt(p)); float dx = t.x - b.x, dy = t.y - b.y, d = hypotf(dx, dy);
+        float want = d < 10 ? 0 : fminf(1, d / 140) * 430, wx = d > 0.1f ? dx / d * want : 0, wy = d > 0.1f ? dy / d * want : 0;
+        float ix = (wx - b.vx) / 260, iy = (wy - b.vy) / 260, il = hypotf(ix, iy); if (il > 1) { ix /= il; iy /= il; }
+        in.x = ix; in.y = iy;
+        if (in.b && d > 10) { in.x = dx / d; in.y = dy / d; }  // DASH goes where you point
+      }
       b.heavy = in.a; b.m = b.heavy ? 3.5f : 1;
       float ax = in.x, ay = in.y, l = hypotf(ax, ay); if (l > 1) { ax /= l; ay /= l; }
       float acc = (b.heavy ? 450.f : 1500.f) * (mod == 1 ? 0.6f : 1);

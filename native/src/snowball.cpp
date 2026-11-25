@@ -1,10 +1,11 @@
 // SNOWBALL FIGHT — arcing snowballs, snow forts to hide behind, most hits in 75 s wins.
 #include "cc.h"
+#include "touch.h"
 
 namespace {
 constexpr float SC = 1 / 40.f;
 const Rectangle BOX = { 60, 100, 1480, 770 };
-struct Kid { int pid; float x, y, vx = 0, vy = 0, r = 32, face, aim, cd = 0, tcd = 0, stun = 0, inv = 0, wind = 0; int hits = 0, bonks = 0; float bt = 0; Vector2 bi{}; bool ba = false, bb = false; };
+struct Kid { int pid; float x, y, vx = 0, vy = 0, r = 32, face, aim, cd = 0, tcd = 0, stun = 0, inv = 0, wind = 0; int hits = 0, bonks = 0; float bt = 0; Vector2 bi{}; bool ba = false, bb = false; Vector2 tl{ -1, -1 }; bool lock = false; float tq = -9; };
 struct Ball { float x, y, h, vx, vy, vh, life; int owner; };
 struct Fort { float x, y, r; };
 
@@ -14,6 +15,18 @@ struct Snowball : Game {
   float T = 75, cdT = 3.5f, el = 0, time = 0, lastTick = 4, overT = 0; bool over = false, done = false;
   Player& P(int i) { return (*ps)[i]; }
   Vector3 W3(float x, float y, float h = 0) { return { (x - 800) * SC, h, (y - 485) * SC }; }
+  TouchBox TB{ BOX.x, BOX.y, BOX.x + BOX.width, BOX.y + BOX.height }; SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    std::vector<TouchObj> base;
+    for (auto& f : forts) { Vector2 q = TB.P(f.x, f.y); base.push_back({ q.x, q.y, TB.R(f.r), Hex(0xf1f6ff), 9 }); }
+    for (auto& b : balls) { Vector2 q = TB.P(b.x, b.y); base.push_back({ q.x, q.y, TB.R(9), Hex(0x4dabff), 12 }); }
+    for (auto& me : k) {
+      if (P(me.pid).bot) continue; std::vector<TouchObj> o = base;
+      for (auto& b : k) { Vector2 q = TB.P(b.x, b.y); o.push_back({ q.x, q.y, TB.R(b.r), b.stun > 0 ? Hex(0xdee2e6) : P(b.pid).color, &b == &me ? 1 : 3 }); }
+      SendSnap(me.pid, o, "❄️ YOU: " + std::to_string(me.hits) + " hits" + (me.stun > 0 ? " · BONK!" : ""));
+    }
+  }
 
   void Start() override {
     int n = (int)ps->size();
@@ -25,14 +38,33 @@ struct Snowball : Game {
       if (ok) forts.push_back(f);
     }
     for (int i = 0; i < 70; i++) { float a = frand(0, 2 * PI); float x = cosf(a) * frand(23, 40), z = sinf(a) * frand(13.5f, 26); trees.push_back({ x, z, frand(1.4f, 2.8f), frand(0, 6) }); }
-    Layout(-1, R"({"name":"pad","stick":"xy","a":"THROW","b":"DASH","hint":"Move, then THROW where you face. Hide behind forts!"})");
+    Layout(-1, TouchLayout("snow", BOX.width / BOX.height, "go", "THROW", "Tap where to run. Tap a player to throw at them!", -1, "DASH"));
     cam.up = { 0, 1, 0 }; cam.fovy = 44; cam.projection = CAMERA_PERSPECTIVE;
     bg.Init();
   }
   struct In { float x, y; bool a, b; };
   In Input(Kid& b) {
     Player& p = P(b.pid);
-    if (!p.bot) return { p.stick.x, p.stick.y, p.a, p.b };
+    if (!p.bot) {
+      In r{ p.stick.x, p.stick.y, p.a, p.b };
+      if (!p.touch) { b.lock = false; b.tl = { -1, -1 }; }
+      else {
+        Vector2 s = TouchAt(p), t = TB.W(s);
+        if (!p.ptouch || hypotf(s.x - b.tl.x, s.y - b.tl.y) > 0.002f) {  // a new tap: on a player = throw at them, anywhere else = run there
+          Kid* h = nullptr; float hd = 90;
+          for (auto& o : k) if (&o != &b) { float d = hypotf(o.x - t.x, o.y - t.y); if (d < hd) { hd = d; h = &o; } }
+          b.lock = h != nullptr; if (h) { b.aim = atan2f(h->y - b.y, h->x - b.x); b.tq = el; }
+        }
+        b.tl = s;
+        if (b.lock) r.x = r.y = 0; else { Vector2 g = GoToward(b.x, b.y, t.x, t.y, 70); r.x = g.x; r.y = g.y; }
+      }
+      if (el - b.tq < 0.4f) r.a = true;
+      if (p.a && !b.lock) {  // THROW button: at the nearest player
+        Kid* h = nullptr; float hd = 1e9f; for (auto& o : k) if (&o != &b) { float d = hypotf(o.x - b.x, o.y - b.y); if (d < hd) { hd = d; h = &o; } }
+        if (h) { b.aim = atan2f(h->y - b.y, h->x - b.x); b.tq = el; }
+      }
+      return r;
+    }
     if (el - b.bt > 0.15f) {
       b.bt = el; Kid* t = nullptr; float bd = 1e9f;
       for (auto& o : k) if (&o != &b) { float d = hypotf(o.x - b.x, o.y - b.y); if (d < bd) { bd = d; t = &o; } }
@@ -46,7 +78,7 @@ struct Snowball : Game {
     return { b.bi.x, b.bi.y, b.ba, false };
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt); bg.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); bg.Update(dt); Snap(dt);
     if (done) return;
     if (cdT > 0) { cdT -= dt; if (ceilf(cdT) < lastTick && cdT > 0) { lastTick = ceilf(cdT); Sfx("tick"); } if (cdT <= 0) { Sfx("go"); Banner("THROW!", 900, "#4dabff"); } return; }
     if (over) { overT -= dt; if (overT <= 0) End(); }
@@ -60,7 +92,7 @@ struct Snowball : Game {
       if (in.b && b.cd <= 0 && b.stun <= 0) { float d = fmaxf(0.2f, hypotf(ax, ay)); float dx = l > 0.2f ? ax / d : cosf(b.face), dy = l > 0.2f ? ay / d : sinf(b.face); b.vx += dx * 900; b.vy += dy * 900; b.cd = 1.1f; Sfx("dash"); fx.Burst(W3(b.x, b.y, 0.3f), 14, WHITE, 5, 0.5f, 0.2f); }
       float f = expf(-3.2f * dt); b.vx *= f; b.vy *= f; b.x += b.vx * dt; b.y += b.vy * dt;
       if (hypotf(b.vx, b.vy) > 40) b.face = atan2f(b.vy, b.vx);
-      if (l > 0.3f && !P(b.pid).bot) b.aim = atan2f(ay, ax);
+      if (l > 0.3f && !P(b.pid).bot && el - b.tq >= 0.4f) b.aim = atan2f(ay, ax);
       b.x = Clamp(b.x, BOX.x + b.r, BOX.x + BOX.width - b.r); b.y = Clamp(b.y, BOX.y + b.r, BOX.y + BOX.height - b.r);
       for (auto& ft : forts) { float dx = b.x - ft.x, dy = b.y - ft.y, d = fmaxf(1, hypotf(dx, dy)), mn = ft.r + b.r; if (d < mn) { b.x = ft.x + dx / d * mn; b.y = ft.y + dy / d * mn; float vn = (b.vx * dx + b.vy * dy) / d; if (vn < 0) { b.vx -= vn * dx / d; b.vy -= vn * dy / d; } } }
       if (hypotf(b.vx, b.vy) > 250 && frand(0, 1) < 0.4f) fx.Puff(W3(b.x, b.y, 0.1f), Hex(0xffffff, 200), 0.15f, 0.5f, { 0, 0.5f, 0 });
@@ -73,7 +105,7 @@ struct Snowball : Game {
         }
         // lob: flight ~0.75 s over ~600 px, peaks ~1.6 m
         balls.push_back({ b.x + cosf(a) * (b.r + 12), b.y + sinf(a) * (b.r + 12), 1.5f, cosf(a) * 760 + b.vx * 0.3f, sinf(a) * 760 + b.vy * 0.3f, 3.2f, 1.1f, b.pid });
-        Sfx("whoosh");
+        Sfx("whoosh"); b.tq = -9;
       }
     }
     for (size_t i = 0; i < k.size(); i++) for (size_t j = i + 1; j < k.size(); j++) {

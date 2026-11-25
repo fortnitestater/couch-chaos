@@ -57,7 +57,7 @@
   // players = connected phones + people seen by the AI camera (the camera phone itself is not a player)
   const humans = () => S.players.filter(p => p.connected && !p.isCam);
   const vip = () => humans().find(p => !p.cam) || null;
-  const CAM_OK = ['swing', 'move', 'shake']; // body-tracked players join motion games only
+  const CAM_OK = ['swing', 'move', 'shake', 'touch']; // body-tracked players join motion games only
   const camFits = () => !S.def || CAM_OK.includes(S.def.ctrl);
 
   function onMsg(conn, m) {
@@ -376,7 +376,7 @@
     o.players = S.players.filter(p => p.connected || !p.cam).map(p => ({ n: p.name, c: p.color, av: p.avatar, vip: p === v, away: !p.connected, cam: !!p.isCam }));
     if (st === 'home') {
       o.qr = S.qr || null;
-      const KW = { move: 'JOYSTICK', tap: 'TAP', swing: 'SWING', type: 'TYPE', shake: 'SHAKE', tilt: 'TILT', draw: 'DRAW', vote: 'VOTE', camera: 'CAMERA' };
+      const KW = { touch: 'TOUCH', move: 'JOYSTICK', tap: 'TAP', swing: 'SWING', type: 'TYPE', shake: 'SHAKE', tilt: 'TILT', draw: 'DRAW', vote: 'VOTE', camera: 'CAMERA' };
       o.rows = rowsData.map(r => ({ name: r.name, short: r.short || r.name, items: r.items.map(gm => ({ id: gm.id, n: gm.name, e: gm.emoji, a1: gm.art[0], a2: gm.art[1], ctrl: CTRL_LABEL[gm.ctrl] || '', k: KW[gm.ctrl] || 'MULTIPLAYER', pl: gm.players, d: gm.desc, sp: gm.id[0] === '_', rec: !!gm._rec })) }));
       o.music = !(SFX.musicMuted && SFX.musicMuted());
       o.f = [focus.r, focus.c];

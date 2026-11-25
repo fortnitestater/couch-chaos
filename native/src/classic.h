@@ -1,6 +1,7 @@
 // Shared bits for the joystick arena games: world mapping, movement helpers, scenery and the Classic base.
 #pragma once
 #include "cc.h"
+#include "touch.h"
 #include <functional>
 
 namespace {
@@ -11,27 +12,6 @@ inline Vector2 Toward(float fx, float fy, float tx, float ty) { float dx = tx - 
 
 struct Mover { float x = 0, y = 0, vx = 0, vy = 0, face = 0; };
 
-// ---------- touch maps: the phone shows the play area live and your finger moves you ----------
-// phone space: x 0..1 across, y 0..1 down; r is a fraction of the map width.
-// k: 0 ball/puck, 1 me, 2 my team, 3 other player, 4 good pickup (coin), 5 danger circle, 6 danger tile (r = half width, r2 = half height), 7 broken tile
-struct TouchObj { float x, y, r; Color c; int k; float r2 = 0; };
-inline std::string TouchLayout(const std::string& theme, float aspect, const std::string& mode, const std::string& btn, const std::string& hint, int team = -1) {
-  char a[32]; snprintf(a, sizeof a, "%.4f", aspect);
-  std::string q = [](const std::string& s) { std::string r = "\""; for (char c : s) { if (c == '"' || c == '\\') { r += '\\'; r += c; } else r += c; } return r + "\""; }(hint);
-  return std::string("{\"name\":\"touch\",\"theme\":\"") + theme + "\",\"aspect\":" + a + ",\"mode\":\"" + mode + "\",\"btn\":\"" + btn + "\",\"hint\":" + q + ",\"team\":" + std::to_string(team) + "}";
-}
-inline void SendSnap(int pid, const std::vector<TouchObj>& o, const std::string& info = "") {
-  std::string s = "{\"t\":\"snap\",\"o\":["; char b[96];
-  for (size_t i = 0; i < o.size(); i++) {
-    snprintf(b, sizeof b, "%s[%.3f,%.3f,%.3f,\"#%02x%02x%02x\",%d,%.3f]", i ? "," : "", o[i].x, o[i].y, o[i].r, o[i].c.r, o[i].c.g, o[i].c.b, o[i].k, o[i].r2);
-    s += b;
-  }
-  s += "]";
-  if (!info.empty()) { s += ",\"i\":\""; for (char c : info) if (c != '"' && c != '\\') s += c; s += "\""; }
-  Send(pid, s + "}");
-}
-// where the finger is, in phone space (valid only while P.touch)
-inline Vector2 TouchAt(const Player& p) { return { Clamp((p.stick.x + 1) / 2, 0, 1), Clamp((p.stick.y + 1) / 2, 0, 1) }; }
 void Steer(Mover& m, Vector2 in, float speed, float dt, float accel = 10) {
   in = Norm(in); float k = fminf(1, accel * dt);
   m.vx += (in.x * speed - m.vx) * k; m.vy += (in.y * speed - m.vy) * k;

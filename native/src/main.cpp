@@ -422,7 +422,7 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   if (!game) return;
   dt = fminf(dt, 0.05f);
   game->Update(dt);
-  for (auto& p : players) { p.pa = p.a; p.pb = p.b; }
+  for (auto& p : players) { p.pa = p.a; p.pb = p.b; p.ptouch = p.touch; }
   lit.ShadowPass();
   PostBegin();
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)

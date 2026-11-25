@@ -193,3 +193,4 @@ body.padBody { background:
 .touchBottom { width: 100%; display: flex; align-items: center; gap: 12px; }
 .touchBottom .rhint { flex: 1; text-align: left; margin: 0; }
 .touchBtn { flex: 0 0 auto; width: 34vw; max-width: 170px; height: 74px; font-size: 22px; }
+.touchBottom .pb.touchBtn { width: 26vw; max-width: 130px; font-size: 18px; }

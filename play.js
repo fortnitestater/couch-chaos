@@ -253,7 +253,7 @@
   const keys = { left: false, right: false, up: false, down: false, a: false, b: false }, btn = { a: false, b: false }, stick = { active: false, x: 0, y: 0 };
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Space: 'a', KeyJ: 'a', Enter: 'a', ShiftLeft: 'b', ShiftRight: 'b', KeyK: 'b', KeyE: 'b' };
   function readInput() {
-    if (layout && layout.name === 'touch') { const f = TM.touching && TM.fing; return { x: f ? TM.fing.x * 2 - 1 : 0, y: f ? TM.fing.y * 2 - 1 : 0, a: keys.a || btn.a, b: false, touch: !!f }; }
+    if (layout && layout.name === 'touch') { const f = TM.touching && TM.fing; return { x: f ? TM.fing.x * 2 - 1 : 0, y: f ? TM.fing.y * 2 - 1 : 0, a: keys.a || btn.a, b: keys.b || btn.b, touch: !!f }; }
     let x = 0, y = 0;
     if (keys.left) x -= 1; if (keys.right) x += 1; if (keys.up) y -= 1; if (keys.down) y += 1;
     if (stick.active) { x = stick.x; y = stick.y; }
@@ -406,14 +406,15 @@
     if (n.length === TM.objs.length && n.every((o, i) => o.k === TM.objs[i].k)) n.forEach((o, i) => { o.dx = TM.objs[i].dx; o.dy = TM.objs[i].dy; });
     n.forEach(o => { if (o.dx === undefined) { o.dx = o.x; o.dy = o.y; } });
     TM.objs = n;
-    if (m.i !== undefined && m.i !== TM.info) { TM.info = m.i; const e = document.getElementById('tInfo'); if (e) e.textContent = m.i; }
+    if (m.i !== undefined && m.i !== TM.info) { if (TM.L.trail && TM.info.split('·')[0] !== m.i.split('·')[0]) TM.tr = {}; TM.info = m.i; const e = document.getElementById('tInfo'); if (e) e.textContent = m.i; }
+    if (TM.L.trail) n.forEach(o => { if (o.k < 1 || o.k > 3) return; const tr = TM.tr[o.c] || (TM.tr[o.c] = []), l = tr[tr.length - 1]; if (l && Math.hypot(l[0] - o.x, l[1] - o.y) > 0.08) tr.length = 0; if (!l || Math.hypot(l[0] - o.x, l[1] - o.y) > 0.002) tr.push([o.x, o.y]); });
     // "go" mode: arrived at the spot you tapped → stop
     if (TM.L.mode === 'go' && TM.fing && !TM.down) { const me = n.find(o => o.k === 1); if (me && Math.hypot(me.x - TM.fing.x, (me.y - TM.fing.y) / TM.L.aspect) < 0.012) { TM.touching = false; TM.fing = null; flush(true); } }
   }
   function renderTouch(L) {
-    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = '';
+    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = ''; TM.tr = {}; TM.t0 = 0;
     stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw"><canvas id="tcv"></canvas></div>
-      <div class="touchBottom">${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${esc(L.btn)}</button>` : ''}<div class="rhint">${esc(L.hint || '')}</div></div></div>`;
+      <div class="touchBottom"><div class="rhint">${esc(L.hint || '')}</div>${L.btn2 ? `<button class="pbtn pb touchBtn" data-b="b">${esc(L.btn2)}</button>` : ''}${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${esc(L.btn)}</button>` : ''}</div></div>`;
     stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
     const tw = $('#tw'), cv = $('#tcv'), g = cv.getContext('2d');
     const fit = () => {
@@ -427,9 +428,11 @@
     const at = e => { const r = cv.getBoundingClientRect(), fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)); return TM.rot ? { x: 1 - fy, y: fx } : { x: fx, y: fy }; };
     let pid = null;
     cv.style.touchAction = 'none';
-    cv.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (_) {} TM.fing = at(e); TM.touching = true; TM.down = true; navigator.vibrate?.(8); flush(true); });
+    cv.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (_) {} TM.fing = at(e); TM.touching = true; TM.down = true; TM.t0 = performance.now(); navigator.vibrate?.(8); flush(true); });
     cv.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; TM.fing = at(e); flush(); });
-    const up = e => { if (e.pointerId !== pid) return; pid = null; TM.down = false; if (L.mode === 'drag') { TM.touching = false; TM.fing = null; } flush(true); };
+    const up = e => { if (e.pointerId !== pid) return; pid = null; TM.down = false;
+      if (L.mode !== 'go') { const rel = () => { if (TM.down) return; TM.touching = false; TM.fing = null; flush(true); }; const held = performance.now() - TM.t0; if (held < 130) { flush(true); setTimeout(rel, 130 - held); } else rel(); return; }
+      flush(true); };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
     cancelAnimationFrame(TM.raf);
     const frame = () => {
@@ -461,19 +464,48 @@
       g.fillStyle = '#cfe7ff'; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2 * d;
       for (let i = 1; i < 10; i++) { g.beginPath(); g.moveTo(W * i / 10, 0); g.lineTo(W * i / 10, H); g.stroke(); }
       for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(0, H * i / 6); g.lineTo(W, H * i / 6); g.stroke(); }
+    } else if (th === 'grid') {
+      g.fillStyle = '#0b0a24'; g.fillRect(0, 0, W, H); g.strokeStyle = '#1c3d7a'; g.lineWidth = 1 * d;
+      for (let i = 1; i < 20; i++) { g.beginPath(); g.moveTo(W * i / 20, 0); g.lineTo(W * i / 20, H); g.stroke(); }
+      for (let i = 1; i < 10; i++) { g.beginPath(); g.moveTo(0, H * i / 10); g.lineTo(W, H * i / 10); g.stroke(); }
+      g.strokeStyle = '#22d3ee'; g.lineWidth = 5 * d; g.strokeRect(0, 0, W, H);
+    } else if (th === 'sea' || th === 'sky') {
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, th === 'sea' ? '#1d6fc0' : '#3aa0e8'); gr.addColorStop(1, th === 'sea' ? '#124a8a' : '#1f78c9'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 2 * d; for (let i = 0; i < 9; i++) { const y = ((i / 9 + t * 0.02) % 1) * H; g.beginPath(); for (let x = 0; x <= W; x += 10 * d) g.lineTo(x, y + Math.sin(x / (30 * d) + t * 2 + i) * 3 * d); g.stroke(); }
+    } else if (th === 'carnival') {
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#5b3cc4'); gr.addColorStop(1, '#ffb3d9'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    } else if (th === 'snow' || th === 'slope') {
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#dfeeff'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      if (th === 'slope') { g.fillStyle = '#ff922b'; const off = (t * 0.6 % 1) * H / 8; for (let y = -H / 8; y < H; y += H / 8) { g.fillRect(0, y + off, 5 * d, H / 16); g.fillRect(W - 5 * d, y + off, 5 * d, H / 16); } }
+    } else if (th === 'party') {
+      g.fillStyle = '#f783ac'; g.fillRect(0, 0, W, H); g.fillStyle = 'rgba(255,255,255,.12)'; const s = W / 12; for (let y = 0; y < H; y += s) for (let x = ((y / s) % 2) * s; x < W; x += 2 * s) g.fillRect(x, y, s, s);
+      g.fillStyle = 'rgba(255,212,59,.55)'; g.beginPath(); g.arc(W / 2, H / 2, W * 0.13, 0, 7); g.fill();
+    } else if (th === 'track') {
+      g.fillStyle = '#f8f9fa'; g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 24; i++) for (let r = 0; r < 2; r++) { g.fillStyle = (i + r) % 2 ? '#212529' : '#fff'; g.fillRect(W * i / 24, r * H * 0.03, W / 24, H * 0.03); }
+      g.fillStyle = '#4dabf7'; g.fillRect(0, H * 0.94, W, 3 * d);
     } else {
       const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#6cc45f'); gr.addColorStop(1, '#4fa548'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
       g.fillStyle = 'rgba(255,255,255,.06)'; for (let i = 0; i < 12; i += 2) g.fillRect(W * i / 12, 0, W / 12, H);
     }
     // ---- objects (smoothed) ----
     const objs = TM.objs; objs.forEach(o => { o.dx += (o.x - o.dx) * 0.45; o.dy += (o.y - o.dy) * 0.45; });
-    const order = [7, 6, 5, 4, 3, 2, 0, 1];
+    if (L.trail) for (const c in TM.tr) { const tr = TM.tr[c]; if (tr.length < 2) continue; g.strokeStyle = c; g.lineWidth = 4 * d; g.lineJoin = g.lineCap = 'round'; g.shadowColor = c; g.shadowBlur = 10 * d; g.beginPath(); tr.forEach((q, i) => i ? g.lineTo(q[0] * W, q[1] * H) : g.moveTo(q[0] * W, q[1] * H)); g.stroke(); g.shadowBlur = 0; }
+    // 8 gate (r = half width), 9 solid thing (tree / fort / bush / chair), 10 bomb, 11 floor disc, 12 small dot (shot, snowball)
+    const order = [11, 7, 6, 5, 8, 9, 13, 4, 10, 12, 3, 2, 0, 1];
     const meDrag = L.mode === 'drag' && TM.touching && TM.fing;
     for (const k of order) for (const o of objs) {
       if (o.k !== k) continue;
       let x = o.dx * W, y = o.dy * H; const r = o.r * W;
       if (k === 6 || k === 7) { const hw = o.r * W, hh = o.r2 * H; g.fillStyle = k === 6 ? `rgba(255,59,59,${0.55 + 0.3 * Math.sin(t * 10)})` : '#0b1b3a'; rr(g, x - hw + d, y - hh + d, hw * 2 - 2 * d, hh * 2 - 2 * d, 4 * d); g.fill(); continue; }
       if (k === 5) { g.fillStyle = 'rgba(255,59,59,.28)'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = '#ff3b3b'; g.lineWidth = 3 * d; g.setLineDash([8 * d, 6 * d]); g.lineDashOffset = -t * 30 * d; g.stroke(); g.setLineDash([]); continue; }
+      if (k === 11) { g.fillStyle = o.c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 4 * d; g.stroke(); continue; }
+      if (k === 8) { g.strokeStyle = o.c; g.globalAlpha = 0.45; g.lineWidth = 6 * d; g.beginPath(); g.moveTo(x - r, y); g.lineTo(x + r, y); g.stroke(); g.globalAlpha = 1;
+        for (const s of [-1, 1]) { const px = x + s * r; g.fillStyle = '#495057'; g.fillRect(px - 1.5 * d, y - 16 * d, 3 * d, 16 * d); g.fillStyle = o.c; g.beginPath(); g.moveTo(px, y - 16 * d); g.lineTo(px - s * 12 * d, y - 12 * d); g.lineTo(px, y - 8 * d); g.fill(); } continue; }
+      if (k === 9) { const rad = Math.max(r, 5 * d); g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.arc(x + 2 * d, y + 3 * d, rad, 0, 7); g.fill(); g.fillStyle = o.c; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill(); g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 2 * d; g.stroke(); g.fillStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.arc(x - rad * 0.3, y - rad * 0.3, rad * 0.35, 0, 7); g.fill(); continue; }
+      if (k === 10) { const rad = Math.max(r, 7 * d); g.fillStyle = '#1c1f26'; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill(); g.strokeStyle = '#ff3b3b'; g.lineWidth = 3 * d; g.stroke(); g.fillStyle = `rgba(255,200,60,${0.6 + 0.4 * Math.sin(t * 20)})`; g.beginPath(); g.arc(x + rad * 0.6, y - rad * 0.9, 3 * d, 0, 7); g.fill(); continue; }
+      if (k === 13) { const s = Math.max(r, 7 * d); if (o.r2) { g.shadowColor = o.c; g.shadowBlur = (10 + 8 * Math.sin(t * 8)) * d; } g.fillStyle = o.c; rr(g, x - s, y - s, 2 * s, 2 * s, 4 * d); g.fill(); g.shadowBlur = 0; g.strokeStyle = o.r2 ? '#fff' : 'rgba(0,0,0,.3)'; g.lineWidth = (o.r2 ? 3 : 2) * d; g.stroke(); continue; }
+      if (k === 12) { g.fillStyle = o.c; g.beginPath(); g.arc(x, y, Math.max(r, 3 * d), 0, 7); g.fill(); continue; }
       if (k === 4) { g.shadowColor = o.c; g.shadowBlur = 12 * d; g.fillStyle = o.c; g.beginPath(); g.arc(x, y, Math.max(r, 6 * d), 0, 7); g.fill(); g.shadowBlur = 0; g.strokeStyle = '#fff'; g.lineWidth = 2 * d; g.stroke(); continue; }
       if (k === 1 && meDrag) {  // your mallet sits right under your finger, kept on your half
         const rn = r / H; x = TM.fing.x * W; y = Math.max(0.5 + rn, Math.min(1 - rn, TM.fing.y)) * H; x = Math.max(r, Math.min(W - r, x));
@@ -488,6 +520,10 @@
       else if (k === 0) { g.strokeStyle = '#555c6b'; g.lineWidth = 2 * d; g.stroke(); }
       else { g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2 * d; g.stroke(); }
     }
+    if (L.mode === 'aim' && TM.fing) { const fx = TM.fing.x * W, fy = TM.fing.y * H, rr2 = 18 * d; g.strokeStyle = '#fff'; g.lineWidth = 3 * d; g.beginPath(); g.arc(fx, fy, rr2, 0, 7); g.stroke();
+      for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2; g.beginPath(); g.moveTo(fx + Math.cos(a) * (rr2 - 6 * d), fy + Math.sin(a) * (rr2 - 6 * d)); g.lineTo(fx + Math.cos(a) * (rr2 + 9 * d), fy + Math.sin(a) * (rr2 + 9 * d)); g.stroke(); } }
+    if (L.mode === 'steer' && TM.fing) { const fx = TM.fing.x * W; g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 3 * d; g.setLineDash([8 * d, 8 * d]); g.beginPath(); g.moveTo(fx, 0); g.lineTo(fx, H); g.stroke(); g.setLineDash([]);
+      const me = objs.find(o => o.k === 1); if (me) { g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.moveTo(fx, me.dy * H - 26 * d); g.lineTo(fx - 9 * d, me.dy * H - 40 * d); g.lineTo(fx + 9 * d, me.dy * H - 40 * d); g.fill(); } }
     // "go" mode: where you are heading
     if (L.mode === 'go' && TM.fing) {
       const me = objs.find(o => o.k === 1), fx = TM.fing.x * W, fy = TM.fing.y * H;

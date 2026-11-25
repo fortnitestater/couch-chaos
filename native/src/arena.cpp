@@ -1,4 +1,4 @@
-// ARENA GAMES in 3D (joystick + one button): Hot Potato, Paint Wars, Coin Rush, Frozen Lake, Ice Hockey,
+// ARENA GAMES in 3D (live touch map on the phone + one button): Hot Potato, Paint Wars, Coin Rush, Frozen Lake, Ice Hockey,
 // Target Blast and Light Trails. Same characters, lighting and scenery as the classics.
 // Made easier than the old versions: snappier steering, bigger touch ranges, longer warnings, aim assist.
 #include "classic.h"
@@ -500,9 +500,23 @@ struct Targets : Classic {
   void Start() override {
     cam = {}; InitCam(52); cam.position = { 0, 3.5f, 16 }; cam.target = { 0, 8.5f, 0 };
     for (int i = 0; i < N(); i++) cr.push_back({ 300.f + i * 150, 500 });
-    Layout(-1, kit::Pad("xy", "SHOOT", "", "Move your crosshair onto balloons and SHOOT. Not the black bombs!"));
+    Layout(-1, TouchLayout("carnival", 0.75f, "aim", "SHOOT", "Tap a balloon to pop it! ★ gold = +5 · black bombs = −3"));
   }
   Vector2 Scr(const B& b) { return GetWorldToScreen(b.p, cam); }
+  SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    std::vector<TouchObj> base;
+    for (auto& b : bl) {
+      if (b.dead) continue; Vector2 s = Scr(b); if (s.y < 60 || s.y > 940) continue;
+      base.push_back({ (s.x - 20) / 1560, (s.y - 100) / 780, b.r * 46 / 1000, b.kind == 1 ? Hex(0xfcc419) : b.c, b.kind == 2 ? 10 : b.kind == 1 ? 4 : 9 });
+    }
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue; std::vector<TouchObj> o = base;
+      for (int j = 0; j < N(); j++) if (j != i) o.push_back({ (cr[j].x - 20) / 1560, (cr[j].y - 100) / 780, 6.f / 1560, P(j).color, 12 });
+      SendSnap(i, o, "🎯 YOU: " + I(cr[i].score) + " pts · tap balloons!");
+    }
+  }
   void Shoot(int i) {
     X& c = cr[i]; if (c.cd > 0) return; c.cd = 0.2f; c.kick = 1; Sfx("shoot");
     int best = -1; float bd = 1e9f;
@@ -513,9 +527,25 @@ struct Targets : Classic {
     if (b.kind == 2) { Sfx("boom"); Shake(8); Buzz(i, 300); } else Sfx("pickup");
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     for (int i = 0; i < N(); i++) {
       X& c = cr[i]; Player& p = P(i); Vector2 in = p.stick; bool fire = p.a;
+      if (!p.bot && p.touch) {  // your finger is the crosshair: tap = shoot right there
+        Vector2 s = TouchAt(p); c.x = 20 + s.x * 1560; c.y = 100 + s.y * 780; c.vx = c.vy = 0; in = { 0, 0 };
+        if (!p.ptouch && cd <= 0 && !over) {  // pick the balloon you tapped on the phone (the phone map is squeezed, so judge it there)
+          int best = -1; float bd = 1e9f;
+          for (size_t j = 0; j < bl.size(); j++) {
+            if (bl[j].dead) continue; Vector2 q = Scr(bl[j]); float dx = s.x - (q.x - 20) / 1560, dy = (s.y - (q.y - 100) / 780) / 0.75f, d = hypotf(dx, dy);
+            bool bomb = bl[j].kind == 2; float reach = bl[j].r * 46 / 1000 + (bomb ? 0.01f : 0.08f), score = bomb ? d * 3 : d;  // bombs only when you tap right on them
+            if (d < reach && score < bd) { bd = score; best = (int)j; }
+          }
+          if (best >= 0) { Vector2 q = Scr(bl[best]); c.x = q.x; c.y = q.y; c.cd = 0; Shoot(i); }
+          else { c.kick = 1; Sfx("shoot"); }
+        }
+        c.cd -= dt; c.kick = fmaxf(0, c.kick - dt * 6);
+        if (fire && cd <= 0 && !over) Shoot(i);
+        continue;
+      }
       if (p.bot) {
         int best = -1; float bd = 1e9f;
         for (size_t j = 0; j < bl.size(); j++) if (!bl[j].dead && bl[j].kind != 2) { Vector2 s = Scr(bl[j]); if (s.y > 870) continue; float d = hypotf(s.x - c.x, s.y - c.y) / (bl[j].kind == 1 ? 2 : 1); if (d < bd) { bd = d; best = (int)j; } }
@@ -578,7 +608,7 @@ struct Targets : Classic {
     }
     Board("POINTS", Sorted([&](int i) { return (float)cr[i].score; }), [&](int i) { return I(cr[i].score); });
     Clock(T);
-    Hint("🎯 Balloon +1 · ★ gold +5 · 💣 bomb −3 — the crosshair helps you aim", Hex(0xf3d9fa)); DrawCount();
+    Hint("🎯 Tap balloons on your phone · ★ gold +5 · 💣 bomb −3", Hex(0xf3d9fa)); DrawCount();
   }
 };
 
@@ -588,7 +618,16 @@ struct Trails : Classic {
   struct Rd { float x, y, ang, energy = 1; bool alive = true; int cell = -1; std::vector<Vector2> pts; };
   std::vector<Rd> rd; std::vector<short> grid; std::vector<float> stamp; std::vector<int> pts, out; int round = 0, R = 3; float el = 0, overT = 0; bool between = false, fin = false;
   float LX(float x) { return x; }
-  void Start() override { InitCam(46); pts.assign(N(), 0); Layout(-1, kit::Pad("x", "", "BOOST", "Steer left / right. Never touch a light wall!")); Next(); }
+  void Start() override { InitCam(46); pts.assign(N(), 0); Layout(-1, TouchLayout("grid", 1400.f / 735.f, "go", "BOOST", "Tap where you want to ride — your bike turns toward your finger. Never touch a light wall!", -1, "", ",\"trail\":true")); Next(); }
+  SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt) || rd.empty()) return;
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue; std::vector<TouchObj> o;
+      for (int j = 0; j < N(); j++) if (rd[j].alive) o.push_back({ (rd[j].x - 100) / 1400, (rd[j].y - TOP) / 735, 12.f / 1400, Shade(P(j).color, 0.25f), j == i ? 1 : 3 });
+      SendSnap(i, o, "ROUND " + I(std::min(round, R)) + " · " + (rd[i].alive ? "stay alive! " + I(pts[i]) + " pts" : "you crashed — " + I(pts[i]) + " pts"));
+    }
+  }
   void Next() {
     round++;
     if (round > R) { if (!fin) { fin = true; FinishOrder(Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return I(pts[i]) + " pts"; }); } return; }
@@ -600,7 +639,7 @@ struct Trails : Classic {
   bool Free(float x, float y, int i) { int c = Cell(x, y); if (c == -2) return false; int o = grid[c]; return o == -1 || (o == i && el - stamp[c] < 0.3f); }
   void Crash(int i) { Rd& r = rd[i]; r.alive = false; out.push_back(i); fx.Burst(W3(r.x, r.y, 0.6f), 40, P(i).color, 8, 1, 0.2f, 2); Sfx("boom"); Shake(8); Buzz(i, 400); }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     if (fin) return;
     if (Counting(dt, "GO!")) return;
     if (between) { overT -= dt; if (overT <= 0) Next(); return; }
@@ -613,6 +652,7 @@ struct Trails : Classic {
         for (float da : { -0.6f, 0.f, 0.6f }) { float s = 0; for (float d = 12; d < 220; d += 8) { if (!Free(r.x + cosf(r.ang + da) * d, r.y + sinf(r.ang + da) * d, i)) break; s = d; } s += da == 0 ? 10 : frand(0, 8); if (s > bs) { bs = s; best = da; } }
         turn = Clamp(best * 2.5f, -1, 1); boost = bs > 200 && frand(0, 1) < 0.02f;
       }
+      if (!P(i).bot && P(i).touch) { Vector2 s = TouchAt(P(i)); float tx = 100 + s.x * 1400, ty = TOP + s.y * 735; if (hypotf(tx - r.x, ty - r.y) > 12) turn = Clamp(angDiff(r.ang, atan2f(ty - r.y, tx - r.x)) * 2.5f, -1, 1); }
       r.ang += Clamp(turn, -1, 1) * 3.0f * dt;
       boost = boost && r.energy > 0.02f; r.energy = boost ? fmaxf(0, r.energy - dt * 0.6f) : fminf(1, r.energy + dt * 0.15f);
       float dist = (boost ? 330.f : 210.f) * dt;
@@ -663,7 +703,7 @@ struct Trails : Classic {
     EndMode3D();
     for (int i = 0; i < N(); i++) if (rd[i].alive) NameTag(W3(rd[i].x, rd[i].y, 1.8f), i, 17);
     Board("ROUND " + I(std::min(round, R)) + " / " + I(R), Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return I(pts[i]); });
-    Hint("🏍️ Steer left / right · BOOST for speed · never touch a wall", Hex(0xc5f6fa)); DrawCount();
+    Hint("🏍️ Tap where to ride on your phone · BOOST for speed · never touch a wall", Hex(0xc5f6fa)); DrawCount();
   }
 };
 }  // namespace

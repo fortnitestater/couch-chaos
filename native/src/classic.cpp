@@ -1,7 +1,8 @@
 // CLASSICS — the games everybody already knows: Musical Chairs, Red Light Green Light, Simon Says,
-// Tug of War, Air Hockey and Tag. A joystick and one button at most: nothing to learn.
+// Tug of War, Air Hockey and Tag. The phone shows the game live: tap where to go, nothing to learn.
 
 #include "classic.h"
+#include "kit.h"
 
 namespace {
 
@@ -14,11 +15,23 @@ struct Chairs : Classic {
   std::string phase = "count"; float t = 0, ringA = 0, RR = 165; int round = 0;
   Vector2 ChairPos(int c) { float a = chA[c] + ringA; return { 800 + cosf(a) * RR, 480 + sinf(a) * RR }; }
   int Alive() { int n = 0; for (auto& m : k) if (!m.out) n++; return n; }
+  TouchBox TB{ 380, 60, 1220, 900 }; SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    const unsigned pal[] = { 0x4dabf7, 0xff922b, 0x51cf66, 0xcc5de8, 0xffd43b, 0xff6b6b, 0x20c997 };
+    std::vector<TouchObj> base;
+    for (size_t q = 0; q < chA.size(); q++) { Vector2 cp = ChairPos((int)q), s = TB.P(cp.x, cp.y); bool fr = phase == "scramble" && chWho[q] < 0; base.push_back({ s.x, s.y, TB.R(fr ? 30 : 26), fr ? Hex(0xffd43b) : Hex(pal[q % 7]), 13, fr ? 1.f : 0.f }); }
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue; std::vector<TouchObj> o = base;
+      for (int j = 0; j < N(); j++) if (!k[j].out) { Vector2 s = TB.P(k[j].x, k[j].y); o.push_back({ s.x, s.y, TB.R(30), P(j).color, j == i ? 1 : 3 }); }
+      SendSnap(i, o, k[i].out ? "You're out — cheer them on!" : k[i].seat ? "🪑 You got a chair!" : phase == "scramble" ? "🪑 SIT! Tap a glowing chair!" : "🎵 Keep walking around the chairs…");
+    }
+  }
 
   void Start() override {
     InitCam(42); sc.Init(25, 16, true);
     for (int i = 0; i < N(); i++) { float a = (float)i / N() * 2 * PI; K m; m.x = 800 + cosf(a) * 280; m.y = 480 + sinf(a) * 280; m.face = a + PI / 2; k.push_back(m); }
-    Layout(-1, R"({"name":"pad","stick":"xy","a":"DASH","hint":"Walk around the chairs. When the music STOPS, run to a chair!"})");
+    Layout(-1, TouchLayout("party", 1, "go", "DASH", "Tap where to walk. When the music STOPS, tap a free chair (glowing)!"));
     NewRound();
   }
   void NewRound() {
@@ -30,7 +43,7 @@ struct Chairs : Classic {
     else { phase = "music"; Sfx("musicOn"); Banner("ROUND " + std::to_string(round) + " · " + std::to_string(m - 1) + (m - 1 == 1 ? " CHAIR LEFT" : " CHAIRS"), 1600, "#ffd43b"); }
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     if (phase == "count") { if (!Counting(dt, "🎵 MUSIC!")) { phase = "music"; Sfx("musicOn"); } return; }
     if (phase == "done") return;
     t -= dt;
@@ -51,6 +64,7 @@ struct Chairs : Classic {
           }
         } else in = { 0, 0 };
       }
+      if (!p.bot && p.touch) { Vector2 t = TB.W(TouchAt(p)); in = GoToward(m.x, m.y, t.x, t.y); }
       if (phase == "result") in = { 0, 0 };
       if (dash && m.dcd <= 0) { m.dashT = 0.3f; m.dcd = 1.4f; Sfx("dash"); fx.Burst(W3(m.x, m.y, 0.5f), 10, p.color, 5, 0.4f, 0.15f); }
       m.dashT -= dt; m.dcd -= dt;
@@ -134,13 +148,24 @@ struct RedLight : Classic {
   struct K : Mover { int fin = -1, caught = 0; float stun = 0, react = 0; };
   std::vector<K> k; std::string light = "wait"; float lt = 0, grace = 0, T = 90, dollYaw = PI; int finN = 0; bool over = false;
   const float START = 800, GOAL = 160;
+  TouchBox TB{ 250, 40, 1350, 850 }; SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    bool red = light == "red" || light == "turn";
+    Vector2 dp = TB.P(800, 70);
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue; std::vector<TouchObj> o; o.push_back({ dp.x, dp.y, TB.R(60), red ? Hex(0xff3b3b) : Hex(0x40c057), 9 });
+      for (int j = 0; j < N(); j++) { Vector2 s = TB.P(k[j].x, k[j].y); o.push_back({ s.x, s.y, TB.R(26), P(j).color, j == i ? 1 : 3 }); }
+      SendSnap(i, o, k[i].fin >= 0 ? "🏁 You made it!" : k[i].stun > 0 ? "😵 Caught moving! Back you go" : light == "green" ? "🟢 GREEN — RUN!" : light == "turn" ? "🟠 She's turning… get ready to stop!" : light == "red" ? "🔴 RED — FREEZE! Let go!" : "Get ready…");
+    }
+  }
   void Start() override {
     InitCam(46); sc.Init(30, 22, true);
     for (int i = 0; i < N(); i++) { K m; m.x = 800 + (i - (N() - 1) / 2.f) * fminf(150, 1050.f / N()); m.y = START; m.face = -PI / 2; k.push_back(m); }
-    Layout(-1, R"({"name":"pad","stick":"xy","a":"RUN","hint":"Hold RUN on GREEN. Let go on RED!"})");
+    Layout(-1, TouchLayout("track", 0.85f, "view", "🏃 RUN", "Hold RUN (or hold anywhere on the track) on GREEN. Let go on RED!"));
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     float tgt = light == "green" || light == "wait" ? PI : 0; dollYaw += angDiff(dollYaw, tgt) * fminf(1, dt * 9);
     if (Counting(dt, "GREEN LIGHT!")) return;
     if (light == "wait") { light = "green"; lt = frand(2, 4); }
@@ -157,7 +182,7 @@ struct RedLight : Classic {
         bool go = light == "green" || (m.react > 0);
         if (light != "green") m.react -= dt;
         in = go ? Vector2{ 0.15f * sinf(time + i), -1 } : Vector2{ 0, 0 };
-      } else { float run = fmaxf(p.a ? 1.f : 0.f, -p.stick.y); in = { p.stick.x * 0.7f, -run }; }
+      } else { float run = fmaxf(p.a || p.touch ? 1.f : 0.f, -p.stick.y); in = { p.stick.x * 0.7f, -run }; }
       if (m.stun > 0) { m.stun -= dt; in = { 0, 0 }; }
       Steer(m, in, 88, dt, 14);
       m.x = Clamp(m.x, 250, 1350); m.y = fminf(m.y, START + 10);
@@ -212,7 +237,7 @@ struct RedLight : Classic {
       UI::Shadow({ 620, 14, 360, 70 }, 35, 20, Hex(0, 90), 6); UI::Box({ 620, 14, 360, 70 }, 35, Shade(c, 0.15f), c);
       Text(800, 50, 38, WHITE, light == "green" ? "GREEN LIGHT" : light == "turn" ? "LOOKING…" : "RED LIGHT", 0, TS_DISPLAY | TS_SHADOW);
     }
-    Hint(light == "red" ? "🛑 FREEZE! Don't touch anything!" : "🏃 Hold RUN (or push up) to run to the finish", light == "red" ? Hex(0xff8787) : WHITE);
+    Hint(light == "red" ? "🛑 FREEZE! Let go of RUN!" : "🏃 Hold RUN on your phone to run to the finish", light == "red" ? Hex(0xff8787) : WHITE);
     DrawCount();
   }
 };
@@ -224,18 +249,27 @@ struct Simon : Classic {
   struct K { int resp = -1, pts = 0, streak = 0, poseAct = -1; float pose = 0, botT = 0; int botAct = -1; bool armed = false, ok = false; };
   std::vector<K> k; int cmd = 0, act = 0, total = 15; bool simon = true; std::string phase = "count"; float t = 0, win = 3, el = 0;
   static constexpr const char* NAME[6] = { "LEFT", "RIGHT", "HANDS UP", "SQUAT", "JUMP", "CLAP" };
-  static constexpr const char* HOW[6] = { "⬅️ push the stick LEFT", "➡️ push the stick RIGHT", "🙌 push the stick UP", "⬇️ push the stick DOWN", "🦘 press JUMP", "👏 press CLAP" };
+  static constexpr const char* HOW[6] = { "⬅️ tap LEFT on your phone", "➡️ tap RIGHT on your phone", "🙌 tap HANDS UP on your phone", "⬇️ tap SQUAT on your phone", "🦘 tap JUMP on your phone", "👏 tap CLAP on your phone" };
+  void Phones() {
+    std::string line = (simon ? "🗣️ Simon says: " : "") + std::string(NAME[act]) + "!";
+    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, kit::Choice(line, { "⬅️ LEFT", "➡️ RIGHT", "🙌 HANDS UP", "⬇️ SQUAT", "🦘 JUMP", "👏 CLAP" }, 2, true, { "#4dabf7", "#ff922b", "#51cf66", "#cc5de8", "#fab005", "#ff6b81" }));
+  }
+  void Act(int p, const std::string& kk, int i, float) override {
+    if (phase != "say" || kk != "choice" || p < 0 || p >= N() || P(p).bot || i < 0 || i > 5) return;
+    K& m = k[p]; if (m.resp >= 0) return;
+    m.resp = i; m.pose = 1; m.poseAct = i; if (i == 4) Sfx("bounce"); if (i == 5) Sfx("pok");
+  }
   void Start() override {
     InitCam(40); sc.Init(24, 14, true);
     k.resize(N());
-    Layout(-1, R"({"name":"pad","stick":"xy","a":"JUMP","b":"CLAP","hint":"Only do it when SIMON SAYS!"})");
+    Layout(-1, kit::Msg("🙋", "Simon Says", "Buttons pop up here — only tap when it says SIMON SAYS!"));
   }
   void NewCmd() {
     cmd++; int prev = act; do act = rand() % 6; while (act == prev);
     simon = cmd <= 3 ? true : frand(0, 1) > 0.28f;
     win = fmaxf(2.4f, 4.0f - cmd * 0.08f); t = win; el = 0; phase = "say";
     for (auto& m : k) { m.resp = -1; m.armed = false; m.ok = false; m.botT = frand(0.5f, win * 0.75f); m.botAct = simon ? (frand(0, 1) < 0.88f ? act : rand() % 6) : (frand(0, 1) < 0.7f ? -1 : act); }
-    Sfx(simon ? "ding" : "blip");
+    Sfx(simon ? "ding" : "blip"); Phones();
   }
   int Read(int i) {
     Player& p = P(i); K& m = k[i]; float mag = hypotf(p.stick.x, p.stick.y);
@@ -266,6 +300,7 @@ struct Simon : Classic {
         for (int i = 0; i < N(); i++) {
           K& m = k[i]; m.ok = simon ? m.resp == act : m.resp < 0;
           if (m.ok) { m.pts++; m.streak++; right++; } else { m.streak = 0; Buzz(i, 250); }
+          if (!P(i).bot) Layout(i, kit::Msg(m.ok ? "✅" : "❌", m.ok ? "Correct!" : simon ? "Too slow / wrong move!" : "Simon didn't say!", "Score: " + std::to_string(m.pts)));
         }
         Sfx(right * 2 >= N() ? "win" : "buzz");
         phase = "judge"; t = 1.8f;
@@ -570,6 +605,18 @@ struct TagGame : Classic {
   struct K : Mover { float itTime = 0, freeze = 0, immune = 0, dashT = 0, dcd = 0; Vector2 wander{}; float wt = 0; };
   std::vector<K> k; std::vector<Vector3> bush; int it = 0; float T = 75; bool over = false;
   const float X0 = 150, X1 = 1450, Y0 = 160, Y1 = 830;
+  TouchBox TB{ X0 - 30, Y0 - 30, X1 + 30, Y1 + 30 }; SnapTimer snap;
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    std::vector<TouchObj> base;
+    for (auto& b : bush) { Vector2 s = TB.P(b.x, b.y); base.push_back({ s.x, s.y, TB.R(b.z + 6), Hex(0x2f9e44), 9 }); }
+    Vector2 is = TB.P(k[it].x, k[it].y); base.push_back({ is.x, is.y, TB.R(62), Hex(0xff3b3b), 5 });
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue; std::vector<TouchObj> o = base;
+      for (int j = 0; j < N(); j++) { Vector2 s = TB.P(k[j].x, k[j].y); o.push_back({ s.x, s.y, TB.R(28), P(j).color, j == i ? 1 : 3 }); }
+      SendSnap(i, o, i == it ? "😈 YOU ARE IT! Tap someone to chase them" : P(it).name + " is IT — run away!");
+    }
+  }
   void Start() override {
     InitCam(44); sc.Init(30, 20, false);
     for (int i = 0; i < N(); i++) { float a = (float)i / N() * 2 * PI; K m; m.x = 800 + cosf(a) * 300; m.y = 495 + sinf(a) * 220; k.push_back(m); }
@@ -580,10 +627,11 @@ struct TagGame : Classic {
       if (ok) bush.push_back(b);
     }
     it = rand() % N(); k[it].freeze = 0;
-    Layout(-1, R"({"name":"pad","stick":"xy","a":"DASH","hint":"Don't be IT! If you are IT, tag someone!"})");
+    Layout(-1, TouchLayout("arena", TB.Aspect(), "go", "DASH", "Tap where to run. Red ring = IT. If you're IT, tap someone to chase them!"));
   }
   void Update(float dt) override {
     time += dt; fx.Update(dt); conf.Update(dt);
+    Snap(dt);
     if (cd > 0 && cd < 3.4f && lastTick == 4) Banner(P(it).name + " is IT!", 1600, "#ff6b6b");
     if (Counting(dt, "RUN!")) return;
     if (over) return;
@@ -611,6 +659,7 @@ struct TagGame : Classic {
           dash = d < 160 && frand(0, 1) < 0.06f;
         }
       }
+      if (!p.bot && p.touch) { Vector2 t = TB.W(TouchAt(p)); in = GoToward(m.x, m.y, t.x, t.y); }
       if (m.freeze > 0) { m.freeze -= dt; in = { 0, 0 }; }
       m.immune -= dt;
       if (dash && m.dcd <= 0) { m.dashT = 0.28f; m.dcd = 2; Sfx("dash"); fx.Burst(W3(m.x, m.y, 0.5f), 10, p.color, 5, 0.4f, 0.15f); }

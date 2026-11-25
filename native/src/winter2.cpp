@@ -14,11 +14,28 @@ struct Ski : Classic {
   std::vector<S> sk; std::vector<O> obs; float T = 60, dist = 0, nextZ = 14, spd = 9; bool over = false, fin = false; float overT = 0; long nid = 0;
   std::vector<Vector4> side;  // trees along the edges
   int Score(int i) { return sk[i].gates * 10 - sk[i].crashes * 3; }
+  SnapTimer snap;
+  // the phone shows the slope ahead of you: 18 m wide, 4 m behind to 20 m ahead
+  Vector2 PP(float x, float z) { return { (x + 9) / 18, 1 - (z - (dist - 4)) / 24 }; }
+  void Snap(float dt) {
+    if (!snap.Tick(dt)) return;
+    std::vector<TouchObj> base;
+    for (auto& o : obs) {
+      if (o.z < dist - 4 || o.z > dist + 20) continue; Vector2 q = PP(o.x, o.z);
+      if (o.type == 0) base.push_back({ q.x, q.y, o.w / 2 / 18, o.c, 8 });
+      else base.push_back({ q.x, q.y, (o.w * 0.55f + 0.2f) / 18, o.hit ? Hex(0x8ca88f) : Hex(0x2f9e44), 9 });
+    }
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue; std::vector<TouchObj> o = base;
+      for (int j = 0; j < N(); j++) { Vector2 q = PP(sk[j].x, dist); o.push_back({ q.x, q.y, 0.5f / 18, P(j).color, j == i ? 1 : 3 }); }
+      SendSnap(i, o, "⛷️ YOU: " + I(sk[i].gates) + " gates" + (sk[i].crash > 0 ? " · OUCH!" : ""));
+    }
+  }
   void Start() override {
     InitCam(52);
     for (int i = 0; i < N(); i++) { S s; s.x = (i - (N() - 1) / 2.f) * 1.6f; sk.push_back(s); }
     for (float z = -10; z < 80; z += frand(1.5f, 3)) for (int sd = -1; sd <= 1; sd += 2) side.push_back({ sd * frand(10.5f, 16), z, frand(1.2f, 2.4f), frand(0, 6) });
-    Layout(-1, kit::Pad("x", "", "TUCK", "Steer through the flag gates · dodge the trees · hold TUCK for speed"));
+    Layout(-1, TouchLayout("slope", 18.f / 24.f, "steer", "", "Hold your finger where you want to ski — go between the flags, dodge the trees!", -1, "TUCK"));
   }
   void Spawn() {
     while (nextZ < dist + 45) {
@@ -29,7 +46,7 @@ struct Ski : Classic {
   }
   void Update(float dt) override {
     time += dt; fx.Update(dt); conf.Update(dt);
-    Spawn();
+    Spawn(); Snap(dt);
     if (Counting(dt, "GO!")) return;
     if (over) { overT -= dt; if (overT <= 0 && !fin) { fin = true; FinishOrder(Sorted([&](int i) { return (float)Score(i); }), [&](int i) { return I(sk[i].gates) + " gates · " + I(sk[i].crashes) + " crashes"; }); } return; }
     T -= dt;
@@ -45,6 +62,7 @@ struct Ski : Classic {
         for (auto& o : obs) if (o.type == 1 && o.z > dist && o.z < dist + 5 && fabsf(o.x - s.x) < 1.8f) want = s.x + (s.x < o.x ? -3.5f : 3.5f);
         in = Clamp((want - s.x) / 2.5f, -1, 1) * 0.9f; s.tuck = false;
       } else if (g && fabsf(in) < 0.15f) in += Clamp((g->x - s.x) / 6, -0.35f, 0.35f);  // gentle steering help when you let go
+      if (!P(i).bot && P(i).touch) { float tx = -9 + TouchAt(P(i)).x * 18; in = Clamp((tx - s.x) / 1.2f, -1, 1); }
       if (s.tuck) anyTuck = true;
       if (s.crash > 0) { s.crash -= dt; s.vx *= 0.9f; continue; }
       s.vx += (in * 13 - s.vx) * fminf(1, dt * 6); s.x = Clamp(s.x + s.vx * dt, -8.5f, 8.5f); s.lean = Clamp(s.vx / 13, -1, 1);
@@ -102,7 +120,7 @@ struct Ski : Classic {
     for (int i = 0; i < N(); i++) { Vector2 s = GetWorldToScreen({ sk[i].x, 2.6f, dist }, cam); Text(s.x, s.y, 18, P(i).color, P(i).name, 0, TS_HEAVY); if (sk[i].crash > 0) Text(s.x, s.y - 30, 26, Hex(0xff6b6b), "OUCH!", 0, TS_DISPLAY | TS_SHADOW); }
     Board("GATES", Sorted([&](int i) { return (float)Score(i); }), [&](int i) { return I(sk[i].gates); });
     Clock(T);
-    Hint("⛷️ Go between the flags (+10) · trees knock you over · hold TUCK for speed", Hex(0xd0ebff));
+    Hint("⛷️ Hold your finger where to ski · flags +10 · trees knock you over · TUCK for speed", Hex(0xd0ebff));
     DrawCount();
   }
 };
