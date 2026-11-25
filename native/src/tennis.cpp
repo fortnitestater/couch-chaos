@@ -10,7 +10,7 @@ using kit::I;
 constexpr float HL = 11.885f, HW = 4.115f, DW = 5.485f, NETH = 0.914f, SVC = 6.4f, G = 9.81f, GSPD = 0.72f;  // GSPD: game speed (slower than real = easier)
 
 struct Tennis : Classic {
-  struct Pl { int pid; int team; Vector3 pos, goal; float sw = 0, swDir = 1, cool = 0; };
+  struct Pl { int pid; int team; Vector3 pos, goal, vel{}; float sw = 0, swDir = 1, cool = 0; };
   std::vector<int> teamQ[2]; std::vector<Pl> on;  // players on court
   Vector3 bp{}, bv{}; bool live = false, bounced = false; int lastHitTeam = -1, bounces = 0; float spin = 0;
   int pts[2] = { 0, 0 }, games[2] = { 0, 0 }, server = 0, serveTeam = 0, GAMES = 2;
@@ -66,15 +66,22 @@ struct Tennis : Classic {
   }
   // where (and when) the receiver should hit: after the bounce, when the ball comes down to ~1 m
   void Predict() {
-    Vector3 p = bp, v = bv; bool b = bounced; float tt = 0;
-    for (int k = 0; k < 600; k++) {
-      float dt = 1 / 120.f; v.y -= G * dt; p = Vector3Add(p, Vector3Scale(v, dt)); tt += dt;
+    Vector3 p = bp, v = bv; bool b = bounced; float tt = 0; const float back = HL + 1.0f;
+    for (int k = 0; k < 900; k++) {
+      float dt = 1 / 120.f; Vector3 pv = v; v.y -= G * dt; p = Vector3Add(p, Vector3Scale(v, dt)); tt += dt;
       if (p.y < 0.033f && v.y < 0) { p.y = 0.033f; v.y = -v.y * 0.72f; v.x *= 0.88f; v.z *= 0.88f; if (b) break; b = true; continue; }
-      if (b && v.y < 0 && p.y < 1.05f) { hitPt = p; hitAt = tt; return; }
-      if (fabsf(p.z) > HL + 4) { hitPt = p; hitAt = tt; return; }
+      if (!b) continue;
+      // after the bounce: take it at the top of the bounce if that's a nice height, else on the way down at ~1.2 m,
+      // and never let the player be pushed far behind the baseline
+      if (pv.y > 0 && v.y <= 0 && p.y < 1.6f) { hitPt = p; hitAt = tt; return; }
+      if (v.y < 0 && p.y < 1.2f) { hitPt = p; hitAt = tt; return; }
+      if (fabsf(p.z) > back) { hitPt = p; hitAt = tt; return; }
     }
     hitPt = p; hitAt = tt;
   }
+  // the racket is in the right hand: stand beside the ball, not on it (near side faces +z → right hand is at -x)
+  float HandSide(int team) { return team == 0 ? -0.75f : 0.75f; }
+  Vector3 RacketPt(const Pl& p) { return { p.pos.x + HandSide(p.team), 1.0f, p.pos.z }; }
   int Receiver() {
     int team = 1 - lastHitTeam, best = -1; float bd = 1e9f;
     for (size_t i = 0; i < on.size(); i++) if (on[i].team == team) { float d = hypotf(on[i].pos.x - hitPt.x, on[i].pos.z - hitPt.z); if (d < bd) { bd = d; best = (int)i; } }
@@ -100,7 +107,7 @@ struct Tennis : Classic {
       if (phase == "serve" && (int)i == server && tossT < 0) { tossT = 0; servePow = power; serveAim = P(pid).stick.x; return; }
       if (phase != "rally" || !live || (int)i != recv) return;
       // generous: anywhere near the ball counts; closer to the ideal moment = better shot
-      Vector3 rk = { p.pos.x, 1.0f, p.pos.z }; float d = Vector3Distance(rk, bp);
+      Vector3 rk = RacketPt(p); float d = Vector3Distance(rk, bp);
       if (d < 3.2f && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, P(pid).stick.x, d < 1.6f); if (d < 1.1f) { call = "PERFECT!"; callT = 0.8f; } return; }
       call = d < 6 ? "TOO EARLY!" : "WAIT FOR IT…"; callT = 0.6f;
     }
@@ -130,13 +137,17 @@ struct Tennis : Classic {
         std::stable_sort(o.begin(), o.begin() + teamQ[w].size(), [&](int a, int b) { return hits[a] > hits[b]; });
         FinishOrder(o, [&](int i) { int tm = i % 2; return std::string(tm == w ? "won " : "lost ") + I(games[tm]) + "-" + I(games[1 - tm]) + " · " + I(hits[i]) + " hits"; }); } return; }
     if (phase == "point") { if (t <= 0) SetupPoint(); return; }
-    // movement: everyone glides toward their spot; the receiver runs to the ball
+    // movement: the receiver runs to stand beside the ball (racket side); everyone else recovers to their ready spot.
+    // Real-ish footwork: accelerate up to ~7 m/s, brake smoothly, always facing the net.
     for (size_t i = 0; i < on.size(); i++) {
-      Pl& p = on[i];
-      if (phase == "rally" && (int)i == recv) p.goal = { Clamp(hitPt.x - 0.6f * (hitPt.x > 0 ? 1 : -1) * 0, -DW - 1.5f, DW + 1.5f), 0, hitPt.z + Side(p.team) * 0.6f };
-      else if (phase == "rally") p.goal = { p.goal.x * 0.98f, 0, p.goal.z };
-      Vector3 d = Vector3Subtract(p.goal, p.pos); float l = Vector3Length(d), sp = 11.0f * dt;
-      if (l > 0.01f) p.pos = Vector3Add(p.pos, Vector3Scale(d, fminf(1, sp / l)));
+      Pl& p = on[i]; bool netMan = Doubles() && fabsf(p.pos.z) < 6 && (int)i != recv;
+      if (phase == "rally" && (int)i == recv) p.goal = { Clamp(hitPt.x - HandSide(p.team), -DW - 1.2f, DW + 1.2f), 0, Clamp(hitPt.z, -HL - 1.5f, HL + 1.5f) };
+      else if (phase == "rally") { float bx2 = live ? bp.x : 0; p.goal = { Clamp(bx2 * 0.35f + (netMan ? (p.goal.x > 0 ? 1.2f : -1.2f) : 0), -3, 3), 0, Side(p.team) * (netMan ? 3.5f : HL + 0.4f) }; }
+      Vector3 d = Vector3Subtract(p.goal, p.pos); d.y = 0; float l = Vector3Length(d);
+      Vector3 want = l > 0.02f ? Vector3Scale(d, fminf(7.0f, l * 4.0f) / l) : Vector3{ 0, 0, 0 };
+      Vector3 dv = Vector3Subtract(want, p.vel); float dl = Vector3Length(dv), acc = 28 * dt;
+      if (dl > acc) dv = Vector3Scale(dv, acc / dl);
+      p.vel = Vector3Add(p.vel, dv); p.pos = Vector3Add(p.pos, Vector3Scale(p.vel, dt));
     }
     if (phase == "serve") {
       Pl& s = on[server];
@@ -165,7 +176,7 @@ struct Tennis : Classic {
       }
       trail.push_back(bp); if (trail.size() > 16) trail.erase(trail.begin());
       // the AI (bots + the practice machine) hits on time, most of the time
-      if (recv >= 0) { Pl& r = on[recv]; bool ai = r.pid < 0 || P(r.pid).bot; Vector3 rk = { r.pos.x, 1, r.pos.z };
+      if (recv >= 0) { Pl& r = on[recv]; bool ai = r.pid < 0 || P(r.pid).bot; Vector3 rk = RacketPt(r);
         if (ai && Vector3Distance(rk, bp) < 1.9f && bounces == 1) { if (frand(0, 1) < (r.pid < 0 ? 0.9f : 0.8f)) Hit(recv, frand(0.45f, 0.9f), frand(-0.8f, 0.8f), true); else { recv = -1; } } }
       if (fabsf(bp.z) > HL + 9 || fabsf(bp.x) > 14) { live = false; Point(bounces >= 1 ? lastHitTeam : 1 - lastHitTeam, bounces >= 1 ? "WINNER!" : "OUT!"); }
     }
@@ -190,8 +201,8 @@ struct Tennis : Classic {
   void Draw() override {
     // broadcast camera: high behind the near baseline, drifting gently with the ball
     float bx = live ? Clamp(bp.x, -4, 4) * 0.25f : 0;
-    cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 9, -22 } : cam.position, { bx, 8.6f, -22.5f }, 0.05f);
-    cam.target = Vector3Lerp(cam.target, { bx * 0.6f, 0, 1.5f }, 0.05f); cam.fovy = 42;
+    cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 10.5f, -26 } : cam.position, { bx, 10.5f, -26.5f }, 0.05f);
+    cam.target = Vector3Lerp(cam.target, { bx * 0.6f, 0, 0.5f }, 0.05f); cam.fovy = 43;
     if (g_dbg == 7 && !on.empty()) { Pl& q = on[0]; cam.position = { q.pos.x + 2.2f, 1.6f, q.pos.z + (q.team ? -2.6f : 2.6f) }; cam.target = { q.pos.x + 0.3f, 1.0f, q.pos.z }; cam.fovy = 40; }
     UI::Sky(Hex(0x4a90e2), Hex(0xcfe8ff));
     lit.Begin(cam, { 0.75f, 0.85f, 0.95f }, 0.004f);
@@ -227,7 +238,7 @@ struct Tennis : Classic {
     // players
     for (auto& p : on) {
       Color c = p.pid >= 0 ? P(p.pid).color : Hex(0xadb5bd);
-      float yaw = p.team == 0 ? 0 : PI; bool moving = Vector3Distance(p.pos, p.goal) > 0.15f;
+      float yaw = p.team == 0 ? 0 : PI; bool moving = Vector3Length(p.vel) > 0.6f;
       g_hold.on = true; g_hold.hand = HandLocal(p, nullptr, nullptr);
       DrawToon(p.pos, yaw, c, time + p.pid, moving ? 0.12f : 0, 0, 1.05f);
       g_hold.on = false;
@@ -235,11 +246,11 @@ struct Tennis : Classic {
     }
     // timing ring: closes around the receiver as the ball arrives
     if (phase == "rally" && live && recv >= 0 && on[recv].pid >= 0 && !P(on[recv].pid).bot) {
-      Pl& r = on[recv]; float d = Vector3Distance({ r.pos.x, 1, r.pos.z }, bp), k = Clamp((d - 1.0f) / 9.0f, 0, 1);
+      Pl& r = on[recv]; Vector3 rp = RacketPt(r); float d = Vector3Distance(rp, bp), k = Clamp((d - 1.0f) / 9.0f, 0, 1);
       Color rc = d < 3.2f ? (d < 1.6f ? Hex(0x51cf66) : Hex(0xffd43b)) : Hex(0xffffff);
-      DrawCircle3D({ r.pos.x, 0.03f, r.pos.z }, 0.7f + k * 3.2f, { 1, 0, 0 }, 90, Fade(rc, 0.95f));
-      DrawCircle3D({ r.pos.x, 0.035f, r.pos.z }, 0.72f + k * 3.2f, { 1, 0, 0 }, 90, Fade(rc, 0.95f));
-      DrawCircle3D({ r.pos.x, 0.03f, r.pos.z }, 0.7f, { 1, 0, 0 }, 90, Fade(WHITE, 0.6f));
+      DrawCircle3D({ rp.x, 0.03f, rp.z }, 0.7f + k * 3.2f, { 1, 0, 0 }, 90, Fade(rc, 0.95f));
+      DrawCircle3D({ rp.x, 0.035f, rp.z }, 0.72f + k * 3.2f, { 1, 0, 0 }, 90, Fade(rc, 0.95f));
+      DrawCircle3D({ rp.x, 0.03f, rp.z }, 0.7f, { 1, 0, 0 }, 90, Fade(WHITE, 0.6f));
     }
     // ball + trail + shadow
     if (live || phase == "serve") {
