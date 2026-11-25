@@ -12,7 +12,7 @@ struct Show : Game {
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitStage() {
-    cam.position = { 0, 4.1f, 13.6f }; cam.target = { 0, 3.5f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 40; cam.projection = CAMERA_PERSPECTIVE;
+    cam.position = { 0, 3.7f, 12.3f }; cam.target = { 0, 3.05f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 40; cam.projection = CAMERA_PERSPECTIVE;
     pts.assign(N(), 0); shown.assign(N(), Spring{}); cheer.assign(N(), 0); pop.assign(N(), 0); lit_.assign(N(), 0); popTxt.assign(N(), "");
   }
   float PodX(int i) { float sp = fminf(2.0f, 13.2f / fmaxf(1, N())); return (i - (N() - 1) / 2.f) * sp; }
@@ -30,17 +30,18 @@ struct Show : Game {
   virtual void Props3D() {}  // extra 3D things on stage (drawn inside the scene)
   void Stage(std::function<bool(int)> hot = nullptr) {
     UI::Sky(Hex(0x070d26), Hex(0x1a1250));
+    if (g_dbg >= 8 && g_dbg <= 12) { int q = g_dbg >= 9 ? std::min(N() - 1, g_dbg - 9) : 0; float z = g_dbg >= 9 ? 3.1f : 4.6f; cam.position = { PodX(q) + 0.3f, 2.3f, z }; cam.target = { PodX(q), g_dbg >= 9 ? 2.5f : 2.1f, 1.55f }; }
     lit.Begin(cam, { 0.05f, 0.06f, 0.16f }, 0.006f);
     BeginMode3D(cam);
     lit.Pattern(PAT_TILE);
-    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 90, 1, 90 }), Hex(0x18224f));
+    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 90, 1, 90 }), Hex(0x22306a));
     lit.Pattern(PAT_NONE);
     // round stage riser with a gold edge
-    lit.Draw(prim.cyl, TRS({ 0, -0.3f, 1.2f }, { 0, 0, 0 }, { 10.5f, 0.42f, 5.2f }), Hex(0x223070));
+    lit.Draw(prim.cyl, TRS({ 0, -0.3f, 1.2f }, { 0, 0, 0 }, { 10.5f, 0.42f, 5.2f }), Hex(0x2c3f8f));
     lit.Draw(prim.cyl, TRS({ 0, -0.31f, 1.2f }, { 0, 0, 0 }, { 10.62f, 0.4f, 5.3f }), Hex(0xc9a24f));
     // back wall: deep navy panels with gold seams
     float wz = -10;
-    lit.Draw(prim.cube, TRS({ 0, 8, wz }, { 0, 0, 0 }, { 70, 20, 0.5f }), Hex(0x0e1640));
+    lit.Draw(prim.cube, TRS({ 0, 8, wz }, { 0, 0, 0 }, { 70, 20, 0.5f }), Hex(0x16205a));
     for (int i = -9; i <= 9; i++) lit.Draw(prim.cube, TRS({ i * 3.6f, 8, wz + 0.3f }, { 0, 0, 0 }, { 0.08f, 20, 0.05f }), Hex(0x8a6d2f));
     // light-bulb arch
     for (int k = 0; k <= 34; k++) {
@@ -58,12 +59,12 @@ struct Show : Game {
     for (int i = 0; i < N(); i++) {
       float x = PodX(i); bool h = hot ? hot(i) : false; Color c = P(i).color;
       float hop = cheer[i] > 0 ? fabsf(sinf(time * 9 + i)) * 0.35f * fminf(1, cheer[i]) : 0;
-      DrawToon({ x, 0.15f, 1.55f }, 0, c, time + i * 0.7f, hop, fminf(1, cheer[i]), 0.86f * r / 0.78f);
-      lit.Draw(prim.cyl, TRS({ x, 0, 2.35f }, { 0, 0, 0 }, { r, 1.15f, r }), Shade(c, -0.2f));
+      DrawToon({ x, 0.15f, 1.55f }, 0, c, time + i * 0.7f, hop, fminf(1, cheer[i]), 0.96f * r / 0.78f);
+      lit.Draw(prim.cyl, TRS({ x, 0, 2.35f }, { 0, 0, 0 }, { r, 0.98f, r }), Shade(c, -0.12f));
       lit.Draw(prim.cyl, TRS({ x, 0.32f, 2.35f }, { 0, 0, 0 }, { r * 1.03f, 0.1f, r * 1.03f }), Hex(0xd9b25a));
-      lit.Draw(prim.cyl, TRS({ x, 1.15f, 2.35f }, { 0, 0, 0 }, { r * 1.1f, 0.12f, r * 1.1f }), Hex(0xf2c66d));
+      lit.Draw(prim.cyl, TRS({ x, 0.98f, 2.35f }, { 0, 0, 0 }, { r * 1.1f, 0.12f, r * 1.1f }), Hex(0xf2c66d));
       // answer light on top of the podium
-      lit.Draw(prim.sphere, TRS({ x, 1.33f, 2.35f + r * 0.55f }, { 0, 0, 0 }, { 0.16f, 0.12f, 0.16f }), h ? Shade(c, 0.6f) : Hex(0x2a3155));
+      lit.Draw(prim.sphere, TRS({ x, 1.16f, 2.35f + r * 0.55f }, { 0, 0, 0 }, { 0.16f, 0.12f, 0.16f }), h ? Shade(c, 0.6f) : Hex(0x2a3155));
     }
     Props3D();
     fx.Draw(); conf.Draw();
@@ -74,6 +75,7 @@ struct Show : Game {
       float sw = sinf(time * 0.6f + s) * 2.5f;
       DrawCylinderEx({ s * 9.f, 12, -3 }, { s * 3.f + sw, 0, 2 }, 0.2f, 2.6f, 18, Fade(tint, 0.06f));
     }
+    for (int i = 0; i < N(); i++) { float x = PodX(i); DrawCylinder({ x, 0.13f, 1.7f }, PodR() * 1.7f, PodR() * 1.7f, 0.01f, 32, Fade(Hex(0xffd89a), 0.05f)); }
     BeginBlendMode(BLEND_ALPHA);
     rlDrawRenderBatchActive(); rlEnableDepthMask();
     EndMode3D();
@@ -84,7 +86,7 @@ struct Show : Game {
     float r = PodR();
     for (int i = 0; i < N(); i++) {
       float x = PodX(i);
-      Vector2 a = GetWorldToScreen({ x, 0.78f, 2.35f + r }, cam), b = GetWorldToScreen({ x, 0.42f, 2.35f + r }, cam);
+      Vector2 a = GetWorldToScreen({ x, 0.7f, 2.35f + r }, cam), b = GetWorldToScreen({ x, 0.36f, 2.35f + r }, cam);
       float fs = fminf(22, fmaxf(13, 150.f / fmaxf(5, (float)P(i).name.size()) * r / 0.78f));
       Text(a.x, a.y, fs, WHITE, P(i).name, 0, TS_HEAVY | TS_SHADOW);
       Text(b.x, b.y, fminf(26, 30 * r / 0.78f), Hex(0xffe9a8), kit::I((int)roundf(shown[i].x)), 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);

@@ -185,6 +185,14 @@ void RealProps::Init() {
     // head: rounder cranium, narrower chin, real proportions (23 cm tall)
     MeshBuilder h; h.Lathe(Resample({ { 0, -0.12f }, { 0.04f, -0.118f }, { 0.07f, -0.1f }, { 0.088f, -0.06f }, { 0.096f, -0.01f }, { 0.1f, 0.04f }, { 0.094f, 0.08f }, { 0.075f, 0.105f }, { 0.04f, 0.118f }, { 0, 0.12f } }, 30), 28, [](float, int) { return WHITE; }, MatrixScale(1, 1, 1.08f));
     head = h.Build();
+    // tapered limb: radius 1 -> 0.75 over length 1, slight muscle swell
+    MeshBuilder l; l.Lathe({ { 1.0f, 0 }, { 1.04f, 0.18f }, { 1.02f, 0.4f }, { 0.92f, 0.65f }, { 0.8f, 0.88f }, { 0.75f, 1.0f } }, 18, [](float, int) { return WHITE; });
+    for (size_t i = 0; i < l.n.size(); i += 3) { float x = l.n[i], z = l.n[i + 2], q = sqrtf(x * x + z * z); if (q > 1e-5f) { l.n[i] = x / q; l.n[i + 1] = 0; l.n[i + 2] = z / q; } }  // radial normals survive non-uniform scaling
+    limb = l.Build();
+    // dome (radius 1, rim at y = 0): hair and caps
+    { std::vector<Vector2> d; for (int i = 0; i <= 16; i++) { float a = i / 16.f * PI / 2; d.push_back({ cosf(a), sinf(a) }); } d.back().x = 0; MeshBuilder m; m.Lathe(d, 32, [](float, int) { return WHITE; });
+      for (size_t t = 0; t + 2 < m.v.size() / 3; t += 3) for (int k = 0; k < 3; k++) std::swap(m.v[(t + 1) * 3 + k], m.v[(t + 2) * 3 + k]), std::swap(m.n[(t + 1) * 3 + k], m.n[(t + 2) * 3 + k]);  // face outward
+      dome = m.Build(); }
   }
   // ---- ice hockey stick: 1.5 m composite shaft, taped blade (grip end at the origin, shaft along +Y) ----
   {

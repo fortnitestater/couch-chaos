@@ -64,8 +64,7 @@ Vector3 ToonPoint(Vector3 pos, float yaw, float sc, float hop, Vector3 local) {
   Matrix base = MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
   return Vector3Transform(local, base);
 }
-// ---------- toon character: a kid in a hooded onesie, big face, walking legs, a hat per player ----------
-// ---------- a realistic person: real proportions (1.78 m at scale 1), jointed limbs, walk/run cycle, face, hair, clothes ----------
+// ---------- a person: natural body, friendly face, jointed limbs, walk/run cycle, hair, clothes ----------
 // the shirt is the player's colour; hair, skin and shorts vary per player so everyone is recognisable
 static Vector3 Ik(Vector3 sh, Vector3 target, float l1, float l2, Vector3 pole) {  // elbow position for a two-bone arm
   Vector3 d = Vector3Subtract(target, sh); float L = fminf(Vector3Length(d), l1 + l2 - 0.001f); if (L < 1e-4f) return Vector3Add(sh, { 0, -l1, 0 });
@@ -74,13 +73,16 @@ static Vector3 Ik(Vector3 sh, Vector3 target, float l1, float l2, Vector3 pole) 
   pp = Vector3Normalize(pp); return Vector3Add(sh, Vector3Add(Vector3Scale(u, l1 * a), Vector3Scale(pp, l1 * sqrtf(1 - a * a))));
 }
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc) {
+  // a friendly, polished person: natural body, slightly larger head, big bright eyes, smile, smooth tapered limbs
   sc *= g_toonK;
   bool moving = hop > 0.02f, flash = c.r == 255 && c.g == 255 && c.b == 255;
   unsigned hsh = (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29;
-  const Color SKINS[] = { Hex(0xf2c9a8), Hex(0xe0ac82), Hex(0xc68a5e), Hex(0x8d5a3b), Hex(0xf6d5b8) };
-  const Color HAIRS[] = { Hex(0x2b1d14), Hex(0x5a3a1e), Hex(0xc9a063), Hex(0x1a1a1a), Hex(0x8a3b1c), Hex(0x6b6b6b) };
+  const Color SKINS[] = { Hex(0xf5d0b0), Hex(0xe8b48c), Hex(0xc98f63), Hex(0x94603f), Hex(0xf8dcc4) };
+  const Color HAIRS[] = { Hex(0x3a2516), Hex(0x6b4423), Hex(0xd9a441), Hex(0x221a16), Hex(0x9c4a22), Hex(0x2e2e34) };
   Color skin = flash ? WHITE : SKINS[hsh % 5], hair = flash ? WHITE : HAIRS[(hsh / 5) % 6];
-  Color shirt = c, shirtD = Shade(c, -0.25f), shorts = flash ? WHITE : ((hsh / 3) % 2 ? Hex(0x1f2a44) : Hex(0x2d2d33)), shoe = flash ? WHITE : Hex(0xf4f4f2), sole = Hex(0x3a3a40);
+  Color shirt = c, shirtD = Shade(c, -0.22f), shirtL = Shade(c, 0.25f);
+  Color shorts = flash ? WHITE : ((hsh / 3) % 2 ? Hex(0x2a3a5e) : Hex(0x34343c)), shoe = flash ? WHITE : Hex(0xfafafa), sole = flash ? WHITE : Hex(0x45454d);
+  Color blush = flash ? WHITE : ColorLerp(skin, Hex(0xff7d7d), 0.32f), eyeW = flash ? WHITE : Hex(0xffffff), iris = flash ? WHITE : Hex((hsh / 7) % 3 == 0 ? 0x4a7fb5 : 0x3b2618), lip = flash ? WHITE : Hex(0x6e2a26);
   int style = (int)((hsh / 11) % 4);  // hair style
   float ph = t * 9.5f, s1 = moving ? sinf(ph) : 0.f, run = moving ? fminf(1, hop * 4) : 0;
   float bob = moving ? fabsf(cosf(ph)) * 0.04f : sinf(t * 2.2f) * 0.006f;
@@ -89,64 +91,105 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
   Matrix base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateX(lean)), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop * 0.35f + bob * sc, pos.z));
   auto X = [&](Vector3 p) { return Vector3Transform(p, base); };
   auto E = [&](Vector3 p, Vector3 r, Vector3 s, Color col) { lit.Draw(prim.sphere, MatrixMultiply(TRS(p, r, s), base), col); };
-  auto Lb = [&](Vector3 a, Vector3 b, float r, Color col) { Limb(X(a), X(b), r * sc, col); };
-  // ---- legs: hip -> knee -> ankle -> foot, with a real stride ----
+  // smooth tapered limb: radius ra at a, rb at b, rounded ends
+  auto Tl = [&](Vector3 a, Vector3 b, float ra, float rb, Color col) {
+    Vector3 A = X(a), B = X(b), d = Vector3Subtract(B, A); float len = Vector3Length(d); if (len < 1e-4f) return;
+    Vector3 u = Vector3Scale(d, 1 / len), ax = Vector3CrossProduct({ 0, 1, 0 }, u); float s = Vector3Length(ax), ang = acosf(Clamp(u.y, -1, 1));
+    Matrix R = s < 1e-4f ? (u.y > 0 ? MatrixIdentity() : MatrixRotateX(PI)) : MatrixRotate(Vector3Scale(ax, 1 / s), ang);
+    // the limb mesh tapers 1 -> 0.75; pick the scale so the far end matches rb
+    float k = ra * sc; lit.Draw(props.limb, MatrixMultiply(MatrixMultiply(MatrixScale(k, len, k), R), MatrixTranslate(A.x, A.y, A.z)), col);
+    lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(ra * 2 * sc, ra * 2 * sc, ra * 2 * sc), MatrixTranslate(A.x, A.y, A.z)), col);
+    float re = ra * 0.75f; (void)rb;
+    lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(re * 2 * sc, re * 2 * sc, re * 2 * sc), MatrixTranslate(B.x, B.y, B.z)), col);
+  };
+  // ---- legs: hip -> knee -> ankle -> sneaker ----
   for (int s = -1; s <= 1; s += 2) {
     float sw = s1 * s, th = sw * (0.35f + 0.25f * run), bend = moving ? fmaxf(0, -sw) * (0.6f + 0.6f * run) + 0.1f : 0.05f;
-    Vector3 hip = { s * 0.095f, 0.93f, 0 };
-    Vector3 knee = Vector3Add(hip, { 0, -0.44f * cosf(th), 0.44f * sinf(th) });
-    Vector3 ank = Vector3Add(knee, { 0, -0.42f * cosf(th - bend), 0.42f * sinf(th - bend) });
-    Lb(hip, Vector3Lerp(hip, knee, 0.55f), 0.088f, shorts);   // thigh in shorts
-    Lb(Vector3Lerp(hip, knee, 0.45f), knee, 0.07f, skin);
-    Lb(knee, ank, 0.058f, skin);                                // calf
-    Lb(Vector3Lerp(knee, ank, 0.7f), ank, 0.047f, flash ? WHITE : Hex(0xf1f1f1));  // sock
-    Vector3 toe = Vector3Add(ank, { 0, -0.045f, 0.12f });
-    E({ (ank.x + toe.x) / 2, ank.y - 0.04f, (ank.z + toe.z) / 2 + 0.02f }, { 0, 0, 0 }, { 0.11f, 0.08f, 0.28f }, shoe);
-    E({ (ank.x + toe.x) / 2, ank.y - 0.075f, (ank.z + toe.z) / 2 + 0.02f }, { 0, 0, 0 }, { 0.115f, 0.03f, 0.29f }, sole);
+    Vector3 hip = { s * 0.092f, 0.93f, 0 };
+    Vector3 knee = Vector3Add(hip, { 0, -0.43f * cosf(th), 0.43f * sinf(th) });
+    Vector3 ank = Vector3Add(knee, { 0, -0.41f * cosf(th - bend), 0.41f * sinf(th - bend) });
+    Tl(Vector3Lerp(hip, knee, 0.3f), knee, 0.088f, 0, skin);                        // thigh
+    Tl(hip, Vector3Lerp(hip, knee, 0.5f), 0.104f, 0, shorts);                       // shorts leg
+    Tl(knee, ank, 0.066f, 0, skin);                                                 // calf
+    Tl(Vector3Lerp(knee, ank, 0.72f), ank, 0.054f, 0, flash ? WHITE : Hex(0xf4f4f4)); // sock
+    Vector3 f = { ank.x, ank.y - 0.05f, ank.z + 0.06f };
+    E(f, { 0, 0, 0 }, { 0.115f, 0.095f, 0.27f }, shoe);                             // sneaker
+    E({ f.x, f.y - 0.032f, f.z }, { 0, 0, 0 }, { 0.122f, 0.04f, 0.285f }, sole);
+    E({ f.x + s * 0.052f, f.y + 0.005f, f.z - 0.01f }, { 0, 0, 0 }, { 0.02f, 0.035f, 0.13f }, shirt);  // colour stripe
   }
-  // ---- torso: one smooth sculpted trunk (shirt) over the shorts ----
+  // ---- torso ----
   DrawProp(props.torsoShorts, base, shorts);
   DrawProp(props.torsoShirt, base, shirt);
-  E({ 0, 1.47f, 0.02f }, { 0.25f, 0, 0 }, { 0.15f, 0.035f, 0.12f }, shirtD);   // collar
-  // ---- arms: shoulder -> elbow -> wrist -> hand; swing while running, raise when cheering, grip when holding ----
+  E({ 0, 1.475f, 0.02f }, { 0.25f, 0, 0 }, { 0.16f, 0.04f, 0.13f }, shirtD);    // collar
+  // ---- arms ----
   for (int s = -1; s <= 1; s += 2) {
-    Vector3 sh = { s * 0.205f, 1.41f, 0 }, wrist;
+    Vector3 sh = { s * 0.2f, 1.4f, 0 }, wrist;
     float up = cheer * (0.9f + 0.1f * sinf(t * 10 + s));
     if (g_hold.on && s == -1) wrist = g_hold.hand;
-    else if (up > 0.05f) wrist = Vector3Lerp({ s * 0.3f, 0.95f, 0.05f }, { s * 0.32f, 1.98f + 0.04f * sinf(t * 12 + s), 0.08f }, fminf(1, up));
-    else { float a = -s1 * s * (0.45f + 0.35f * run); wrist = { s * 0.25f, 1.41f - 0.5f * cosf(a) + (moving ? 0.1f * run : 0), 0.5f * sinf(a) + (moving ? 0.12f * run : 0.04f) }; }
-    Vector3 el = Ik(sh, wrist, 0.29f, 0.26f, { s * 0.4f, -0.4f, -0.6f });
+    else if (up > 0.05f) wrist = Vector3Lerp({ s * 0.28f, 0.98f, 0.08f }, { s * 0.34f, 1.98f + 0.04f * sinf(t * 12 + s), 0.1f }, fminf(1, up));
+    else {
+      float a = -s1 * s * (0.45f + 0.35f * run), br = moving ? 0 : sinf(t * 2.2f + s) * 0.01f;
+      wrist = { s * 0.255f, 1.4f - 0.49f * cosf(a) + (moving ? 0.1f * run : 0.03f) + br, 0.49f * sinf(a) + (moving ? 0.12f * run : 0.07f) };
+    }
+    Vector3 el = Ik(sh, wrist, 0.28f, 0.25f, { s * 0.5f, -0.3f, -0.6f });
     Vector3 elDir = Vector3Normalize(Vector3Subtract(el, sh));
-    Lb(sh, Vector3Add(sh, Vector3Scale(elDir, 0.14f)), 0.062f, shirt);    // sleeve
-    Lb(Vector3Add(sh, Vector3Scale(elDir, 0.12f)), el, 0.05f, skin);      // upper arm
-    Vector3 wd = Vector3Normalize(Vector3Subtract(wrist, el)); Vector3 wr = Vector3Add(el, Vector3Scale(wd, 0.26f));
-    Lb(el, wr, 0.043f, skin);                                               // forearm
-    Vector3 hc = Vector3Add(wr, Vector3Scale(wd, 0.06f));
-    E(hc, { 0, 0, 0 }, { 0.075f, 0.1f, 0.05f }, skin);                       // hand
-    E(Vector3Add(hc, { s * -0.03f, 0.02f, 0.03f }), { 0, 0, 0 }, { 0.03f, 0.05f, 0.03f }, skin);  // thumb
+    Tl(Vector3Add(sh, Vector3Scale(elDir, 0.05f)), el, 0.058f, 0, skin);             // upper arm
+    Tl(sh, Vector3Add(sh, Vector3Scale(elDir, 0.15f)), 0.07f, 0, shirt);            // sleeve
+    Vector3 wd = Vector3Normalize(Vector3Subtract(wrist, el)); Vector3 wr = Vector3Add(el, Vector3Scale(wd, 0.24f));
+    Tl(el, wr, 0.044f, 0, skin);                                                    // forearm
+    Vector3 hc = Vector3Add(wr, Vector3Scale(wd, 0.055f));
+    E(hc, { 0, 0, 0 }, { 0.08f, 0.1f, 0.055f }, skin);                               // hand
+    E(Vector3Add(hc, { s * -0.034f, 0.025f, 0.028f }), { 0, 0, 0 }, { 0.032f, 0.055f, 0.032f }, skin);  // thumb
   }
-  // ---- neck + head ----
-  Lb({ 0, 1.44f, 0 }, { 0, 1.56f, 0.01f }, 0.05f, skin);
-  float hy = 1.67f;
-  DrawProp(props.head, MatrixMultiply(MatrixTranslate(0, hy - 0.01f, 0.01f), base), skin);
+  // ---- neck + head (head ~1.3x natural: friendlier and readable from the couch) ----
+  Tl({ 0, 1.43f, 0 }, { 0, 1.56f, 0.01f }, 0.058f, 0, skin);
+  const float K = 1.32f, hy = 1.69f;
+  DrawProp(props.head, MatrixMultiply(MatrixMultiply(MatrixScale(K, K, K), MatrixTranslate(0, hy, 0.01f)), base), skin);
+  bool blink = fmodf(t + (float)(hsh % 7), 4.2f) < 0.12f;
+  bool happy = cheer > 0.3f;
   for (int s = -1; s <= 1; s += 2) {
-    E({ s * 0.103f, hy - 0.005f, -0.005f }, { 0, 0, 0 }, { 0.03f, 0.055f, 0.04f }, Shade(skin, -0.06f));  // ears
-    bool blink = fmodf(t + (float)(hsh % 7), 4.2f) < 0.12f;
-    E({ s * 0.038f, hy + 0.012f, 0.108f }, { 0, 0, 0 }, { 0.03f, blink ? 0.004f : 0.018f, 0.012f }, flash ? WHITE : Hex(0xfdfdfd));
-    if (!blink) E({ s * 0.038f, hy + 0.012f, 0.114f }, { 0, 0, 0 }, { 0.015f, 0.015f, 0.008f }, flash ? WHITE : Hex(0x3b2a1e));
-    E({ s * 0.04f, hy + 0.04f, 0.11f }, { 0, 0, s * 0.12f }, { 0.04f, 0.009f, 0.012f }, hair);  // brows
+    E({ s * 0.13f, hy - 0.005f, -0.004f }, { 0, s * 0.3f, 0 }, { 0.035f, 0.065f, 0.05f }, Shade(skin, -0.05f));  // ears
+    // eyes follow the curve of the face
+    float ry = s * 0.36f; Vector3 n = { s * 0.35f, 0, 0.94f };
+    Vector3 ec = { s * 0.048f, hy + 0.012f, 0.131f };
+    if (blink || happy) {
+      E(Vector3Add(ec, Vector3Scale(n, 0.004f)), { 0, ry, 0 }, { 0.046f, 0.008f, 0.014f }, flash ? WHITE : Hex(0x2a1a12));  // closed / smiling eye
+    } else {
+      E(ec, { 0, ry, 0 }, { 0.05f, 0.058f, 0.02f }, eyeW);
+      Vector3 ic = Vector3Add(ec, Vector3Scale(n, 0.008f)); ic.y -= 0.004f;
+      E(ic, { 0, ry, 0 }, { 0.034f, 0.038f, 0.012f }, iris);
+      E(Vector3Add(ic, Vector3Scale(n, 0.004f)), { 0, ry, 0 }, { 0.018f, 0.02f, 0.008f }, flash ? WHITE : Hex(0x120c08));  // pupil
+      E(Vector3Add(Vector3Add(ic, Vector3Scale(n, 0.007f)), { s * 0.006f - 0.004f, 0.009f, 0 }), { 0, 0, 0 }, { 0.011f, 0.011f, 0.006f }, WHITE);  // sparkle
+    }
+    E({ s * 0.05f, hy + 0.06f, 0.124f }, { 0, s * 0.38f, s * -0.12f }, { 0.052f, 0.013f, 0.016f }, hair);  // brows
+    E({ s * 0.078f, hy - 0.03f, 0.109f }, { 0, s * 0.62f, 0 }, { 0.044f, 0.026f, 0.006f }, blush);       // cheeks
   }
-  E({ 0, hy - 0.018f, 0.118f }, { 0.3f, 0, 0 }, { 0.024f, 0.042f, 0.028f }, Shade(skin, -0.04f));    // nose
-  E({ 0, hy - 0.062f, 0.1f }, { 0, 0, 0 }, { 0.044f, cheer > 0.3f ? 0.02f : 0.008f, 0.012f }, flash ? WHITE : Hex(cheer > 0.3f ? 0x7a2a2a : 0xa8584e));  // mouth
-  // hair: short crop, ponytail, curly top, or a cap in the shirt colour
-  if (style == 3) {
-    E({ 0, hy + 0.085f, -0.005f }, { 0, 0, 0 }, { 0.205f, 0.11f, 0.225f }, shirtD);
-    E({ 0, hy + 0.06f, 0.1f }, { 0.25f, 0, 0 }, { 0.17f, 0.02f, 0.12f }, shirtD);
+  E({ 0, hy - 0.022f, 0.141f }, { 0, 0, 0 }, { 0.024f, 0.026f, 0.022f }, Shade(skin, -0.02f));  // nose
+  if (happy) {
+    E({ 0, hy - 0.066f, 0.126f }, { 0.2f, 0, 0 }, { 0.058f, 0.036f, 0.02f }, flash ? WHITE : Hex(0x5a1e1e));  // open laugh
+    E({ 0, hy - 0.056f, 0.132f }, { 0.2f, 0, 0 }, { 0.046f, 0.01f, 0.012f }, WHITE);                        // teeth
   } else {
-    E({ 0, hy + 0.05f, -0.02f }, { 0, 0, 0 }, { 0.205f, 0.17f, 0.215f }, hair);
-    E({ 0, hy - 0.01f, -0.06f }, { 0, 0, 0 }, { 0.2f, 0.18f, 0.15f }, hair);
-    if (style == 1) { E({ 0, hy - 0.02f, -0.13f }, { 0, 0, 0 }, { 0.07f, 0.07f, 0.07f }, hair); Lb({ 0, hy - 0.04f, -0.14f }, { 0, hy - 0.2f, -0.15f }, 0.03f, hair); }
-    if (style == 2) for (int k = 0; k < 5; k++) E({ -0.07f + k * 0.035f, hy + 0.11f, 0.02f - (k % 2) * 0.03f }, { 0, 0, 0 }, { 0.07f, 0.06f, 0.07f }, hair);
+    for (int k = -4; k <= 4; k++) {  // a gentle smile line
+      float x = k * 0.0075f, y = hy - 0.062f + 0.013f * (k * k) / 16.f;
+      E({ x, y, 0.135f - 0.0007f * k * k }, { 0, 0, 0 }, { 0.014f, 0.011f, 0.012f }, lip);
+    }
+  }
+  // ---- hair: neat crop, long with ponytail, curly, or a cap in the shirt colour ----
+  if (style == 3) {
+    DrawProp(props.dome, MatrixMultiply(TRS({ 0, hy + 0.03f, -0.008f }, { -0.3f, 0, 0 }, { 0.157f, 0.17f, 0.177f }), base), shirtD);
+    E({ 0, hy + 0.075f, 0.15f }, { 0.22f, 0, 0 }, { 0.22f, 0.024f, 0.16f }, shirtD);   // brim
+    E({ 0, hy + 0.175f, 0 }, { 0, 0, 0 }, { 0.03f, 0.02f, 0.03f }, shirt);             // button
+    E({ 0, hy - 0.03f, -0.04f }, { 0, 0, 0 }, { 0.26f, 0.2f, 0.24f }, hair);          // hair under the cap
+  } else {
+    DrawProp(props.dome, MatrixMultiply(TRS({ 0, hy + 0.025f, -0.012f }, { -0.32f, 0, 0 }, { 0.155f, 0.175f, 0.175f }), base), hair);
+    E({ 0, hy + 0.02f, -0.045f }, { 0, 0, 0 }, { 0.276f, 0.29f, 0.25f }, hair);      // back of the head
+    E({ -0.035f, hy + 0.1f, 0.098f }, { -0.5f, 0, 0.25f }, { 0.17f, 0.045f, 0.09f }, hair); // side-swept fringe
+    if (style == 1) {
+      for (int s = -1; s <= 1; s += 2) Tl({ s * 0.12f, hy + 0.02f, -0.02f }, { s * 0.135f, hy - 0.16f, -0.04f }, 0.04f, 0, hair);  // long sides
+      E({ 0, hy + 0.0f, -0.15f }, { 0, 0, 0 }, { 0.08f, 0.08f, 0.08f }, Shade(c, -0.1f));  // scrunchie
+      Tl({ 0, hy - 0.01f, -0.17f }, { 0, hy - 0.22f, -0.19f }, 0.042f, 0, hair);          // ponytail
+    }
+    if (style == 2) for (int k = 0; k < 7; k++) { float a = k / 6.f * PI; E({ cosf(a) * 0.1f, hy + 0.1f + sinf(a) * 0.045f, 0.01f - (k % 2) * 0.05f }, { 0, 0, 0 }, { 0.085f, 0.075f, 0.085f }, hair); }
   }
 }
 
