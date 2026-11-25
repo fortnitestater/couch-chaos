@@ -260,6 +260,9 @@ void Particles3D::Draw() {
 }
 
 // ---------- registry + exported API ----------
+static std::vector<std::pair<std::string, GameMaker>>& Registry() { static std::vector<std::pair<std::string, GameMaker>> r; return r; }
+RegGame::RegGame(const char* id, GameMaker f) { Registry().push_back({ id, f }); }
+std::unique_ptr<Game> MakeRegistered(const std::string& id) { for (auto& r : Registry()) if (r.first == id) return r.second(); return nullptr; }
 static std::vector<Player> players;
 static std::unique_ptr<Game> game;
 
@@ -302,6 +305,15 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
   else if (g == "memory") game = MakeMemory();
   else if (g == "hilo") game = MakeHiLo();
   else if (g == "word") game = MakeWord();
+  else if (g == "trivia") game = MakeTrivia();
+  else if (g == "colors") game = MakeClash();
+  else if (g == "count") game = MakeCount();
+  else if (g == "math") game = MakeMath();
+  else if (g == "likely") game = MakeLikely();
+  else if (g == "lowest") game = MakeLowest();
+  else if (g == "rps") game = MakeRPS();
+  else if (g == "bomb") game = MakeBomb();
+  else game = MakeRegistered(g);
   if (game) { game->ps = &players; game->Start(); }
 }
 EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {

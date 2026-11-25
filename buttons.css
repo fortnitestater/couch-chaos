@@ -1,0 +1,116 @@
+/* =====================================================================
+   COUCH CHAOS — REAL BUTTONS
+   Every button is a physical keycap: a glossy candy top, a solid lip it
+   sits on, a soft drop shadow. Pressing sinks it onto the lip (instant),
+   letting go springs it back up with a tiny overshoot. press.js adds the
+   .rb class to every button, sets --bc from its color and handles .press.
+   ===================================================================== */
+.rb {
+  --bc: #4d7cff; --depth: 6px; --lip: color-mix(in oklab, var(--bc) 52%, #05060d);
+  position: relative; isolation: isolate; overflow: hidden;
+  background-color: var(--bc) !important;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,0) 55%, rgba(0,0,0,.16) 100%) !important;
+  border: 0 !important;
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.55),
+    inset 0 -3px 0 rgba(0,0,0,.16),
+    inset 0 0 0 1px rgba(255,255,255,.12),
+    0 var(--depth) 0 var(--lip),
+    0 calc(var(--depth) + 4px) 14px rgba(0,0,0,.42) !important;
+  transform: translateY(0) !important;
+  transition: transform 260ms var(--ease-bounce, cubic-bezier(.3,1.6,.5,1)), box-shadow 260ms var(--ease-bounce, ease-out), filter 160ms !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.22);
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  margin-bottom: var(--depth);
+}
+/* the glossy reflection across the top of the cap */
+.rb::before {
+  content: ''; position: absolute; z-index: -1; left: 6%; right: 6%; top: 3px; height: 46%;
+  border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.42), rgba(255,255,255,0));
+  opacity: .8; transition: opacity 160ms;
+}
+.rb.light { text-shadow: 0 1px 0 rgba(255,255,255,.4); }
+/* pressed: the cap sits on its lip */
+.rb.press, .rb.on {
+  transform: translateY(calc(var(--depth) - 1px)) !important;
+  box-shadow:
+    inset 0 2px 6px rgba(0,0,0,.25),
+    inset 0 -1px 0 rgba(255,255,255,.18),
+    0 1px 0 var(--lip),
+    0 2px 5px rgba(0,0,0,.35) !important;
+  filter: brightness(.96) saturate(1.08);
+  transition: transform 45ms ease-out, box-shadow 45ms ease-out, filter 45ms !important;
+}
+.rb.press::before, .rb.on::before { opacity: .45; }
+.rb:disabled { filter: saturate(.25) brightness(.7); opacity: .55;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 0 var(--lip) !important; transform: translateY(calc(var(--depth) - 2px)) !important; }
+/* the one you picked stays pressed in and lit */
+.rb.picked { filter: none; opacity: 1; outline: 4px solid #fff; outline-offset: 3px;
+  transform: translateY(calc(var(--depth) - 1px)) !important; box-shadow: inset 0 2px 6px rgba(0,0,0,.22), 0 1px 0 var(--lip), 0 0 26px color-mix(in oklab, var(--bc) 70%, #fff) !important; }
+
+/* sizes / depths */
+.rb.d-sm { --depth: 4px; }
+.pbtn.rb { --depth: 10px; border-radius: 50% !important; }
+.pbtn.rb.pa { --bc: #ff4d6d; }
+.pbtn.rb.pb { --bc: #3d8bff; }
+.tapBig.rb { --depth: 16px; --bc: #ff4d6d; }
+.readyBtn.rb { --depth: 9px; --bc: #34c77b; color: #06240f !important; }
+.readyBtn.rb.done { --bc: #3a4670; color: #c9d0ec !important; }
+.big.rb { --depth: 8px; --bc: #ffd166; color: #2b1a00 !important; }
+.dpad button.rb { --depth: 7px; --bc: #2b3c74; color: #fff; border-radius: 22px !important; }
+.dpad .ok.rb { --bc: #ffd166; color: #2b1a00; border-radius: 50% !important; }
+.qbtns button.rb { --bc: #ff8a4c; color: #2b1200; }
+.qbtns button.alt.rb { --bc: #7c5cff; color: #fff; }
+.gbtn.rb { --bc: #1f2742; --depth: 5px; color: #fff; }
+.chip.rb, .ctrlBtn.rb { --bc: #2a3356; --depth: 3px; color: #e2e6f3 !important; margin-bottom: 3px; }
+.chip.rb.on { --bc: #f7f8fc; color: #0b0d17 !important; }
+.ctrlBtn.rb.on { --bc: #6d4bff; color: #fff !important; }
+.cardBtns button.rb, .diceBtns button.rb { --bc: #3d8bff; color: #fff; }
+.diceBtns button.done.rb { --bc: #34c77b; color: #06240f; }
+.bingoBtn.rb { --depth: 9px; --bc: #ff4d6d; color: #fff; }
+.bcard button.rb { --depth: 4px; --bc: #f7f6f1; color: #1a1438; text-shadow: none; }
+.bcard button.rb.mk { --bc: #ff4d6d; color: #fff; }
+.bcard button.rb.free { --bc: #ffd166; }
+.bcard button.rb.called:not(.mk) { --bc: #dcecff; }
+.suitPick button.rb { --bc: #ffffff; --depth: 8px; color: #1a1a2e; }
+.drawTools button.rb { --depth: 4px; border-radius: 50% !important; }
+.drawTools button.rb.sel { outline: 3px solid #fff; outline-offset: 2px; }
+.drawTools .clr.rb { --bc: #3a4670; color: #fff; border-radius: 14px !important; width: auto; padding: 0 12px; }
+.songBtns button.rb, .songHost button.rb { --bc: #3d5bd9; }
+.songBtns button#sgSkip.rb { --bc: #6d4bff; }
+.songHost button.end.rb { --bc: #e03131; }
+.songSug button.rb { --bc: #2f2566; --depth: 4px; }
+.songIn button.rb { --bc: #2f3a66; --depth: 4px; }
+.camBtn.rb { --bc: #1f2742; --depth: 5px; }
+.camRemote button.rb { --depth: 4px; --bc: #2f3a66; }
+.camRemote button.ok.rb { --bc: #ffd166; color: #1a0f00; }
+#diceName.rb { --bc: #2f3a66; --depth: 5px; }
+
+/* the joystick: a real rubber thumbstick in a recessed socket */
+.jsBase { background: radial-gradient(circle at 50% 40%, #0b0e1a 0%, #151a2c 55%, #232a44 100%) !important;
+  border: 0 !important; box-shadow: inset 0 6px 14px rgba(0,0,0,.7), inset 0 -2px 0 rgba(255,255,255,.08), 0 0 0 6px rgba(255,255,255,.05), 0 0 0 7px rgba(0,0,0,.35) !important; }
+.jsKnob { width: 84px !important; height: 84px !important; margin: -42px 0 0 -42px !important;
+  background: radial-gradient(circle at 50% 46%, #2e3550 0%, #262c44 38%, #3a4262 39%, #2a304a 62%, #4a5378 100%) !important;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.22), inset 0 -4px 6px rgba(0,0,0,.45), 0 10px 0 #10131f, 0 14px 22px rgba(0,0,0,.55) !important;
+  transition: transform 220ms var(--ease-bounce, ease-out); }
+.jsKnob::after { content: ''; position: absolute; inset: 22%; border-radius: 50%;
+  background: repeating-radial-gradient(circle, rgba(255,255,255,.06) 0 2px, rgba(0,0,0,.12) 2px 4px); box-shadow: inset 0 2px 4px rgba(0,0,0,.5); }
+.joyZone.on .jsKnob { transition: none; box-shadow: inset 0 3px 0 rgba(255,255,255,.22), inset 0 -4px 6px rgba(0,0,0,.45), 0 5px 0 #10131f, 0 8px 14px rgba(0,0,0,.5) !important; }
+.joyZone { background: radial-gradient(circle at 50% 50%, rgba(255,209,102,.07), rgba(255,255,255,.02) 70%) !important; border: 2px solid rgba(255,255,255,.06) !important; }
+
+/* picked state on the old outline hack */
+.choiceGrid button.rb { border-radius: 20px !important; }
+.bigCard.rb { --bc: #2a2266; --depth: 9px; color: #fff; border-radius: 26px !important; }
+.bigCard.rb:hover { filter: brightness(1.08); }
+
+/* phone matches the TV console: midnight navy with gold accents */
+body.padBody { background:
+  radial-gradient(120% 60% at 50% -8%, rgba(255,209,102,.13) 0%, transparent 55%),
+  radial-gradient(90% 50% at 50% 110%, rgba(61,90,200,.35) 0%, transparent 60%),
+  linear-gradient(180deg, #0c1638 0%, #08102a 100%) !important; }
+.padBody .topbar { background: rgba(10,18,48,.72) !important; border-bottom: 1px solid rgba(242,198,109,.22) !important; }
+.padBody .focusCard { background: rgba(255,255,255,.06); border: 1px solid rgba(242,198,109,.28); }
+.padBody .focusCard b, .padBody .introC h2, .padBody .center h2 { background: linear-gradient(180deg, #fff3ce, #f2c66d 50%, #c48c3a); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.padBody .muted { color: #9fb0dc; }

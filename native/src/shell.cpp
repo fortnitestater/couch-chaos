@@ -56,7 +56,7 @@ void DrawBoot(float a) {
 
 // ---------------- HOME (gold & midnight console) ----------------
 const Color GOLDN = Hex(0xf2c66d), GOLDN_D = Hex(0xb8873a), NAVY = Hex(0x0a1633), CREAM = Hex(0xfff3d6);
-constexpr int TS_GOLD = 32, TS_SPACED = 64, TS_SILVER = 128;
+
 struct Spark { float x, y, s, ph, sp; };
 std::vector<Spark> sparks;
 Spring tabX, tabW, rowIn, carousel, descIn; std::vector<float> rowMemoScroll;

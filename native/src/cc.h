@@ -14,7 +14,7 @@ constexpr int W = 1600, H = 900;
 
 // ---------- bridge to the website ----------
 // Text is drawn by the website with real fonts (emoji, names). align: 0 center, -1 left, 1 right. wrapW > 0 wraps lines.
-enum { TS_DISPLAY = 1, TS_PLAIN = 2, TS_SHADOW = 4, TS_LIGHT = 8, TS_HEAVY = 16 };
+enum { TS_DISPLAY = 1, TS_PLAIN = 2, TS_SHADOW = 4, TS_LIGHT = 8, TS_HEAVY = 16, TS_GOLD = 32, TS_SPACED = 64, TS_SILVER = 128 };
 void Text(float x, float y, float size, Color c, const std::string& s, int align = 0, int style = 0, float wrapW = 0);
 float Measure(const std::string& s, float size, int style = 0);
 void TextClip(float x, float y, float w, float h);
@@ -127,4 +127,16 @@ std::unique_ptr<Game> MakeDice();
 std::unique_ptr<Game> MakeMemory();
 std::unique_ptr<Game> MakeHiLo();
 std::unique_ptr<Game> MakeWord();
+std::unique_ptr<Game> MakeTrivia();
+std::unique_ptr<Game> MakeClash();
+std::unique_ptr<Game> MakeCount();
+std::unique_ptr<Game> MakeMath();
+std::unique_ptr<Game> MakeLikely();
+std::unique_ptr<Game> MakeLowest();
+std::unique_ptr<Game> MakeRPS();
+std::unique_ptr<Game> MakeBomb();
+// newer games register themselves: static RegGame r("id", [] { return std::unique_ptr<Game>(new X); });
+using GameMaker = std::unique_ptr<Game> (*)();
+struct RegGame { RegGame(const char* id, GameMaker f); };
+std::unique_ptr<Game> MakeRegistered(const std::string& id);
 #include "json.h"

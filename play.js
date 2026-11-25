@@ -360,7 +360,7 @@
     stage.querySelectorAll('.choiceGrid button').forEach(b => b.onclick = () => {
       sendMsg({ t: 'act', a: 'choice', i: +b.dataset.i }); navigator.vibrate?.(20);
       if (multi) { taps++; const d = $('#dots'); if (d) d.textContent = '●'.repeat(taps) + '○'.repeat(Math.max(0, multi - taps)); b.style.transform = 'scale(.92)'; setTimeout(() => b.style.transform = '', 100); if (taps >= multi) stage.querySelectorAll('.choiceGrid button').forEach(x => x.disabled = true); }
-      else stage.querySelectorAll('.choiceGrid button').forEach(x => { x.disabled = true; if (x === b) { x.disabled = false; x.style.outline = '5px solid #fff'; } });
+      else stage.querySelectorAll('.choiceGrid button').forEach(x => { x.disabled = true; if (x === b) { x.disabled = false; x.classList.add('picked'); } });
     });
   }
   function renderDraw(L) {

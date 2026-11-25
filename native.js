@@ -138,6 +138,11 @@ class NativeGame {
   onPump(p, n) { const i = this.ps.indexOf(p); if (i >= 0 && this.ready) NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, 'pump', Math.max(1, +n || 1), 0]); }
   onAct(p, m) {
     const i = this.ps.indexOf(p); if (i < 0 || !this.ready) return;
+    if (m.a === 'stroke' && Array.isArray(m.pts)) {  // doodles: "stroke:id|#color|width|x,y;x,y;..."
+      const pts = m.pts.slice(0, 200).filter(Array.isArray).map(q => (+q[0] || 0).toFixed(3) + ',' + (+q[1] || 0).toFixed(3)).join(';');
+      NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, `stroke:${String(m.id || '').replace(/[|:]/g, '')}|${String(m.c || '#000').slice(0, 9)}|${+m.w || 6}|${pts}`, 0, 0]);
+      return;
+    }
     const kind = String(m.a || '') + (m.id ? ':' + m.id : ''), n = m.s ? ['♠', '♥', '♦', '♣'].indexOf(m.s) : +m.i || 0;
     NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, kind, n, +m.p || 0]);
   }
