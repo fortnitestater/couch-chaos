@@ -455,7 +455,7 @@ class SmashTennis extends Sport3D {
     const to = opp.reduce((a, q) => (Math.abs(q.x - (c ? c.x : tx)) < Math.abs(a.x - (c ? c.x : tx)) ? q : a));
     // can they get there in time? real players: ~0.25 s to react, ~5.5 m/s sprint, ~1.3 m reach with the racket
     const easy = to.p.ctrl !== 'motion' && !to.p.cam && !to.p.bot;
-    const reach = c ? easy || Math.hypot(c.x - to.x, c.z - to.z) <= 5.3 * Math.max(0, c.t - 0.3) + 1.25 : false;
+    const reach = c ? easy || !to.p.bot || Math.hypot(c.x - to.x, c.z - to.z) <= 5.3 * Math.max(0, c.t - 0.3) + 1.25 : false; // people always get there; only bots can be beaten
     this.ball = { sim, t: 0, t1: b1 ? b1.t : 99, bx: b1 ? b1.x : tx, bz: b1 ? b1.z : tz, A: c ? c.t : sim.end, c: c || { x: tx, y: 1, z: to.z, t: sim.end }, rcv: to, by: from, kind, spin, kmh: Math.round(kmh),
       smash: kind === 'smash' || !!opt.fire, bounced: false, done: false, out: !!b1 && !sim.net && !inside, netT: sim.net ? sim.net.t : null, serve: kind === 'serve', reach, prevZ: S.z };
     // bots: they try to hit it on time, but like people they are sometimes a bit early / late
@@ -509,10 +509,10 @@ class SmashTennis extends Sport3D {
     if (this.phase !== 'rally' || !this.ball || this.ball.done || this.ball.rcv !== pl || this.ball.netT != null || this.ball.out) return;
     const b = this.ball, easy = pl.p.ctrl !== 'motion' && !pl.p.cam && !pl.p.bot; let dt = b.t - this.latency(pl, lag) - b.A;
     if (easy) { if (dt < -0.7 || dt > 0.5) { if (dt < -0.7) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('WAIT FOR IT…', s.x, s.y, '#ff922b', 34, 0.7); pl.cool = 0.1; } return; } dt *= 0.35; } // joystick: forgiving timing
-    if (dt < -0.38) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO EARLY!', s.x, s.y, '#ff922b', 36, 0.7); pl.cool = 0.15; return; }
-    if (dt > 0.3) return; // too late — the ball is past you
+    if (dt < -0.5) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO EARLY!', s.x, s.y, '#ff922b', 36, 0.7); pl.cool = 0.15; return; }
+    if (dt > 0.42) return; // too late — the ball is past you (generous window)
     if (!b.reach) { const s = this.scr(pl.x, 2.6, pl.z); this.pop.add('TOO FAR!', s.x, s.y, '#ff922b', 34, 0.7); return; }
-    const perfect = Math.abs(dt) < 0.09, good = Math.abs(dt) < 0.2, high = b.c.y > 2.0;
+    const perfect = Math.abs(dt) < 0.12, good = Math.abs(dt) < 0.28, high = b.c.y > 2.0;
     this.hits.set(pl.p, this.hits.get(pl.p) + 1); this.rally = (this.rally || 0) + 1;
     if (this.rally === 8) { this.say('Unbelievable!'); this.c.sfx.cheer && this.c.sfx.cheer(0.5); } else if (perfect && Math.random() < 0.12) this.say('What a shot!');
     const bxRel = (b.c.x - pl.x) * this.bodyRight(pl);

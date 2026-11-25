@@ -24,7 +24,7 @@ struct Chairs : Classic {
   void NewRound() {
     round++; int m = Alive(); chA.clear(); chWho.clear();
     for (int c = 0; c < m - 1; c++) { chA.push_back((float)c / (m - 1) * 2 * PI); chWho.push_back(-1); }
-    for (auto& q : k) { q.seat = false; q.chair = -1; q.react = frand(0.25f, 0.9f); }
+    for (auto& q : k) { q.seat = false; q.chair = -1; q.react = frand(0.5f, 1.2f); }
     t = frand(5, 10);
     if (round == 1) phase = "count";
     else { phase = "music"; Sfx("musicOn"); Banner("ROUND " + std::to_string(round) + " · " + std::to_string(m - 1) + (m - 1 == 1 ? " CHAIR LEFT" : " CHAIRS"), 1600, "#ffd43b"); }
@@ -147,8 +147,8 @@ struct RedLight : Classic {
     if (over) return;
     T -= dt; lt -= dt; grace -= dt;
     if (lt <= 0) {
-      if (light == "green") { light = "turn"; lt = 0.6f; Sfx("whoosh"); for (auto& m : k) m.react = frand(0.0f, 1.15f); }
-      else if (light == "turn") { light = "red"; lt = frand(1.6f, 3.4f); grace = 0.4f; Sfx("alarm"); Banner("🔴 RED LIGHT!", 900, "#ff4d6d"); }
+      if (light == "green") { light = "turn"; lt = 1.0f; Sfx("whoosh"); for (auto& m : k) m.react = frand(0.0f, 1.15f); }
+      else if (light == "turn") { light = "red"; lt = frand(1.6f, 3.0f); grace = 0.75f; Sfx("alarm"); Banner("🔴 RED LIGHT!", 900, "#ff4d6d"); }
       else { light = "green"; lt = frand(1.4f, 4.2f); Sfx("go"); Banner("🟢 GREEN LIGHT!", 900, "#51cf66"); }
     }
     for (int i = 0; i < N(); i++) {
@@ -161,9 +161,9 @@ struct RedLight : Classic {
       if (m.stun > 0) { m.stun -= dt; in = { 0, 0 }; }
       Steer(m, in, 88, dt, 14);
       m.x = Clamp(m.x, 250, 1350); m.y = fminf(m.y, START + 10);
-      if (light == "red" && grace <= 0 && m.stun <= 0 && hypotf(m.vx, m.vy) > 18) {
+      if (light == "red" && grace <= 0 && m.stun <= 0 && hypotf(m.vx, m.vy) > 30) {
         fx.Burst(W3(m.x, m.y, 1), 20, Hex(0xff6b6b), 6, 0.6f, 0.2f);
-        m.y = fminf(START, m.y + 200); m.vx = m.vy = 0; m.stun = 1.0f; m.caught++;
+        m.y = fminf(START, m.y + 140); m.vx = m.vy = 0; m.stun = 0.8f; m.caught++;
         Sfx("buzz"); Buzz(i, 300); Shake(5); Banner(p.name + " MOVED! Back you go", 1100, "#ff8787");
         fx.Burst(W3(m.x, m.y, 1), 14, WHITE, 5, 0.5f, 0.2f);
       }
@@ -232,8 +232,8 @@ struct Simon : Classic {
   }
   void NewCmd() {
     cmd++; int prev = act; do act = rand() % 6; while (act == prev);
-    simon = cmd <= 2 ? true : frand(0, 1) > 0.32f;
-    win = fmaxf(1.7f, 3.3f - cmd * 0.1f); t = win; el = 0; phase = "say";
+    simon = cmd <= 3 ? true : frand(0, 1) > 0.28f;
+    win = fmaxf(2.4f, 4.0f - cmd * 0.08f); t = win; el = 0; phase = "say";
     for (auto& m : k) { m.resp = -1; m.armed = false; m.ok = false; m.botT = frand(0.5f, win * 0.75f); m.botAct = simon ? (frand(0, 1) < 0.88f ? act : rand() % 6) : (frand(0, 1) < 0.7f ? -1 : act); }
     Sfx(simon ? "ding" : "blip");
   }
@@ -416,7 +416,7 @@ struct Tug : Classic {
 struct Hockey : Classic {
   struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; };
   std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0; int score[2] = { 0, 0 }, last = -1; bool over = false;
-  const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 105, MR = 42, PR = 26;
+  const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 125, MR = 46, PR = 26;
   void Start() override {
     InitCam(40); sc.Init(26, 17, true);
     int cnt[2] = { 0, 0 }; for (int i = 0; i < N(); i++) cnt[i % 2]++;

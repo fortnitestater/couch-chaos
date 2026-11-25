@@ -66,6 +66,11 @@ struct Snowball : Game {
       if (hypotf(b.vx, b.vy) > 250 && frand(0, 1) < 0.4f) fx.Puff(W3(b.x, b.y, 0.1f), Hex(0xffffff, 200), 0.15f, 0.5f, { 0, 0.5f, 0 });
       if (in.a && b.tcd <= 0 && b.stun <= 0 && !over) {
         float a = b.aim; b.tcd = 0.45f; b.wind = 1;
+        if (!P(b.pid).bot) {  // aim assist: snap to the nearest player within ~35 degrees of where you aim
+          float best = 0.62f, ta = a;
+          for (auto& o : k) if (&o != &b) { float oa = atan2f(o.y - b.y, o.x - b.x), d = fabsf(angDiff(a, oa)); if (d < best && hypotf(o.x - b.x, o.y - b.y) < 900) { best = d; ta = oa; } }
+          a = ta;
+        }
         // lob: flight ~0.75 s over ~600 px, peaks ~1.6 m
         balls.push_back({ b.x + cosf(a) * (b.r + 12), b.y + sinf(a) * (b.r + 12), 1.5f, cosf(a) * 760 + b.vx * 0.3f, sinf(a) * 760 + b.vy * 0.3f, 3.2f, 1.1f, b.pid });
         Sfx("whoosh");
