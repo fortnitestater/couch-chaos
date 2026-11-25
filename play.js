@@ -302,6 +302,99 @@
   addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) { keys[k] = false; flush(); } });
   addEventListener('blur', resetInput);
 
+  // ---------- physical gestures (instead of buttons) ----------
+  // flick a card up to throw it onto the table (a plain tap still works)
+  function flickable(el, onPlay) {
+    let sx = 0, sy = 0, st = 0, id = null, done = false;
+    el.style.touchAction = 'none';
+    el.addEventListener('pointerdown', e => { if (el.disabled) return; id = e.pointerId; sx = e.clientX; sy = e.clientY; st = performance.now(); try { el.setPointerCapture(id); } catch (_) {} el.style.transition = 'none'; el.style.zIndex = 5; });
+    el.addEventListener('pointermove', e => { if (e.pointerId !== id) return; const dx = e.clientX - sx, dy = Math.min(20, e.clientY - sy); el.style.transform = `translate(${dx * 0.6}px,${dy}px) rotate(${dx * 0.08}deg) scale(${1 + Math.min(0.15, -dy / 600)})`; });
+    const up = e => {
+      if (e.pointerId !== id) return; id = null;
+      const dx = e.clientX - sx, dy = e.clientY - sy, v = dy / Math.max(1, performance.now() - st), tap = Math.hypot(dx, dy) < 10;
+      if (!done && (dy < -55 || v < -0.6 || tap)) {
+        done = true; el.style.transition = 'transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s'; el.style.transform = `translate(${dx}px,-${innerHeight * 0.7}px) rotate(${dx * 0.2 + 18}deg) scale(1.2)`; el.style.opacity = '0';
+        navigator.vibrate?.([12, 30, 18]); onPlay();
+      } else { el.style.transition = 'transform .35s cubic-bezier(.3,1.6,.5,1)'; el.style.transform = ''; el.style.zIndex = ''; }
+    };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    el.onclick = null;
+  }
+  // a big die: flick it upward or shake the phone to roll
+  let shakeRoll = null, lastRollShake = 0;
+  addEventListener('devicemotion', e => {
+    if (!shakeRoll) return; const a = e.acceleration || {}; const mag = a.x != null ? Math.hypot(a.x, a.y, a.z) : 0;
+    if (mag > 15 && performance.now() - lastRollShake > 900) { lastRollShake = performance.now(); shakeRoll(); }
+  });
+  function diceRoller(holder, onRoll, label = 'Flick the dice up — or shake your phone!') {
+    holder.innerHTML = `<div class="roller"><div class="rdice"><span class="rdie">${PIPS[5]}</span><span class="rdie b">${PIPS[3]}</span></div><div class="rhint">🎲 ${esc(label)}</div></div>`;
+    const box = holder.querySelector('.roller'), dice = holder.querySelector('.rdice');
+    let sy = 0, st = 0, id = null, rolled = false;
+    const roll = () => { if (rolled) return; rolled = true; shakeRoll = null; box.classList.add('go'); navigator.vibrate?.([20, 40, 20, 40, 30]); onRoll(); };
+    shakeRoll = roll;
+    box.addEventListener('pointerdown', e => { id = e.pointerId; sy = e.clientY; st = performance.now(); try { box.setPointerCapture(id); } catch (_) {} });
+    box.addEventListener('pointermove', e => { if (e.pointerId !== id) return; const dy = Math.min(0, e.clientY - sy); dice.style.transform = `translateY(${dy * 0.7}px) rotate(${dy * 0.4}deg)`; });
+    const up = e => { if (e.pointerId !== id) return; id = null; const dy = e.clientY - sy, v = dy / Math.max(1, performance.now() - st); dice.style.transform = ''; if (dy < -40 || v < -0.5 || Math.abs(dy) < 8) roll(); };
+    box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+  }
+  // slash across a wire to cut it
+  function renderWires(L) {
+    const n = L.wires.length;
+    stage.innerHTML = `<div class="wiresC"><div class="prompt">${esc(L.prompt || '')}</div><div class="bombBox" id="bb"></div><div class="rhint">✂️ Swipe your finger across a wire to CUT it</div></div>`;
+    const bb = $('#bb'), H = Math.max(200, 300 * bb.clientHeight / Math.max(1, bb.clientWidth)), gap = (H - 30) / n;
+    const half = (y, k, sw, col, hi) => k === 0
+      ? `<path d="M22 ${y} C 61 ${y + 12}, 105 ${y + 6}, 150 ${y}" stroke="${col}" stroke-width="${sw}" fill="none" stroke-linecap="round"${hi ? ' transform="translate(0,-3)"' : ''}/>`
+      : `<path d="M150 ${y} C 195 ${y - 6}, 239 ${y - 12}, 278 ${y}" stroke="${col}" stroke-width="${sw}" fill="none" stroke-linecap="round"${hi ? ' transform="translate(0,-3)"' : ''}/>`;
+    const layer = (y, k, c) => half(y, k, 24, '#111') + half(y, k, 16, c) + half(y, k, 4, 'rgba(255,255,255,.5)', true);
+    bb.innerHTML = `<svg id="wsvg" viewBox="0 0 300 ${H}">${L.wires.map((w, i) => { const y = 15 + gap * (i + 0.5), c = esc(w.color); return `<g class="wire" data-i="${i}">
+        <rect x="6" y="${y - 12}" width="16" height="24" rx="5" fill="#adb5bd"/><rect x="278" y="${y - 12}" width="16" height="24" rx="5" fill="#adb5bd"/>
+        <g class="whole">${half(y, 0, 24, '#111')}${half(y, 1, 24, '#111')}${half(y, 0, 16, c)}${half(y, 1, 16, c)}${half(y, 0, 4, 'rgba(255,255,255,.5)', true)}${half(y, 1, 4, 'rgba(255,255,255,.5)', true)}</g>
+        <g class="wl">${layer(y, 0, c)}</g><g class="wr">${layer(y, 1, c)}</g>
+        <text x="4" y="${y - 18}" fill="#fff" font-size="16" font-weight="800">${i + 1}</text></g>`; }).join('')}
+      <path id="slash" d="" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity=".85"/></svg>`;
+    const svg = $('#wsvg'), slash = $('#slash'); let pts = [], cut = false, id = null;
+    const P2 = e => { const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const q = pt.matrixTransform(svg.getScreenCTM().inverse()); return [q.x, q.y]; };
+    svg.style.touchAction = 'none';
+    svg.addEventListener('pointerdown', e => { if (cut) return; id = e.pointerId; try { svg.setPointerCapture(id); } catch (_) {} pts = [P2(e)]; });
+    svg.addEventListener('pointermove', e => {
+      if (e.pointerId !== id || cut) return; const p = P2(e), q = pts[pts.length - 1]; pts.push(p); if (pts.length > 14) pts.shift();
+      slash.setAttribute('d', 'M' + pts.map(x => x.join(' ')).join(' L'));
+      if (p[0] < 30 || p[0] > 270) return;
+      for (let i = 0; i < n; i++) { const y = 15 + gap * (i + 0.5); if ((q[1] - y) * (p[1] - y) <= 0 && Math.abs(p[1] - q[1]) > 1) {
+        cut = true; svg.querySelector(`.wire[data-i="${i}"]`).classList.add('cut'); navigator.vibrate?.([30, 20, 60]);
+        sendMsg({ t: 'act', a: 'choice', i }); setTimeout(() => slash.setAttribute('d', ''), 220); return; } }
+    });
+    const up = e => { if (e.pointerId === id) { id = null; if (!cut) slash.setAttribute('d', ''); } };
+    svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+  }
+  // curling: pull the stone back like a slingshot and let go; then rub the ice to sweep
+  function renderCurl(L) {
+    if (L.sweep) {
+      stage.innerHTML = `<div class="curlC sweep" id="sw"><div class="broom">🧹</div><h2>RUB THE ICE!</h2><div class="rhint">Scrub left-right as fast as you can to make it slide further</div></div>`;
+      const z = $('#sw'), br = z.querySelector('.broom'); let lx = null, dir = 0, last = 0; z.style.touchAction = 'none';
+      z.addEventListener('pointermove', e => { if (!e.buttons && e.pointerType === 'mouse') return; br.style.left = e.clientX + 'px'; br.style.top = e.clientY + 'px';
+        if (lx != null) { const d = Math.sign(e.clientX - lx); if (d && d !== dir && Math.abs(e.clientX - lx) > 2) { dir = d; const now = performance.now(); if (now - last > 70) { last = now; sendMsg({ t: 'act', a: 'sweep' }); navigator.vibrate?.(8); } } }
+        lx = e.clientX; });
+      z.addEventListener('pointerup', () => (lx = null));
+      return;
+    }
+    stage.innerHTML = `<div class="curlC"><div class="sheet" id="sh"><div class="house"></div><svg class="aimline" id="al"><line id="aimL" x1="0" y1="0" x2="0" y2="0" stroke="#ffd43b" stroke-width="5" stroke-dasharray="10 8" stroke-linecap="round"/></svg><div class="stone" id="st"></div></div>
+      <div class="rhint">🥌 Pull the stone DOWN, aim, and let go! Further back = more power</div></div>`;
+    const sh = $('#sh'), stn = $('#st'), aimL = $('#aimL'); let id = null, ox = 0, oy = 0, thrown = false; sh.style.touchAction = 'none';
+    const home = () => { const r = sh.getBoundingClientRect(); return [r.width / 2, r.height - 202]; };
+    const vec = e => { const r = sh.getBoundingClientRect(), [hx, hy] = home(); let dx = e.clientX - r.left - hx, dy = e.clientY - r.top - hy; const l = Math.hypot(dx, dy), m = 140; if (l > m) { dx *= m / l; dy *= m / l; } return [dx, Math.max(0, dy)]; };
+    sh.addEventListener('pointerdown', e => { if (thrown) return; id = e.pointerId; try { sh.setPointerCapture(id); } catch (_) {} });
+    sh.addEventListener('pointermove', e => { if (e.pointerId !== id) return; const [dx, dy] = vec(e), [hx, hy] = home(); stn.style.transform = `translate(${dx}px,${dy}px)`; aimL.setAttribute('x1', hx); aimL.setAttribute('y1', hy); aimL.setAttribute('x2', hx - dx * 3); aimL.setAttribute('y2', hy - dy * 3); ox = dx; oy = dy; });
+    const up = e => {
+      if (e.pointerId !== id) return; id = null;
+      if (oy < 20) { stn.style.transform = ''; aimL.setAttribute('x2', aimL.getAttribute('x1')); return; }
+      thrown = true; const power = Math.min(1, oy / 140), aim = Math.max(-1, Math.min(1, -ox / Math.max(30, oy)));
+      stn.style.transition = 'transform .45s cubic-bezier(.2,.8,.3,1)'; stn.style.transform = `translate(${-ox * 2}px,-${innerHeight}px)`;
+      navigator.vibrate?.(40); sendMsg({ t: 'act', a: 'curl', i: Math.round(aim * 1000), p: +power.toFixed(3) });
+    };
+    sh.addEventListener('pointerup', up); sh.addEventListener('pointercancel', up);
+  }
+
   // ---------- layouts ----------
   let camMode = false;
   function startCam() {
@@ -314,12 +407,12 @@
   function bindCamBtn() { const b = document.getElementById('camB'); if (b) b.onclick = startCam; }
   function render(L) {
     if (camMode) return; // the camera phone ignores game screens
-    layout = L; resetInput(); pumps = 0;
+    layout = L; resetInput(); pumps = 0; shakeRoll = null;
     if ((L.name === 'pad' && L.stick) || L.name === 'swing') recenterSoon = true;
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -397,9 +490,9 @@
     stage.innerHTML = `<div class="diceC"><div class="muted">Round ${L.round}/${L.rounds} · tap dice to HOLD</div>
       <div class="diceRow">${L.dice.map((v, i) => `<button class="die ${L.held[i] ? 'held' : ''}" data-i="${i}" ${L.done ? 'disabled' : ''}>${PIPS[v]}</button>`).join('')}</div>
       <div class="handName">${esc(L.hand)}</div>
-      <div class="diceBtns"><button id="rollB" ${L.done || !L.left ? 'disabled' : ''}>🎲 Roll (${L.left})</button><button id="doneB" class="done" ${L.done ? 'disabled' : ''}>${L.done ? '✓ Locked' : '✋ Keep'}</button></div></div>`;
+      ${L.done || !L.left ? '' : `<div class="rollHold" id="rollH"></div>`}<div class="diceBtns"><button id="doneB" class="done" ${L.done ? 'disabled' : ''}>${L.done ? '✓ Locked' : '✋ Keep these'}</button></div></div>`;
     stage.querySelectorAll('.die').forEach(b => b.onclick = () => { sendMsg({ t: 'act', a: 'hold', i: +b.dataset.i }); b.classList.toggle('held'); });
-    $('#rollB').onclick = () => { sendMsg({ t: 'act', a: 'roll' }); navigator.vibrate?.(40); };
+    if ($('#rollH')) diceRoller($('#rollH'), () => sendMsg({ t: 'act', a: 'roll' }), `Flick up or shake to re-roll (${L.left} left) — tap dice to hold`);
     $('#doneB').onclick = () => sendMsg({ t: 'act', a: 'done' });
   }
   function bindHold(el, key) {
@@ -441,7 +534,19 @@
   function bindJoy(xOnly) {
     const z = $('#jz'), base = $('#jsB'), knob = $('#jsK'); if (!z) return; let pid = null, cx = 0, cy = 0;
     const R = () => Math.max(44, Math.min(80, z.clientHeight * 0.2));
-    const move = e => { const r = R(); let dx = e.clientX - cx, dy = xOnly ? 0 : e.clientY - cy; const l = Math.hypot(dx, dy); if (l > r) { dx *= r / l; dy *= r / l; } knob.style.transform = `translate(${dx}px,${dy}px)`; let x = dx / r, y = dy / r; if (Math.hypot(x, y) < 0.12) x = y = 0; stick.x = x; stick.y = y; flush(); };
+    let atEdge = false;
+    const move = e => {
+      const r = R(); let dx = e.clientX - cx, dy = xOnly ? 0 : e.clientY - cy; const l = Math.hypot(dx, dy);
+      // the base follows your thumb if you drag past the edge, so you never "run out" of stick
+      if (l > r * 1.35) { const k = (l - r * 1.35) / l; cx += dx * k; cy += xOnly ? 0 : dy * k; const zr = z.getBoundingClientRect(); base.style.left = (cx - zr.left) + 'px'; base.style.top = (cy - zr.top) + 'px'; dx -= dx * k; dy -= dy * k; }
+      const l2 = Math.hypot(dx, dy); if (l2 > r) { dx *= r / l2; dy *= r / l2; }
+      knob.style.transform = `translate(${dx}px,${dy}px)`;
+      // radial dead zone + gentle response curve: precise near the middle, full speed at the edge
+      const m = Math.min(1, Math.hypot(dx, dy) / r), dz = 0.1, o = m < dz ? 0 : ((m - dz) / (1 - dz)) * 0.7 + Math.pow((m - dz) / (1 - dz), 2) * 0.3;
+      const nx = m > 0 ? dx / (m * r) : 0, ny = m > 0 ? dy / (m * r) : 0; stick.x = nx * o; stick.y = ny * o;
+      if (m > 0.97 && !atEdge) { atEdge = true; navigator.vibrate?.(6); } else if (m < 0.9) atEdge = false;
+      flush();
+    };
     z.addEventListener('pointerdown', e => { e.preventDefault(); if (pid != null) return; pid = e.pointerId; try { z.setPointerCapture(pid); } catch (_) {} const zr = z.getBoundingClientRect(); cx = e.clientX; cy = xOnly ? zr.top + zr.height / 2 : e.clientY; base.style.left = (cx - zr.left) + 'px'; base.style.top = (cy - zr.top) + 'px'; z.classList.add('on'); stick.active = true; move(e); navigator.vibrate?.(8); });
     z.addEventListener('pointermove', e => { if (e.pointerId === pid) move(e); });
     const end = e => { if (e.pointerId !== pid) return; pid = null; stick.active = false; stick.x = stick.y = 0; knob.style.transform = ''; base.style.left = base.style.top = ''; z.classList.remove('on'); flush(); };
@@ -497,7 +602,7 @@
         <div class="swIcon" id="swIcon">${icon}</div>
         <div class="swLabel">${motion ? 'SWING IT!' : esc(L.label || 'SWING!')}</div>
         <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motion ? 'Hold it like ' + noun + ' and SWING!' : 'Motion is off'}</div>
-        <div class="swHint">${motion ? (L.sport === 'tennis' ? 'Hold it like a racket (screen facing you). <b>Serve:</b> just swing. <b>Rally:</b> swing when the ring closes, <b>toward</b> where you want it. Swing <b>low→high</b> for topspin (stays in), <b>high→low</b> for slice. <b>Purple ring</b> = SMASH!' : 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want it and swing!') : esc(L.hint || '')}</div>
+        <div class="swHint">${motion ? (L.sport === 'tennis' ? 'Hold it like a racket. <b>Serve:</b> just swing. <b>Rally:</b> you run to the ball by yourself — swing when the ring around you turns <b>green</b>. Tilt left/right to aim. High ball + big swing = <b>SMASH!</b>' : 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want it and swing!') : esc(L.hint || '')}</div>
         ${motion ? '<button class="chip on" id="swCenter">⟲ CENTER (hold still, screen to you)</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
       </div></div>`;
     if (motion) {
@@ -519,9 +624,13 @@
     const cards = (m.cards || []).map((c, i) => `<button class="tcard ${c.ok ? 'ok' : ''}" data-i="${i}" ${c.ok ? '' : 'disabled'} style="--cc:${esc(c.color || '#495057')}">${c.icon ? `<span class="tci">${esc(c.icon)}</span>` : ''}<b>${esc(c.label)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</button>`).join('');
     const btns = (m.buttons || []).map(b => `<button class="pbtn2 ${b.big ? 'big' : ''}" data-b="${esc(b.id)}" ${b.off ? 'disabled' : ''} style="--bc:${esc(b.color || '#4dabff')}">${esc(b.label)}</button>`).join('');
     stage.innerHTML = `<div class="gpanel ${m.myTurn ? 'my' : ''}"><div class="gpTop"><b>${esc(m.title || '')}</b><span>${esc(m.info || '')}</span></div>
-      ${m.sub ? `<div class="gpSub">${esc(m.sub)}</div>` : ''}<div class="gpHand">${cards || '<div class="muted" style="padding:20px">No cards</div>'}</div><div class="gpBtns">${btns}</div></div>`;
-    stage.querySelectorAll('.tcard.ok').forEach(b => (b.onclick = () => { sendMsg({ t: 'act', a: 'card', i: +b.dataset.i }); navigator.vibrate?.(20); b.classList.add('gone'); }));
-    stage.querySelectorAll('.pbtn2').forEach(b => (b.onclick = () => { sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }); navigator.vibrate?.(25); }));
+      ${m.sub ? `<div class="gpSub">${esc(m.sub)}</div>` : ''}<div class="gpHand">${cards || '<div class="muted" style="padding:20px;grid-column:1/-1;text-align:center">Nothing in your hand yet</div>'}</div><div class="gpBtns">${btns}</div></div>`;
+    stage.querySelectorAll('.tcard.ok').forEach(b => flickable(b, () => sendMsg({ t: 'act', a: 'card', i: +b.dataset.i })));
+    if (stage.querySelector('.tcard.ok')) stage.querySelector('.gpHand').insertAdjacentHTML('beforebegin', '<div class="rhint">👆 Flick a glowing card up to throw it</div>');
+    stage.querySelectorAll('.pbtn2').forEach(b => {
+      if (b.dataset.b === 'roll') { const h = document.createElement('div'); h.className = 'rollHold'; b.replaceWith(h); diceRoller(h, () => sendMsg({ t: 'act', a: 'btn', id: 'roll' })); return; }
+      b.onclick = () => { sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }); navigator.vibrate?.(25); };
+    });
   }
   // ---------- 🎵 song guess: type + pick from live suggestions ----------
   const sNorm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -594,10 +703,23 @@
     h.querySelectorAll('button').forEach(b => b.onclick = () => sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }));
   }
   function renderButton(L) {
+    if (/🎲|ROLL/i.test(L.label || '')) {  // rolling dice = flick or shake, not a button
+      stage.innerHTML = `<div class="center"><div class="rollHold" id="rollH"></div><p class="muted">${esc(L.hint || '')}</p></div>`;
+      diceRoller($('#rollH'), () => { btn.a = true; flush(); setTimeout(() => { btn.a = false; flush(); }, 150); });
+      return;
+    }
     stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p><p class="muted" style="font-size:13px">PC: Space</p></div>`;
     bindHold($('#tap'), 'a');
   }
   function renderShake(L) {
+    if (L.rope) {  // tug of war: pull the rope down, hand over hand
+      stage.innerHTML = `<div class="ropeC" id="rp"><div class="rope" id="ropeV"></div><div class="hands">✊</div><h2>PULL!</h2><div class="shakeCount" id="shakeN">0</div><div class="rhint">${esc(L.hint || 'Grab the rope and pull it DOWN, again and again!')}</div></div>`;
+      const z = $('#rp'), rope = $('#ropeV'); let id = null, ly = 0, acc = 0, off = 0; z.style.touchAction = 'none';
+      z.addEventListener('pointerdown', e => { id = e.pointerId; ly = e.clientY; try { z.setPointerCapture(id); } catch (_) {} });
+      z.addEventListener('pointermove', e => { if (e.pointerId !== id) return; const d = e.clientY - ly; ly = e.clientY; if (d > 0) { acc += d; off = (off + d) % 60; rope.style.backgroundPositionY = off + 'px'; while (acc > 45) { acc -= 45; pump(); navigator.vibrate?.(10); } } });
+      const up = e => { if (e.pointerId === id) { id = null; acc = 0; } }; z.addEventListener('pointerup', up); z.addEventListener('pointercancel', up);
+      return;
+    }
     stage.innerHTML = `<div class="center"><h2>${motionSeen && ctrlMode === 'motion' ? '📳 SHAKE YOUR PHONE!' : '👆 TAP AS FAST AS YOU CAN!'}</h2><div class="shakeCount" id="shakeN">0</div>
       <button class="tapBig" id="tap" style="font-size:30px">${motionSeen && ctrlMode === 'motion' ? 'or TAP here' : 'TAP!'}</button><p class="muted">${esc(L.hint || '')}</p></div>`;
     $('#tap').addEventListener('pointerdown', e => { e.preventDefault(); pump(); $('#tap').classList.add('on'); setTimeout(() => $('#tap') && $('#tap').classList.remove('on'), 80); });
@@ -617,7 +739,9 @@
       <div class="cardBtns"><button id="drawB" ${m.canDraw ? '' : 'disabled'}>${m.pending ? `Take +${m.pending}` : '🂠 Draw'}</button><button id="passB" ${m.canPass ? '' : 'disabled'}>Pass ➜</button></div>
       <div class="legend">Match suit or rank · 8 wild · 2 = +2 · J skip · Q reverse · A = CHAOS<br>PC: ← → select · Enter play · D draw · P pass</div>
       ${m.needSuit ? `<div class="suitPick"><h2>Pick the new suit</h2><div class="row">${['♠', '♥', '♦', '♣'].map(s => `<button data-s="${s}" class="${'♥♦'.includes(s) ? 'red' : ''}">${s}</button>`).join('')}</div></div>` : ''}</div>`;
-    stage.querySelectorAll('.hand .card').forEach(b => b.onclick = () => { const i = +b.dataset.i; if (!m.myTurn) return toast('Not your turn yet'); if (!m.playable[i]) { b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); navigator.vibrate?.(40); return; } sendMsg({ t: 'act', a: 'play', i }); });
+    stage.querySelectorAll('.hand .card').forEach(b => { const i = +b.dataset.i;
+      if (m.myTurn && m.playable[i]) { flickable(b, () => sendMsg({ t: 'act', a: 'play', i })); return; }
+      b.onclick = () => { if (!m.myTurn) return toast('Not your turn yet'); b.classList.remove('wiggle'); void b.offsetWidth; b.classList.add('wiggle'); navigator.vibrate?.(40); }; });
     const d = $('#drawB'), p = $('#passB'); if (d) d.onclick = () => sendMsg({ t: 'act', a: 'draw' }); if (p) p.onclick = () => sendMsg({ t: 'act', a: 'pass' });
     stage.querySelectorAll('.suitPick button').forEach(b => b.onclick = () => sendMsg({ t: 'act', a: 'suit', s: b.dataset.s }));
     stage.querySelectorAll('.card.sel').forEach(b => b.style.outline = '4px solid #4dabff');

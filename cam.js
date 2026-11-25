@@ -7,6 +7,7 @@
 window.CCCam = (() => {
   const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
   const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+  const MODEL_FULL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
   // keypoints we send (MediaPipe ids): nose, shoulders, elbows, wrists, hips, knees, ankles
   const KP = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
   const EDGES = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
@@ -36,8 +37,11 @@ window.CCCam = (() => {
     try {
       const vision = await import(MP + '/vision_bundle.mjs');
       const fs = await vision.FilesetResolver.forVisionTasks(MP + '/wasm');
-      const opts = (delegate) => ({ baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: 'IMAGE', numPoses: 4, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
-      try { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('GPU')); } catch (e) { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('CPU')); }
+      // VIDEO mode tracks people between frames (smoother + faster than detecting from scratch every frame).
+      // Phones with a GPU get the more accurate "full" model at ~30 fps; others fall back to "lite" on the CPU.
+      const opts = (delegate, model) => ({ baseOptions: { modelAssetPath: model, delegate }, runningMode: 'VIDEO', numPoses: 4, minPoseDetectionConfidence: 0.35, minPosePresenceConfidence: 0.35, minTrackingConfidence: 0.45 });
+      try { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('GPU', MODEL_FULL)); st.gpu = true; }
+      catch (e) { try { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('GPU', MODEL)); st.gpu = true; } catch (e2) { st.lm = await vision.PoseLandmarker.createFromOptions(fs, opts('CPU', MODEL)); st.gpu = false; } }
       if (!st.camErr) stat('Looking for players…');
     } catch (e) { console.error(e); stat('⚠️ Could not load the AI. Check the internet and try again.'); return; }
     loop();
@@ -63,9 +67,13 @@ window.CCCam = (() => {
     if (!st || !st.run) return;
     requestAnimationFrame(loop);
     const v = st.v, now = performance.now();
-    if (!st.lm || v.readyState < 2 || now - st.lastT < 55) return; // ~18 fps; every frame is a full multi-person detection
-    const dt = Math.min(0.2, (now - (st.lastT || now)) / 1000) || 0.05; st.lastT = now;
-    let res; try { res = st.lm.detect(v); } catch (e) { return; }
+    // adaptive rate: as fast as the phone can manage (≈30 fps on GPU), never so fast that frames pile up
+    const gap = st.gpu ? Math.max(30, (st.cost || 20) * 1.15) : Math.max(50, (st.cost || 40) * 1.2);
+    if (!st.lm || v.readyState < 2 || now - st.lastT < gap || v.currentTime === st.vt) return;
+    const dt = Math.min(0.2, (now - (st.lastT || now)) / 1000) || 0.05; st.lastT = now; st.vt = v.currentTime;
+    let res; const t0 = performance.now();
+    try { res = st.lm.detectForVideo(v, now); } catch (e) { return; }
+    st.cost = (st.cost || 25) * 0.8 + (performance.now() - t0) * 0.2;
     st.frames++; if (now - st.fpsT > 1000) { st.fps = st.frames; st.frames = 0; st.fpsT = now; }
     track(res.landmarks || [], dt, now);
     draw();
@@ -108,7 +116,8 @@ window.CCCam = (() => {
       const dom = s.vEma[1] >= s.vEma[0] ? 1 : 0, w = W[dom];
       // the camera faces the players: their right side is on the LEFT of the image → flip the sign
       const aim = clamp(-(w.x - sc.x) / (torso * 1.3)), lean = clamp(-(sc.x - hc.x) / torso * 3.2);
-      s.aim = s.aim * 0.5 + aim * 0.5; s.lean = s.lean * 0.5 + (Math.abs(lean) < 0.12 ? 0 : lean) * 0.5;
+      const ka = Math.min(0.85, 0.25 + Math.abs(aim - s.aim) * 1.2), kl = Math.min(0.85, 0.25 + Math.abs(lean - s.lean) * 1.2);  // one-euro style: jitter filtered, big moves instant
+      s.aim += (aim - s.aim) * ka; s.lean += ((Math.abs(lean) < 0.1 ? 0 : lean) - s.lean) * kl;
       const up = (L[15].y < L[0].y - torso * 0.15) || (L[16].y < L[0].y - torso * 0.15);
       const vmax = Math.max(sp[0], sp[1]);
       // a swing starts when a wrist moves fast; we follow it for ~150 ms to catch its PEAK speed, then send

@@ -333,7 +333,7 @@ struct Tug : Classic {
   void Start() override {
     InitCam(38); sc.Init(26, 14, true);
     for (int i = 0; i < N(); i++) { team.push_back(i % 2); taps.push_back(0); botAcc.push_back(0); botRate.push_back(frand(4.6f, 6.4f)); flash.push_back(0); }
-    Layout(-1, R"({"name":"shake","hint":"TAP as fast as you can to pull the rope!"})");
+    Layout(-1, R"({"name":"shake","rope":true,"hint":"Grab the rope and pull it DOWN — hand over hand, fast!"})");
     NewRound();
   }
   void NewRound() { round++; rp = 0; phase = "count"; Recount(); rt = 0; if (round > 1) Banner("ROUND " + std::to_string(round), 1400, "#ffd43b"); }

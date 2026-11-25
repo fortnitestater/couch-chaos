@@ -21,7 +21,8 @@ struct QuizShow : Show {
   virtual void Resolve() {
     for (int i = 0; i < N(); i++) if (ans[i] >= 0 && ans[i] == q.correct) gain[i] = 600 + (int)(400 * at[i] / tMax) / 10 * 10;
   }
-  virtual void Board(float x, float y, float w, float h) {}   // custom picture inside the big screen
+  virtual void Board(float x, float y, float w, float h) {}
+  virtual std::string PhoneLayout() { return ""; }  // custom phone screen (gesture) instead of answer buttons   // custom picture inside the big screen
   virtual bool ShowTiles() { return !q.hideOpts; }
   virtual float PanelBottom() { return ShowTiles() ? 268 : 590; }
   void Start() override {
@@ -41,7 +42,7 @@ struct QuizShow : Show {
     std::vector<std::string> cols; for (size_t i = 0; i < q.opts.size(); i++) cols.push_back(i < q.colors.size() ? Hx(q.colors[i]) : OPT[i % 10]);
     int c = q.cols ? q.cols : (q.opts.size() > 4 ? 3 : q.opts.size() == 3 ? 3 : 2);
     for (int i = 0; i < N(); i++) {
-      if (!P(i).bot) Layout(i, Choice(q.phone.empty() ? q.text : q.phone, q.opts, c, q.big, cols));
+      if (!P(i).bot) { std::string pl = PhoneLayout(); Layout(i, pl.empty() ? Choice(q.phone.empty() ? q.text : q.phone, q.opts, c, q.big, cols) : pl); }
       else botAt[i] = frand(1.6f, fmaxf(2.0f, fminf(8.0f, tMax - 2)));
     }
     Sfx("whoosh");
@@ -49,7 +50,7 @@ struct QuizShow : Show {
   void Act(int p, const std::string& k, int i, float) override {
     if (phase != "ask" || k != "choice" || p < 0 || p >= N() || ans[p] >= 0 || i < 0 || i >= (int)q.opts.size()) return;
     ans[p] = i; at[p] = t; Sfx("tick");
-    if (!P(p).bot) Layout(p, Msg("🔒", "Locked in!", q.opts[i]));
+    if (!P(p).bot && PhoneLayout().empty()) Layout(p, Msg("🔒", "Locked in!", q.opts[i]));
     bool all = true; for (int v : ans) all &= v >= 0;
     if (all) t = fminf(t, 0.6f);
   }
@@ -93,9 +94,9 @@ struct QuizShow : Show {
       RRect(x + 16, ty - 23, 46, 46, 23, Hex(0xffffff, (unsigned char)(235 * alpha)), Hex(0xffffff, (unsigned char)(235 * alpha)), BLANK, 0);
       Text(x + 39, ty + 1, 24, Fade(Shade(c, -0.5f), alpha), std::string(1, (char)('A' + i)), 0, TS_DISPLAY | TS_PLAIN);
       float fs = q.big ? fminf(66, ch * 0.55f) : 36;
-      while (fs > 16 && Measure(q.opts[i], fs, TS_HEAVY) > cw - 100) fs -= 2;
+      while (fs > 16 && Measure(q.opts[i], fs, TS_DISPLAY) > cw - 110) fs -= 2;
       bool lightC = (c.r * 299 + c.g * 587 + c.b * 114) / 1000 > 175;
-      Text(x + cw / 2 + 22, ty, fs, Fade(lightC ? Hex(0x1a1438) : WHITE, alpha), q.opts[i], 0, (q.big ? TS_DISPLAY : TS_HEAVY) | (lightC ? TS_PLAIN : TS_SHADOW | TS_PLAIN));
+      (void)lightC; Text(x + cw / 2 + 22, ty, fs, Fade(WHITE, alpha), q.opts[i], 0, TS_DISPLAY | TS_SHADOW);
       if (rev) {  // who picked it
         int k = 0;
         for (int p = 0; p < N(); p++) if (ans[p] == i) { float px = x + cw - 30 - k * 26, py = TileTop(y) + 22; RRect(px - 12, py - 12, 24, 24, 12, P(p).color, P(p).color, WHITE, 2.5f); k++; }
@@ -359,6 +360,7 @@ struct Bomb : QuizShow {
   }
   bool ShowTiles() override { return false; }
   float PanelBottom() override { return 214; }
+  std::string PhoneLayout() override { std::string w; for (size_t i = 0; i < wires.size(); i++) w += std::string(i ? "," : "") + "{\"color\":\"" + Hx(Hex(WC[wires[i]])) + "\"}"; return "{\"name\":\"wires\",\"prompt\":" + Q(q.phone) + ",\"wires\":[" + w + "]}"; }
 };
 }  // namespace
 

@@ -202,7 +202,7 @@ struct Curling : Classic {
     if (turn >= (int)order.size()) { phase = "done"; t = 3.5f; auto o = Rank(); Banner(P(o[0]).name + " IS CLOSEST!", 2400, kit::Hx(P(o[0]).color).c_str()); Sfx("win"); conf.Spawn({ HX, 3, HZ }, 120, 3, 6); return; }
     cur = order[turn]; phase = "aim"; t = 10; osc = 0; osc2 = 0; sweep = 0; botAt = frand(1.0f, 2.4f);
     Banner(P(cur).name + "'s throw", 1200, kit::Hx(P(cur).color).c_str());
-    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == cur ? "{\"name\":\"button\",\"label\":\"LOCK AIM\",\"hint\":\"Tap when the arrow points at the target\"}" : kit::Msg("👀", P(cur).name + " is throwing", "Get ready to cheer!"));
+    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == cur ? "{\"name\":\"curl\"}" : kit::Msg("👀", P(cur).name + " is throwing", "Get ready to cheer!"));
   }
   void Press() {
     if (phase == "aim") { lockedAim = AimV(); phase = "power"; t = 10; osc2 = 0; Sfx("tick"); botAt = frand(0.8f, 2.0f); if (!P(cur).bot) Layout(cur, "{\"name\":\"button\",\"label\":\"THROW!\",\"hint\":\"Tap when the bar is in the green zone\"}"); }
@@ -210,8 +210,13 @@ struct Curling : Classic {
       float pw = PowV(), sp = 7 + pw * 10;
       stones.push_back({ cur, X0, 0, cosf(lockedAim) * sp, sinf(lockedAim) * sp }); live = &stones.back();
       phase = "slide"; Sfx("whoosh");
-      if (!P(cur).bot) Layout(cur, "{\"name\":\"button\",\"label\":\"SWEEP!\",\"hint\":\"Tap fast to make it slide further\"}");
+      if (!P(cur).bot) Layout(cur, "{\"name\":\"curl\",\"sweep\":true}");
     } else if (phase == "slide") sweep = fminf(1, sweep + 0.14f);
+  }
+  void Act(int p, const std::string& k, int i, float pw) override {
+    if (p != cur) return;
+    if (k == "curl" && (phase == "aim" || phase == "power")) { lockedAim = Clamp(i / 1000.f, -1, 1) * 0.16f; phase = "power"; osc2 = acosf(Clamp(1 - 2 * (0.15f + Clamp(pw, 0, 1) * 0.6f), -1, 1)) / 2.0f; Press(); }
+    else if (k == "sweep" && phase == "slide") Press();
   }
   float Dist(const St& s) { return hypotf(s.x - HX, s.z - HZ); }
   float Best(int p) { float b = 1e9f; for (auto& s : stones) if (s.who == p && !s.out) b = fminf(b, Dist(s)); return b; }

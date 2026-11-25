@@ -6,49 +6,58 @@
    .rb class to every button, sets --bc from its color and handles .press.
    ===================================================================== */
 .rb {
-  --bc: #4d7cff; --depth: 6px; --lip: color-mix(in oklab, var(--bc) 52%, #05060d);
+  /* jelly-candy game button: saturated body, thick white outline, glossy blob top-left, dark lip under it */
+  --bc: #2f86ff; --depth: 6px; --lip: color-mix(in oklab, var(--bc) 45%, #05060d);
   position: relative; isolation: isolate; overflow: hidden;
   background-color: var(--bc) !important;
   background-image:
-    linear-gradient(180deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 42%, rgba(0,0,0,0) 55%, rgba(0,0,0,.16) 100%) !important;
-  border: 0 !important;
+    radial-gradient(120% 90% at 30% 18%, color-mix(in oklab, var(--bc) 62%, #fff) 0%, rgba(255,255,255,0) 58%),
+    linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(0,0,0,0) 50%, color-mix(in oklab, var(--bc) 55%, #000) 100%) !important;
+  border: 3.5px solid #fff !important;
   box-shadow:
-    inset 0 2px 0 rgba(255,255,255,.55),
-    inset 0 -3px 0 rgba(0,0,0,.16),
-    inset 0 0 0 1px rgba(255,255,255,.12),
-    0 var(--depth) 0 var(--lip),
-    0 calc(var(--depth) + 4px) 14px rgba(0,0,0,.42) !important;
+    inset 0 -5px 0 color-mix(in oklab, var(--bc) 70%, #000),
+    inset 0 3px 0 rgba(255,255,255,.35),
+    0 0 0 2px rgba(0,0,0,.45),
+    0 var(--depth) 0 2px var(--lip),
+    0 calc(var(--depth) + 6px) 16px rgba(0,0,0,.5) !important;
+  color: #fff !important;
+  font-family: 'Fredoka', 'Inter', system-ui, sans-serif !important; font-weight: 700 !important; letter-spacing: .01em;
   transform: translateY(0) !important;
   transition: transform 260ms var(--ease-bounce, cubic-bezier(.3,1.6,.5,1)), box-shadow 260ms var(--ease-bounce, ease-out), filter 160ms !important;
-  text-shadow: 0 1px 0 rgba(0,0,0,.22);
+  text-shadow: 0 2px 0 color-mix(in oklab, var(--bc) 45%, #000), 0 0 3px rgba(0,0,0,.35);
   -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
-  margin-bottom: var(--depth);
+  margin-bottom: calc(var(--depth) + 2px);
 }
-/* the glossy reflection across the top of the cap */
+/* the shiny highlight blob in the top-left corner (like a jelly sweet) */
 .rb::before {
-  content: ''; position: absolute; z-index: -1; left: 6%; right: 6%; top: 3px; height: 46%;
-  border-radius: inherit; pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,255,255,.42), rgba(255,255,255,0));
-  opacity: .8; transition: opacity 160ms;
+  content: ''; position: absolute; z-index: -1; left: 9%; top: 9%; width: min(34%, 56px); height: min(26%, 22px);
+  border-radius: 50% 50% 45% 45%; pointer-events: none; transform: rotate(-14deg);
+  background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.55) 60%, rgba(255,255,255,0));
+  opacity: .9; transition: opacity 160ms;
 }
-.rb.light { text-shadow: 0 1px 0 rgba(255,255,255,.4); }
-/* pressed: the cap sits on its lip */
+.rb::after {
+  content: ''; position: absolute; z-index: -1; left: calc(9% + min(34%, 56px) + 4px); top: 11%; width: 9px; height: 9px; border-radius: 50%;
+  background: rgba(255,255,255,.75); pointer-events: none;
+}
+.rb.light { color: #fff !important; }
+/* pressed: the button squashes onto its lip */
 .rb.press, .rb.on {
-  transform: translateY(calc(var(--depth) - 1px)) !important;
+  transform: translateY(calc(var(--depth) - 1px)) scale(.985, .97) !important;
   box-shadow:
-    inset 0 2px 6px rgba(0,0,0,.25),
-    inset 0 -1px 0 rgba(255,255,255,.18),
-    0 1px 0 var(--lip),
-    0 2px 5px rgba(0,0,0,.35) !important;
-  filter: brightness(.96) saturate(1.08);
+    inset 0 -2px 0 color-mix(in oklab, var(--bc) 70%, #000),
+    inset 0 4px 8px rgba(0,0,0,.25),
+    0 0 0 2px rgba(0,0,0,.45),
+    0 1px 0 2px var(--lip),
+    0 3px 6px rgba(0,0,0,.4) !important;
+  filter: brightness(.95) saturate(1.1);
   transition: transform 45ms ease-out, box-shadow 45ms ease-out, filter 45ms !important;
 }
-.rb.press::before, .rb.on::before { opacity: .45; }
-.rb:disabled { filter: saturate(.25) brightness(.7); opacity: .55;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 0 var(--lip) !important; transform: translateY(calc(var(--depth) - 2px)) !important; }
-/* the one you picked stays pressed in and lit */
-.rb.picked { filter: none; opacity: 1; outline: 4px solid #fff; outline-offset: 3px;
-  transform: translateY(calc(var(--depth) - 1px)) !important; box-shadow: inset 0 2px 6px rgba(0,0,0,.22), 0 1px 0 var(--lip), 0 0 26px color-mix(in oklab, var(--bc) 70%, #fff) !important; }
+.rb.press::before, .rb.on::before { opacity: .55; }
+.rb:disabled { filter: saturate(.2) brightness(.65); opacity: .6; border-color: rgba(255,255,255,.5) !important;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 2px 0 2px var(--lip) !important; transform: translateY(calc(var(--depth) - 2px)) !important; }
+/* the one you picked stays pressed in and glows */
+.rb.picked { filter: none; opacity: 1; border-color: #ffe066 !important;
+  transform: translateY(calc(var(--depth) - 1px)) !important; box-shadow: inset 0 4px 8px rgba(0,0,0,.22), 0 0 0 2px rgba(0,0,0,.45), 0 1px 0 2px var(--lip), 0 0 30px color-mix(in oklab, var(--bc) 60%, #fff) !important; }
 
 /* sizes / depths */
 .rb.d-sm { --depth: 4px; }
@@ -56,25 +65,26 @@
 .pbtn.rb.pa { --bc: #ff4d6d; }
 .pbtn.rb.pb { --bc: #3d8bff; }
 .tapBig.rb { --depth: 16px; --bc: #ff4d6d; }
-.readyBtn.rb { --depth: 9px; --bc: #34c77b; color: #06240f !important; }
+.readyBtn.rb { --depth: 9px; --bc: #2fb54a; color: #fff !important; }
 .readyBtn.rb.done { --bc: #3a4670; color: #c9d0ec !important; }
-.big.rb { --depth: 8px; --bc: #ffd166; color: #2b1a00 !important; }
-.dpad button.rb { --depth: 7px; --bc: #2b3c74; color: #fff; border-radius: 22px !important; }
-.dpad .ok.rb { --bc: #ffd166; color: #2b1a00; border-radius: 50% !important; }
-.qbtns button.rb { --bc: #ff8a4c; color: #2b1200; }
-.qbtns button.alt.rb { --bc: #7c5cff; color: #fff; }
-.gbtn.rb { --bc: #1f2742; --depth: 5px; color: #fff; }
-.chip.rb, .ctrlBtn.rb { --bc: #2a3356; --depth: 3px; color: #e2e6f3 !important; margin-bottom: 3px; }
-.chip.rb.on { --bc: #f7f8fc; color: #0b0d17 !important; }
+.big.rb { --depth: 8px; --bc: #ffae1a; color: #fff !important; }
+.dpad button.rb { --depth: 7px; --bc: #1f6fe0; color: #fff; border-radius: 22px !important; }
+.dpad .ok.rb { --bc: #ffae1a; color: #fff !important; border-radius: 50% !important; }
+.qbtns button.rb { --bc: #ff7a1a; color: #fff !important; }
+.qbtns button.alt.rb { --bc: #8e44ff; color: #fff; }
+.gbtn.rb { --bc: #2c3e8f; --depth: 5px; color: #fff; }
+.chip.rb, .ctrlBtn.rb { --bc: #3a4a8a; --depth: 3px; color: #fff !important; margin-bottom: 4px; border-width: 2.5px !important; }
+.chip.rb::after, .ctrlBtn.rb::after { display: none; }
+.chip.rb.on { --bc: #f7f8fc; color: #0b0d1 !important7 !important; }
 .ctrlBtn.rb.on { --bc: #6d4bff; color: #fff !important; }
 .cardBtns button.rb, .diceBtns button.rb { --bc: #3d8bff; color: #fff; }
-.diceBtns button.done.rb { --bc: #34c77b; color: #06240f; }
+.diceBtns button.done.rb { --bc: #34c77b; color: #06240f !important; }
 .bingoBtn.rb { --depth: 9px; --bc: #ff4d6d; color: #fff; }
-.bcard button.rb { --depth: 4px; --bc: #f7f6f1; color: #1a1438; text-shadow: none; }
+.bcard button.rb { --depth: 4px; --bc: #f7f6f1; color: #1a1438 !important; text-shadow: none; }
 .bcard button.rb.mk { --bc: #ff4d6d; color: #fff; }
 .bcard button.rb.free { --bc: #ffd166; }
 .bcard button.rb.called:not(.mk) { --bc: #dcecff; }
-.suitPick button.rb { --bc: #ffffff; --depth: 8px; color: #1a1a2e; }
+.suitPick button.rb { --bc: #ffffff; --depth: 8px; color: #1a1a2e !important; }
 .drawTools button.rb { --depth: 4px; border-radius: 50% !important; }
 .drawTools button.rb.sel { outline: 3px solid #fff; outline-offset: 2px; }
 .drawTools .clr.rb { --bc: #3a4670; color: #fff; border-radius: 14px !important; width: auto; padding: 0 12px; }
@@ -83,7 +93,7 @@
 .songHost button.end.rb { --bc: #e03131; }
 .songSug button.rb { --bc: #2f2566; --depth: 4px; }
 .songIn button.rb { --bc: #2f3a66; --depth: 4px; }
-.camBtn.rb { --bc: #1f2742; --depth: 5px; }
+.camBtn.rb { --bc: #2c3e8f; --depth: 5px; }
 .camRemote button.rb { --depth: 4px; --bc: #2f3a66; }
 .camRemote button.ok.rb { --bc: #ffd166; color: #1a0f00; }
 #diceName.rb { --bc: #2f3a66; --depth: 5px; }
@@ -102,7 +112,7 @@
 
 /* picked state on the old outline hack */
 .choiceGrid button.rb { border-radius: 20px !important; }
-.bigCard.rb { --bc: #2a2266; --depth: 9px; color: #fff; border-radius: 26px !important; }
+.bigCard.rb { --bc: #3b2f9e; --depth: 9px; color: #fff; border-radius: 26px !important; }
 .bigCard.rb:hover { filter: brightness(1.08); }
 
 /* phone matches the TV console: midnight navy with gold accents */
@@ -114,3 +124,47 @@ body.padBody { background:
 .padBody .focusCard { background: rgba(255,255,255,.06); border: 1px solid rgba(242,198,109,.28); }
 .padBody .focusCard b, .padBody .introC h2, .padBody .center h2 { background: linear-gradient(180deg, #fff3ce, #f2c66d 50%, #c48c3a); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .padBody .muted { color: #9fb0dc; }
+
+/* ---------- gesture screens ---------- */
+.rhint { text-align: center; color: #ffe9a8; font: 700 15px Fredoka, Inter, sans-serif; padding: 6px 10px; }
+.rollHold { display: flex; justify-content: center; padding: 8px; }
+.roller { display: flex; flex-direction: column; align-items: center; gap: 10px; touch-action: none; padding: 16px 24px; cursor: grab; }
+.rdice { display: flex; gap: 18px; transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+.rdie { width: 92px; height: 92px; border-radius: 22px; display: grid; place-items: center; background: radial-gradient(120% 90% at 30% 20%, #fff, #e9ecf5 60%, #c8cede);
+  border: 3.5px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 8px 0 2px #9aa3bb, 0 14px 22px rgba(0,0,0,.5); transform: rotate(-8deg); animation: dieIdle 1.6s ease-in-out infinite; }
+.rdie.b { transform: rotate(10deg); animation-delay: -.8s; }
+.rdie .pips { width: 64px; height: 64px; }
+@keyframes dieIdle { 50% { translate: 0 -8px; } }
+.roller.go .rdie { animation: dieRoll .7s cubic-bezier(.2,.8,.3,1) forwards; }
+.roller.go .rdie.b { animation-delay: .05s; }
+@keyframes dieRoll { 0% { transform: translateY(0) rotate(0); } 60% { transform: translateY(-46vh) rotate(540deg) scale(.8); opacity: 1; } 100% { transform: translateY(-80vh) rotate(720deg) scale(.5); opacity: 0; } }
+.wiresC { height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.wiresC .prompt { font: 700 18px Fredoka, Inter, sans-serif; text-align: center; color: #ffe066; }
+.bombBox { flex: 1; min-height: 0; border-radius: 22px; padding: 10px; background: linear-gradient(180deg, #4a525c, #2b3036); border: 4px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.5), inset 0 0 30px rgba(0,0,0,.5); }
+.bombBox svg { width: 100%; height: 100%; touch-action: none; }
+.wire.cut .wl { transform: translate(-12px, 10px) rotate(-6deg); transform-box: fill-box; transform-origin: left center; transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+.wire.cut .wr { transform: translate(12px, 10px) rotate(6deg); transform-box: fill-box; transform-origin: right center; transition: transform .3s cubic-bezier(.3,1.6,.5,1); }
+.bombBox svg .wire text { font-family: Fredoka, sans-serif; }
+.wire .wl, .wire .wr { display: none; } .wire.cut .whole { display: none; } .wire.cut .wl, .wire.cut .wr { display: inline; }
+.curlC { height: 100%; display: flex; flex-direction: column; padding: 10px; gap: 6px; }
+.curlC .sheet { flex: 1; position: relative; border-radius: 26px; overflow: hidden; touch-action: none; border: 4px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.45);
+  background: linear-gradient(90deg, #4dabff 0 6px, transparent 6px calc(100% - 6px), #4dabff 0), linear-gradient(180deg, #f8fbff, #dceeff); }
+.curlC .house { position: absolute; left: 50%; top: 40px; width: 150px; height: 150px; margin-left: -75px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 12%, #ff6b6b 12% 36%, #fff 36% 60%, #4dabff 60% 100%); opacity: .9; }
+.curlC .aimline { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.curlC .stone { position: absolute; left: 50%; bottom: 170px; width: 64px; height: 64px; margin-left: -32px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #dee2e6, #868e96 70%); border: 4px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.4), 0 6px 12px rgba(0,0,0,.35); }
+.curlC .stone::after { content: ''; position: absolute; left: 12px; right: 12px; top: 24px; height: 10px; border-radius: 6px; background: #e03131; }
+.curlC.sweep { align-items: center; justify-content: center; text-align: center; touch-action: none; background: linear-gradient(180deg, #f8fbff22, #dceeff11); }
+.curlC .broom { position: fixed; font-size: 70px; transform: translate(-50%, -50%) rotate(-30deg); pointer-events: none; left: 50%; top: 60%; }
+.ropeC { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px; touch-action: none; position: relative; }
+.ropeC .rope { position: absolute; left: 50%; top: 0; bottom: 0; width: 34px; margin-left: -17px; border-radius: 17px;
+  background: repeating-linear-gradient(160deg, #c8964a 0 10px, #a8742e 10px 20px, #e0b066 20px 30px); box-shadow: inset -6px 0 8px rgba(0,0,0,.3), 0 0 0 3px rgba(0,0,0,.3); }
+.ropeC .hands { position: absolute; left: 50%; top: 40%; font-size: 64px; transform: translateX(-50%); pointer-events: none; }
+.ropeC h2, .ropeC .shakeCount, .ropeC .rhint { position: relative; background: rgba(10,18,48,.75); border-radius: 14px; padding: 4px 12px; }
+.curlC.sweep { background: linear-gradient(180deg, #e7f5ff, #c5e1ff) !important; border-radius: 24px; margin: 10px; height: calc(100% - 20px); border: 4px solid #fff; }
+.curlC.sweep h2 { color: #0b3d6e; font: 700 40px Fredoka, sans-serif; } .curlC.sweep .rhint { color: #1c4f87; }
+.gpanel.my .gpTop b { animation: turnPulse 1.4s ease-in-out infinite !important; transform: none; color: #ffe066 !important; font-family: Fredoka, sans-serif !important; font-weight: 700 !important; }
+@keyframes turnPulse { 50% { transform: scale(1.05); } }
+.tcard { touch-action: none; border: 3.5px solid #fff !important; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 6px 0 2px color-mix(in oklab, var(--cc) 45%, #000), 0 10px 16px rgba(0,0,0,.4) !important; }
+.tcard.ok { box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 6px 0 2px color-mix(in oklab, var(--cc) 45%, #000), 0 0 22px color-mix(in oklab, var(--cc) 70%, #fff) !important; }

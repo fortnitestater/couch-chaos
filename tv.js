@@ -414,8 +414,18 @@
 
   if (/[?&]debug/.test(location.search)) window.CCDBG = { S, startIntro, launch, endGame, toHome, humans, makeCtx };
   // ---------- render loop ----------
+  // FPS saver: only on TVs that can't keep up (under ~42 fps for a few seconds) do we step down, one notch at a time:
+  // 1) draw the text layer at 1x instead of retina, 2) switch off the bloom/glow pass. Fast TVs never lose anything.
+  const PERF = { n: 0, t: 0, level: 0 };
+  function perfTick(dt) {
+    if (document.hidden || PERF.level >= 2 || performance.now() < 12000 || dt > 0.2) return;
+    PERF.n++; PERF.t += dt;
+    if (PERF.t < 4) return;
+    const fps = PERF.n / PERF.t; PERF.n = 0; PERF.t = 0;
+    if (fps < 42) { PERF.level++; if (PERF.level === 1) fit(); if (PERF.level === 2 && NATIVE.mod) NATIVE.mod._cc_dbg(100); console.info('[perf] step down to level', PERF.level, Math.round(fps) + ' fps'); }
+  }
   function fit() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = PERF.level >= 1 ? 1 : Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
     const s = Math.min(cv.width / W, cv.height / H); view = { s, ox: (cv.width - W * s) / 2, oy: (cv.height - H * s) / 2 };
     snowCv.width = innerWidth; snowCv.height = innerHeight;
@@ -427,6 +437,8 @@
   let lastT = performance.now();
   function frame(t) {
     const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+    perfTick(Math.min(0.25, (t - (frame.pt || t)) / 1000)); frame.pt = t;
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
     if (S.state === 'home' || S.state === 'intro' || S.state === 'boot') {
       sg.clearRect(0, 0, snowCv.width, snowCv.height); sg.fillStyle = 'rgba(255,255,255,.75)';
       for (const f of flakes) { f.y += f.s * dt; f.w += dt; if (f.y > 1.02) { f.y = -0.02; f.x = Math.random(); } sg.beginPath(); sg.arc((f.x + Math.sin(f.w) * 0.01) * snowCv.width, f.y * snowCv.height, f.r, 0, TAU); sg.fill(); }
