@@ -13,6 +13,7 @@
 constexpr int W = 1600, H = 900;  // the logical screen every game draws in
 // the real render resolution is W*g_rs x H*g_rs (matches the TV: 1.2 = 1920x1080, 2 = 3200x1800); games never need to care
 extern float g_rs;
+extern int g_dbg;  // debug switches (7 = tennis close-up camera)
 // world → screen in LOGICAL 1600x900 space (overlay text + 2D drawing use logical coordinates)
 inline Vector2 CC_WorldToScreen(Vector3 p, Camera3D c) { return GetWorldToScreenEx(p, c, W, H); }
 #define GetWorldToScreen(...) CC_WorldToScreen(__VA_ARGS__)
@@ -93,6 +94,10 @@ inline float EaseOut(float t) { t = Clamp(t, 0, 1); return 1 - (1 - t) * (1 - t)
 inline float EaseBack(float t) { t = Clamp(t, 0, 1); float c = 1.7f; return 1 + (c + 1) * powf(t - 1, 3) + c * powf(t - 1, 2); }
 // cartoon character: hop = jump height, cheer 0..1 raises arms
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop = 0, float cheer = 0, float scale = 1);
+// make the next DrawToon hold something: its right hand goes to 'hand' (toon-local space, before scale)
+struct ToonHold { bool on = false; Vector3 hand{}; };
+extern ToonHold g_hold;
+Vector3 ToonPoint(Vector3 pos, float yaw, float sc, float hop, Vector3 local);  // toon-local point → world
 struct WinterBG {
   struct Flake { Vector3 p; float s, w; };
   std::vector<Flake> snow; std::vector<Vector4> trees, hills; float t = 0;

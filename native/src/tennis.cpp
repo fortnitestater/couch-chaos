@@ -3,6 +3,7 @@
 // A ring on the ground closes on the ball: swing when it's smallest. Ball flies with gravity + bounce, lands in.
 #include "classic.h"
 #include "kit.h"
+#include "mesh.h"
 
 namespace {
 using kit::I;
@@ -15,7 +16,8 @@ struct Tennis : Classic {
   int pts[2] = { 0, 0 }, games[2] = { 0, 0 }, server = 0, serveTeam = 0, GAMES = 2;
   std::string phase = "intro", call, radar; float t = 2.5f, callT = 0, radarT = 0, hitAt = -1, tossT = -1; int recv = -1; Vector3 hitPt{};
   std::vector<Vector4> crowd; bool fin = false; int rally = 0; std::vector<int> hits;
-  std::vector<Vector3> trail;
+  std::vector<Vector3> trail; Mesh crowdMesh{};
+  ~Tennis() { if (crowdMesh.vertexCount) UnloadMesh(crowdMesh); }
 
   void Start() override {
     InitCam(40); hits.assign(N(), 0);
@@ -168,20 +170,29 @@ struct Tennis : Classic {
       if (fabsf(bp.z) > HL + 9 || fabsf(bp.x) > 14) { live = false; Point(bounces >= 1 ? lastHitTeam : 1 - lastHitTeam, bounces >= 1 ? "WINNER!" : "OUT!"); }
     }
   }
+  // the swing arc in the character's own space: the right arm sweeps from behind, across the front
+  Vector3 HandLocal(const Pl& p, Vector3* dir, Vector3* face) {
+    float sw = p.sw, ph = sw > 0 ? -1.7f + (1 - sw) * 3.4f : -0.35f;  // back → across
+    Vector3 sh = { -0.33f, 1.0f, 0 };
+    float reach = 0.52f, h = sw > 0 ? 0.95f + 0.12f * sinf((1 - sw) * PI) : 0.78f;
+    Vector3 hand = { sh.x - reach * cosf(ph), h, reach * sinf(ph) };
+    if (dir) *dir = Vector3Normalize({ -cosf(ph) * 0.8f, sw > 0 ? 0.35f : 0.9f, sinf(ph) * 0.8f });
+    if (face) *face = { sinf(ph), 0, cosf(ph) };
+    return hand;
+  }
   void Racket(const Pl& p, Color c) {
-    float s = p.sw, a = (s > 0 ? -1.4f + (1 - s) * 2.8f : -0.4f) * p.swDir, side = p.team == 0 ? 1.f : -1.f;
-    Vector3 sh = { p.pos.x + 0.35f, 1.1f, p.pos.z };
-    Vector3 hd = { sh.x + sinf(a) * 0.75f, 1.0f + (s > 0 ? 0.2f : 0), sh.z + cosf(a) * 0.75f * side };
-    Limb(sh, hd, 0.035f, Hex(0x343a40));
-    Vector3 dir = Vector3Normalize(Vector3Subtract(hd, sh)); Vector3 head = Vector3Add(hd, Vector3Scale(dir, 0.22f));
-    lit.Draw(prim.cyl, TRS(head, { PI / 2, atan2f(dir.x, dir.z), 0 }, { 0.2f, 0.03f, 0.26f }), c);
-    lit.Draw(prim.cyl, TRS(head, { PI / 2, atan2f(dir.x, dir.z), 0 }, { 0.17f, 0.035f, 0.23f }), Hex(0xf1f3f5));
+    float yaw = p.team == 0 ? 0 : PI, sc = 1.05f; Vector3 d, f; Vector3 hl = HandLocal(p, &d, &f);
+    Vector3 hand = ToonPoint(p.pos, yaw, sc, 0, hl);
+    Vector3 tip = ToonPoint(p.pos, yaw, sc, 0, Vector3Add(hl, d)), fw = ToonPoint(p.pos, yaw, sc, 0, Vector3Add(hl, f));
+    Matrix xf = RacketXf(Vector3Subtract(hand, Vector3Scale(Vector3Normalize(Vector3Subtract(tip, hand)), 0.06f)), Vector3Subtract(tip, hand), Vector3Subtract(fw, hand), 1.4f);
+    DrawProp(props.racketFrame, xf, c); DrawProp(props.racketRest, xf, WHITE);
   }
   void Draw() override {
     // broadcast camera: high behind the near baseline, drifting gently with the ball
     float bx = live ? Clamp(bp.x, -4, 4) * 0.25f : 0;
     cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 9, -22 } : cam.position, { bx, 8.6f, -22.5f }, 0.05f);
     cam.target = Vector3Lerp(cam.target, { bx * 0.6f, 0, 1.5f }, 0.05f); cam.fovy = 42;
+    if (g_dbg == 7 && !on.empty()) { Pl& q = on[0]; cam.position = { q.pos.x + 2.2f, 1.6f, q.pos.z + (q.team ? -2.6f : 2.6f) }; cam.target = { q.pos.x + 0.3f, 1.0f, q.pos.z }; cam.fovy = 40; }
     UI::Sky(Hex(0x4a90e2), Hex(0xcfe8ff));
     lit.Begin(cam, { 0.75f, 0.85f, 0.95f }, 0.004f);
     BeginMode3D(cam);
@@ -194,9 +205,8 @@ struct Tennis : Classic {
     for (float z : { -SVC, SVC }) line(-HW, z, HW, z);
     line(0, -SVC, 0, SVC); line(0, -HL, 0, -HL + 0.2f); line(0, HL - 0.2f, 0, HL);
     // net + posts
-    lit.Draw(prim.cube, TRS({ 0, NETH / 2, 0 }, { 0, 0, 0 }, { 2 * DW + 0.8f, NETH, 0.03f }), Hex(0x15171c, 220));
-    lit.Draw(prim.cube, TRS({ 0, NETH, 0 }, { 0, 0, 0 }, { 2 * DW + 0.8f, 0.07f, 0.05f }), WHITE);
-    for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cyl, TRS({ s * (DW + 0.45f), 0, 0 }, { 0, 0, 0 }, { 0.06f, 1.07f, 0.06f }), Hex(0x2b2f36));
+    DrawProp(props.tennisNet, MatrixIdentity());  // woven net, headband, centre strap, posts with cranks (real ITF sizes)
+    for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cyl, TRS({ s * (HW + 0.914f), 0, 0 }, { 0, 0, 0 }, { 0.03f, 1.07f, 0.03f }), Hex(0xf1f3f5));  // singles sticks
     // umpire chair
     for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cyl, TRS({ -DW - 1.6f + s * 0.25f, 0, 0 }, { 0, 0, 0 }, { 0.05f, 2.0f, 0.05f }), Hex(0xdee2e6));
     lit.Draw(prim.cube, TRS({ -DW - 1.6f, 2.0f, 0 }, { 0, 0, 0 }, { 0.8f, 0.12f, 0.8f }), Hex(0x2f9e44));
@@ -211,13 +221,16 @@ struct Tennis : Classic {
     }
     const unsigned CC[] = { 0xff6b6b, 0xffd43b, 0x4dabff, 0x51cf66, 0xf783ac, 0xffffff, 0xff922b, 0xcc5de8 };
     float ex = phase == "point" ? 1.f : 0.25f;
-    for (auto& c : crowd) { float b = fabsf(sinf(time * (6 + c.w) + c.x)) * 0.18f * ex; lit.Draw(prim.sphere, TRS({ c.x, c.y + 0.35f + b, c.z }, { 0, 0, 0 }, { 0.32f, 0.38f, 0.32f }), Hex(CC[(int)c.w])); }
+    (void)CC; if (!crowdMesh.vertexCount) { std::vector<Vector4> seats; for (auto& c : crowd) seats.push_back({ c.x, c.y - 0.1f, c.z, atan2f(-c.x, -c.z) }); crowdMesh = BuildCrowd(seats, 7); }
+    DrawProp(crowdMesh, MatrixTranslate(0, fabsf(sinf(time * 7)) * 0.06f * ex, 0));
     for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ 0, 0.5f, s * (HL + 5.4f) }, { 0, 0, 0 }, { 2 * DW + 6, 1.0f, 0.15f }), s < 0 ? Hex(0x0b3d6e) : Hex(0x7b2cbf));
     // players
     for (auto& p : on) {
       Color c = p.pid >= 0 ? P(p.pid).color : Hex(0xadb5bd);
       float yaw = p.team == 0 ? 0 : PI; bool moving = Vector3Distance(p.pos, p.goal) > 0.15f;
-      DrawToon(p.pos, yaw, c, time + p.pid, moving ? 0.12f : 0, phase == "point" && call.size() && lastHitTeam == p.team ? 0.6f : 0, 1.05f);
+      g_hold.on = true; g_hold.hand = HandLocal(p, nullptr, nullptr);
+      DrawToon(p.pos, yaw, c, time + p.pid, moving ? 0.12f : 0, 0, 1.05f);
+      g_hold.on = false;
       Racket(p, c);
     }
     // timing ring: closes around the receiver as the ball arrives
@@ -231,7 +244,7 @@ struct Tennis : Classic {
     // ball + trail + shadow
     if (live || phase == "serve") {
       if (phase != "serve" || tossT >= 0) {
-        lit.Draw(prim.sphere, TRS(bp, { 0, 0, 0 }, { 0.09f, 0.09f, 0.09f }), Hex(0xd8f53a)); lit.Caster({ bp.x, 0, bp.z }, 0.08f);
+        DrawProp(props.tennisBall, MatrixMultiply(MatrixMultiply(MatrixScale(0.05f, 0.05f, 0.05f), MatrixRotateXYZ({ time * 20, time * 13, 0 })), MatrixTranslate(bp.x, bp.y, bp.z))); lit.Caster({ bp.x, 0, bp.z }, 0.08f);
         for (size_t k = 1; k < trail.size(); k++) Limb(trail[k - 1], trail[k], 0.03f * k / trail.size(), Fade(Hex(0xf4ffb0), 0.6f));
       }
     }

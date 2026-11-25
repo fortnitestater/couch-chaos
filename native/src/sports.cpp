@@ -2,6 +2,7 @@
 // and Home Run Derby (everyone bats at the same pitch; a generous timing window and a closing ring to time it).
 #include "classic.h"
 #include "kit.h"
+#include "mesh.h"
 
 namespace {
 using kit::I;
@@ -108,14 +109,14 @@ struct Bowling : Classic {
     for (auto& pn : pins) {
       if (pn.gone) continue;
       Matrix m = MatrixMultiply(MatrixMultiply(MatrixRotateX(pn.fall * 1.45f), MatrixRotateY(pn.dir)), MatrixTranslate(pn.x, 0, pn.z));
-      lit.Draw(prim.cyl, MatrixMultiply(TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 0.055f, 0.26f, 0.055f }), m), WHITE);
-      lit.Draw(prim.sphere, MatrixMultiply(TRS({ 0, 0.31f, 0 }, { 0, 0, 0 }, { 0.035f, 0.05f, 0.035f }), m), WHITE);
-      lit.Draw(prim.cyl, MatrixMultiply(TRS({ 0, 0.24f, 0 }, { 0, 0, 0 }, { 0.042f, 0.025f, 0.042f }), m), Hex(0xe03131));
+      DrawProp(props.pin, m);  // regulation ten-pin shape with the red neck stripes
       if (!pn.down) lit.Caster({ pn.x, 0, pn.z }, 0.07f);
     }
     float ax = -Clamp(aim, -1, 1) * 0.42f;
     Vector3 bp = ball.on ? Vector3{ ball.x, ball.y, ball.z } : Vector3{ ax, 0.11f, 0.35f };
-    lit.Draw(prim.sphere, TRS(bp, { ball.rot, 0, 0 }, { 0.11f, 0.11f, 0.11f }), P(cur).color); lit.Caster({ bp.x, 0, bp.z }, 0.1f);
+    lit.Draw(prim.sphere, TRS(bp, { ball.rot, 0, 0 }, { 0.11f, 0.11f, 0.11f }), P(cur).color);
+    { Matrix bm = MatrixMultiply(MatrixRotateX(ball.rot), MatrixTranslate(bp.x, bp.y, bp.z)); const Vector3 H[3] = { { 0.03f, 0.06f, -0.09f }, { -0.03f, 0.06f, -0.09f }, { 0, 0.0f, -0.108f } };
+      for (auto& h : H) { Vector3 w = Vector3Transform(h, bm); lit.Draw(prim.sphere, TRS(w, { 0, 0, 0 }, { 0.032f, 0.032f, 0.032f }), Hex(0x111111)); } } lit.Caster({ bp.x, 0, bp.z }, 0.1f);
     if (phase == "aim") for (int i = 0; i < 22; i++) { float z = 1.8f + i * 0.72f; lit.Draw(prim.cyl, TRS({ ax, 0.006f, z }, { 0, 0, 0 }, { 0.05f, 0.005f, 0.05f }), Fade(P(cur).color, 0.9f * (1 - i / 26.f) * (0.6f + 0.4f * sinf(time * 8 - i * 0.6f)))); }
     if (!ball.on || ball.z < 4) DrawToon({ 1.45f, 0, 1.3f }, -0.6f, P(cur).color, time, 0, swingAnim, 1.0f);
     fx.Draw(); conf.Draw();
@@ -211,9 +212,10 @@ struct Derby : Classic {
       DrawToon({ BX(i) - 0.5f, 0, -0.3f }, PI / 2 - 0.25f, P(i).color, time + i, 0, 0, 1.0f);
       float s = swingA[i % 8], a = -1.2f + (1 - s) * 0 + s * 2.6f;
       Vector3 h = { BX(i) - 0.25f, 1.05f, -0.2f };
-      Limb(h, { h.x + cosf(a) * 0.95f * (s > 0 ? 1 : 0.2f) + (s > 0 ? 0 : 0.1f), h.y + (s > 0 ? 0.1f : 0.8f), h.z + sinf(a) * 0.95f * (s > 0 ? 1 : 0.2f) }, 0.045f, Hex(0xc0703a));
+      Vector3 bd = s > 0 ? Vector3{ cosf(a), 0.12f, sinf(a) } : Vector3{ 0.15f, 1, -0.2f };  // bat on the shoulder, or swinging through
+      DrawProp(props.bat, RacketXf(h, bd, { 0, 0, 1 }, 1.1f));
     }
-    if (phase == "pitch" && pt > 0) { Vector3 b = BallAt(pt); lit.Draw(prim.sphere, TRS(b, { 0, 0, 0 }, { 0.1f, 0.1f, 0.1f }), WHITE); lit.Caster({ b.x, 0, b.z }, 0.08f); }
+    if (phase == "pitch" && pt > 0) { Vector3 b = BallAt(pt); DrawProp(props.baseball, MatrixMultiply(MatrixMultiply(MatrixScale(0.06f, 0.06f, 0.06f), MatrixRotateXYZ({ time * 30, time * 7, 0 })), MatrixTranslate(b.x, b.y, b.z))); lit.Caster({ b.x, 0, b.z }, 0.08f); }
     for (int i = 0; i < N(); i++) if (fly[i].on) { auto& f = fly[i]; lit.Draw(prim.sphere, TRS(f.p, { 0, 0, 0 }, { 1.2f, 1.2f, 1.2f }), Shade(P(i).color, 0.3f)); for (size_t k = 1; k < f.trail.size(); k++) Limb(f.trail[k - 1], f.trail[k], 0.25f * k / f.trail.size(), Fade(P(i).color, 0.7f)); }
     // timing ring: closes on the plate exactly when you should swing
     if (phase == "pitch" && pt > -0.6f) { float k = Clamp((T - pt) / 1.2f, 0, 1); DrawCircle3D({ 0, 1, 0.5f }, 0.35f + k * 1.6f, { 0, 1, 0 }, 0, Fade(Hex(0xffd43b), 0.9f)); DrawCircle3D({ 0, 1, 0.5f }, 0.36f + k * 1.6f, { 0, 1, 0 }, 0, Fade(Hex(0xffd43b), 0.9f)); }

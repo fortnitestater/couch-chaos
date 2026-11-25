@@ -2,6 +2,7 @@
 // Easier than before: wider gates + steering help, a catch-up boost for sleds, slower curling meters.
 #include "classic.h"
 #include "kit.h"
+#include "mesh.h"
 
 namespace {
 using kit::I;
@@ -257,9 +258,8 @@ struct Curling : Classic {
   }
   void Stone(const St& s) {
     Color c = P(s.who).color;
-    lit.Draw(prim.cyl, TRS({ s.x, 0.02f, s.z }, { 0, 0, 0 }, { R, 0.32f, R }), Hex(0x868e96));
-    lit.Draw(prim.cyl, TRS({ s.x, 0.3f, s.z }, { 0, 0, 0 }, { R * 0.78f, 0.1f, R * 0.78f }), c);
-    lit.Draw(prim.cube, TRS({ s.x, 0.45f, s.z }, { 0, s.spin, 0 }, { 0.5f, 0.12f, 0.12f }), Hex(0x212529));
+    Matrix m = MatrixMultiply(MatrixMultiply(MatrixScale(R / 0.145f, R / 0.145f, R / 0.145f), MatrixRotateY(s.spin)), MatrixTranslate(s.x, 0.01f, s.z));
+    DrawProp(props.stone, m); DrawProp(props.stoneHandle, m, c);  // polished granite + coloured handle, real proportions
     lit.Caster({ s.x, 0, s.z }, R);
   }
   void Draw() override {

@@ -3,6 +3,7 @@
 // Made easier than the old versions: snappier steering, bigger touch ranges, longer warnings, aim assist.
 #include "classic.h"
 #include "kit.h"
+#include "mesh.h"
 
 namespace {
 using kit::I;
@@ -82,6 +83,7 @@ struct Arena : Classic {
     }
   }
   // ---- drawing helpers ----
+  virtual bool Sticks() { return false; }  // players carry a hockey stick
   void Toons(std::function<Color(int)> ring = nullptr, std::function<float(int)> cheerF = nullptr) {
     auto o = over ? Rank() : std::vector<int>{};
     for (int i = 0; i < N(); i++) {
@@ -91,7 +93,13 @@ struct Arena : Classic {
       bool flash = m.inv > 0 && (int)(time * 12) % 2;
       float cheer = over && !o.empty() && o[0] == i ? 1.f : cheerF ? cheerF(i) : 0;
       float s = 1.3f * (m.alive ? 1 : m.fade);
-      DrawToon({ pos.x, groundY + (m.alive ? 0 : (1 - m.fade) * -1.5f), pos.z }, PI / 2 - m.face, flash ? WHITE : P(i).color, time + i, m.stun > 0 ? 0 : fabsf(sinf(time * 13 + i)) * 0.28f * fminf(1, sp / 200) + (cheer > 0 ? fabsf(sinf(time * 8)) * 0.5f : 0), cheer, s);
+      Vector3 hl = { -0.46f, 0.72f, 0.36f }; if (Sticks()) { g_hold.on = true; g_hold.hand = hl; }
+      float hop = m.stun > 0 ? 0 : fabsf(sinf(time * 13 + i)) * 0.28f * fminf(1, sp / 200) + (cheer > 0 ? fabsf(sinf(time * 8)) * 0.5f : 0);
+      Vector3 tp = { pos.x, groundY + (m.alive ? 0 : (1 - m.fade) * -1.5f), pos.z }; float yaw = PI / 2 - m.face;
+      DrawToon(tp, yaw, flash ? WHITE : P(i).color, time + i, hop, cheer, s);
+      if (Sticks()) { g_hold.on = false; float swing = m.dashT > 0 ? sinf(m.dashT * 10) * 0.6f : 0;
+        Vector3 h = ToonPoint(tp, yaw, s, hop, hl), tip = ToonPoint(tp, yaw, s, 0, { -0.2f + swing, 0.02f, 1.25f }), fc = ToonPoint(tp, yaw, s, 0, { -1.2f, 0.72f, 0.36f });
+        DrawProp(props.hockeyStick, RacketXf(h, Vector3Subtract(tip, h), Vector3Subtract(fc, h), Vector3Distance(tip, h) / 1.45f)); }
     }
   }
   void Names() { for (int i = 0; i < N(); i++) if (k[i].alive) NameTag({ W3(k[i].x, k[i].y).x, 3.4f, W3(k[i].x, k[i].y).z }, i, 18); }
@@ -410,6 +418,7 @@ struct IceHockey : Arena {
     return o;
   }
   std::string Stat(int i) override { int t = k[i].team; return std::string(t ? "Blue " : "Red ") + I(goals[t]) + "-" + I(goals[1 - t]) + " · " + I(indiv[i]) + " goals"; }
+  bool Sticks() override { return true; }
   std::string WinText() override { return goals[0] == goals[1] ? "IT'S A DRAW!" : goals[0] > goals[1] ? "RED TEAM WINS!" : "BLUE TEAM WINS!"; }
   Vector2 Bot(int i, bool& dash) override {
     float gx = k[i].team == 0 ? X1 : X0, gy = (Y0 + Y1) / 2, dx = px - gx, dy = py - gy, d = fmaxf(1, hypotf(dx, dy));
@@ -431,10 +440,8 @@ struct IceHockey : Arena {
       float x = s ? X1 + 10 : X0 - 10;
       for (float y : { cy - GH - (cy - GH - Y0) / 2, cy + GH + (Y1 - cy - GH) / 2 }) lit.Draw(prim.cube, TRS(W3(x, y, 0.35f), { 0, 0, 0 }, { 0.25f, 0.7f, (cy - GH - Y0) * SC }), Hex(0xffd43b));
       // goal net
-      float gx = s ? X1 + 40 : X0 - 40; Color tc = s ? Hex(0x4dabff) : Hex(0xff4d6d);
-      lit.Draw(prim.cube, TRS(W3(gx, cy, 0.7f), { 0, 0, 0 }, { 1.4f, 1.4f, GH * 2 * SC }), Fade(WHITE, 0.55f));
-      for (float y : { cy - GH, cy + GH }) lit.Draw(prim.cyl, TRS(W3(s ? X1 + 8 : X0 - 8, y, 0), { 0, 0, 0 }, { 0.12f, 1.5f, 0.12f }), tc);
-      lit.Draw(prim.cube, TRS(W3(s ? X1 + 8 : X0 - 8, cy, 1.5f), { 0, 0, 0 }, { 0.2f, 0.2f, GH * 2 * SC }), tc);
+      Vector3 gp = W3(s ? X1 + 8 : X0 - 8, cy, 0);  // a real goal: red pipe frame + netting, mouth facing the rink
+      DrawProp(props.hockeyGoal, MatrixMultiply(MatrixMultiply(MatrixScale(1.8f, 1.5f, GH * 2 * SC), MatrixRotateY(s ? PI : 0)), MatrixTranslate(gp.x, 0, gp.z)));
     }
     sc.Trees(time);
     Toons([&](int i) { return k[i].team ? Hex(0x4dabff, 220) : Hex(0xff4d6d, 220); });

@@ -1,0 +1,205 @@
+// Mesh toolkit + the real-world props (see mesh.h). Everything is built once, uploaded to the GPU, drawn in one call.
+#include "mesh.h"
+#include "rlgl.h"
+
+RealProps props;
+
+void MeshBuilder::Lathe(const std::vector<Vector2>& prof, int seg, std::function<Color(float, int)> col, Matrix xf) {
+  int m = (int)prof.size();
+  std::vector<Vector2> pn(m);  // 2D profile normals
+  for (int i = 0; i < m; i++) {
+    Vector2 a = prof[std::max(0, i - 1)], b = prof[std::min(m - 1, i + 1)];
+    Vector2 d = { b.x - a.x, b.y - a.y }; float l = hypotf(d.x, d.y); if (l < 1e-6f) l = 1;
+    pn[i] = { d.y / l, -d.x / l };
+  }
+  Matrix nx = MatrixTranspose(MatrixInvert(xf)); nx.m12 = nx.m13 = nx.m14 = 0;
+  for (int s = 0; s < seg; s++) {
+    float a0 = 2 * PI * s / seg, a1 = 2 * PI * (s + 1) / seg;
+    for (int i = 0; i + 1 < m; i++) {
+      auto P = [&](int k, float a) { return Vector3Transform({ prof[k].x * cosf(a), prof[k].y, prof[k].x * sinf(a) }, xf); };
+      auto N = [&](int k, float a) { return Vector3Normalize(Vector3Transform({ pn[k].x * cosf(a), pn[k].y, pn[k].x * sinf(a) }, nx)); };
+      Color c0 = col((prof[i].y + prof[i + 1].y) / 2, i);
+      Tri(P(i, a0), P(i + 1, a0), P(i + 1, a1), N(i, a0), N(i + 1, a0), N(i + 1, a1), c0);
+      Tri(P(i, a0), P(i + 1, a1), P(i, a1), N(i, a0), N(i + 1, a1), N(i, a1), c0);
+    }
+  }
+}
+void MeshBuilder::Tube(const std::vector<Vector3>& path, float r, int sides, Color col, bool closed) {
+  int m = (int)path.size(); if (m < 2) return;
+  std::vector<Vector3> T(m), Nn(m), Bn(m);
+  for (int i = 0; i < m; i++) {
+    Vector3 a = path[closed ? (i - 1 + m) % m : std::max(0, i - 1)], b = path[closed ? (i + 1) % m : std::min(m - 1, i + 1)];
+    T[i] = Vector3Normalize(Vector3Subtract(b, a));
+  }
+  // parallel transport frames: no twisting along the tube
+  Vector3 up = fabsf(T[0].y) < 0.9f ? Vector3{ 0, 1, 0 } : Vector3{ 1, 0, 0 };
+  Nn[0] = Vector3Normalize(Vector3CrossProduct(T[0], up)); Bn[0] = Vector3CrossProduct(T[0], Nn[0]);
+  for (int i = 1; i < m; i++) { Vector3 b = Vector3CrossProduct(T[i], Nn[i - 1]); b = Vector3Length(b) < 1e-5f ? Bn[i - 1] : Vector3Normalize(b); Bn[i] = b; Nn[i] = Vector3CrossProduct(b, T[i]); }
+  int segs = closed ? m : m - 1;
+  for (int i = 0; i < segs; i++) {
+    int j = (i + 1) % m;
+    for (int s = 0; s < sides; s++) {
+      float a0 = 2 * PI * s / sides, a1 = 2 * PI * (s + 1) / sides;
+      auto D = [&](int k, float a) { return Vector3Add(Vector3Scale(Nn[k], cosf(a)), Vector3Scale(Bn[k], sinf(a))); };
+      Vector3 d00 = D(i, a0), d01 = D(i, a1), d10 = D(j, a0), d11 = D(j, a1);
+      Vector3 p00 = Vector3Add(path[i], Vector3Scale(d00, r)), p01 = Vector3Add(path[i], Vector3Scale(d01, r)), p10 = Vector3Add(path[j], Vector3Scale(d10, r)), p11 = Vector3Add(path[j], Vector3Scale(d11, r));
+      Tri(p00, p10, p11, d00, d10, d11, col); Tri(p00, p11, p01, d00, d11, d01, col);
+    }
+  }
+}
+void MeshBuilder::Sphere(Vector3 ce, float r, Color col, int rings, int segs, Vector3 sc) {
+  for (int i = 0; i < rings; i++) for (int s = 0; s < segs; s++) {
+    auto D = [&](int a, int b) { float th = PI * a / rings, ph = 2 * PI * b / segs; return Vector3{ sinf(th) * cosf(ph), cosf(th), sinf(th) * sinf(ph) }; };
+    auto P = [&](Vector3 d) { return Vector3{ ce.x + d.x * r * sc.x, ce.y + d.y * r * sc.y, ce.z + d.z * r * sc.z }; };
+    Vector3 a = D(i, s), b = D(i + 1, s), d = D(i + 1, s + 1), e = D(i, s + 1);
+    Tri(P(a), P(b), P(d), a, b, d, col); Tri(P(a), P(d), P(e), a, d, e, col);
+  }
+}
+void MeshBuilder::Box(Vector3 c, Vector3 sz, Color col) {
+  Vector3 h = Vector3Scale(sz, 0.5f);
+  const Vector3 N[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+  for (auto& nn : N) {
+    Vector3 u = fabsf(nn.y) > 0.5f ? Vector3{ 1, 0, 0 } : Vector3{ 0, 1, 0 }, w = Vector3CrossProduct(nn, u);
+    auto P = [&](float a, float b) { return Vector3{ c.x + (nn.x + u.x * a + w.x * b) * h.x, c.y + (nn.y + u.y * a + w.y * b) * h.y, c.z + (nn.z + u.z * a + w.z * b) * h.z }; };
+    Tri(P(-1, -1), P(1, -1), P(1, 1), nn, nn, nn, col); Tri(P(-1, -1), P(1, 1), P(-1, 1), nn, nn, nn, col);
+  }
+}
+Mesh MeshBuilder::Build() {
+  Mesh m{}; m.vertexCount = (int)v.size() / 3; m.triangleCount = m.vertexCount / 3;
+  m.vertices = (float*)MemAlloc(v.size() * sizeof(float)); memcpy(m.vertices, v.data(), v.size() * sizeof(float));
+  m.normals = (float*)MemAlloc(n.size() * sizeof(float)); memcpy(m.normals, n.data(), n.size() * sizeof(float));
+  m.texcoords = (float*)MemAlloc(t.size() * sizeof(float)); memcpy(m.texcoords, t.data(), t.size() * sizeof(float));
+  m.colors = (unsigned char*)MemAlloc(c.size()); memcpy(m.colors, c.data(), c.size());
+  UploadMesh(&m, false);
+  return m;
+}
+
+void DrawProp(const Mesh& m, Matrix xf, Color tint) { if (m.vertexCount) lit.Draw(m, xf, tint); }
+
+// grip at 'hand', handle running along 'dir', string face pointing along 'face'
+Matrix RacketXf(Vector3 hand, Vector3 dir, Vector3 face, float sc) {
+  Vector3 Y = Vector3Normalize(dir), Z = Vector3Normalize(Vector3Subtract(face, Vector3Scale(Y, Vector3DotProduct(face, Y)))), X = Vector3CrossProduct(Y, Z);
+  Matrix r = { X.x * sc, Y.x * sc, Z.x * sc, hand.x, X.y * sc, Y.y * sc, Z.y * sc, hand.y, X.z * sc, Y.z * sc, Z.z * sc, hand.z, 0, 0, 0, 1 };
+  return r;
+}
+
+static std::vector<Vector2> Resample(const std::vector<Vector2>& p, int n) {  // even points along a profile (crisp colour bands)
+  std::vector<float> L(1, 0); for (size_t i = 1; i < p.size(); i++) L.push_back(L.back() + hypotf(p[i].x - p[i - 1].x, p[i].y - p[i - 1].y));
+  std::vector<Vector2> o; size_t k = 1;
+  for (int i = 0; i <= n; i++) { float d = L.back() * i / n; while (k < p.size() - 1 && L[k] < d) k++; float u = (d - L[k - 1]) / fmaxf(1e-6f, L[k] - L[k - 1]); o.push_back({ p[k - 1].x + (p[k].x - p[k - 1].x) * u, p[k - 1].y + (p[k].y - p[k - 1].y) * u }); }
+  return o;
+}
+
+void RealProps::Init() {
+  if (ready) return; ready = true;
+  const Color WHT = { 245, 245, 240, 255 };
+  // ---- tennis net (ITF size): 0.914 m at the centre, 1.07 m at the posts, posts 0.914 m outside the doubles lines ----
+  {
+    MeshBuilder b; const float PX = 6.4f, cell = 0.1f, cord = 0.0045f;
+    auto top = [&](float x) { float u = fabsf(x) / PX; return 0.914f + 0.156f * u * u; };
+    for (float x = -PX + cell; x < PX - 0.01f; x += cell) b.Tube({ { x, 0.04f, 0 }, { x, top(x) - 0.03f, 0 } }, cord, 3, { 28, 30, 34, 255 });
+    for (float y = 0.04f; y < 0.9f; y += cell) b.Tube({ { -PX, y, 0 }, { PX, y, 0 } }, cord, 3, { 28, 30, 34, 255 });
+    std::vector<Vector3> cable; for (int i = 0; i <= 64; i++) { float x = -PX + 2 * PX * i / 64; cable.push_back({ x, top(x), 0 }); }
+    b.Tube(cable, 0.018f, 8, WHT);  // the white headband over the top cable
+    for (int i = 0; i < 64; i++) { float x = -PX + 2 * PX * (i + 0.5f) / 64; b.Box({ x, top(x) - 0.03f, 0 }, { 2 * PX / 64 + 0.002f, 0.06f, 0.016f }, WHT); }
+    b.Box({ 0, 0.46f, 0 }, { 0.05f, 0.9f, 0.012f }, WHT);  // centre strap
+    b.Tube({ { -PX, 0.04f, 0 }, { PX, 0.04f, 0 } }, 0.008f, 6, { 28, 30, 34, 255 });
+    for (int s = -1; s <= 1; s += 2) {  // posts with the winding crank
+      b.Tube({ { s * (PX + 0.05f), 0, 0 }, { s * (PX + 0.05f), 1.09f, 0 } }, 0.04f, 12, { 34, 74, 52, 255 });
+      b.Sphere({ s * (PX + 0.05f), 1.09f, 0 }, 0.04f, { 34, 74, 52, 255 }, 6, 10);
+      b.Box({ s * (PX + 0.05f), 0.6f, 0.06f }, { 0.04f, 0.08f, 0.06f }, { 120, 124, 130, 255 });
+      b.Tube({ { s * (PX + 0.05f), 0.6f, 0.09f }, { s * (PX + 0.05f), 0.6f, 0.16f }, { s * (PX + 0.05f), 0.5f, 0.16f } }, 0.008f, 6, { 120, 124, 130, 255 });
+    }
+    tennisNet = b.Build();
+  }
+  // ---- tennis racket: 68.5 cm long, 33 x 25 cm head, 16x19 string bed, wrapped grip ----
+  {
+    MeshBuilder f, r; const float cy = 0.525f, a = 0.125f, bb = 0.165f;
+    std::vector<Vector3> hoop; for (int i = 0; i < 72; i++) { float t = 2 * PI * i / 72; hoop.push_back({ a * cosf(t), cy + bb * sinf(t), 0 }); }
+    f.Tube(hoop, 0.011f, 10, WHITE, true);
+    float ta = 4.3f; Vector3 jl = { a * cosf(ta), cy + bb * sinf(ta), 0 }, jr = { -jl.x, jl.y, 0 };
+    f.Tube({ { -0.014f, 0.19f, 0 }, { -0.02f, 0.26f, 0 }, jl }, 0.01f, 8, WHITE);
+    f.Tube({ { 0.014f, 0.19f, 0 }, { 0.02f, 0.26f, 0 }, jr }, 0.01f, 8, WHITE);
+    f.Tube({ jl, { 0, jl.y - 0.012f, 0 }, jr }, 0.009f, 8, WHITE);  // throat bridge
+    for (int i = 0; i < 16; i++) { float x = -0.105f + 0.21f * i / 15, h = bb * 0.95f * sqrtf(fmaxf(0, 1 - (x / (a * 0.95f)) * (x / (a * 0.95f)))); r.Tube({ { x, cy - h, 0 }, { x, cy + h, 0 } }, 0.0017f, 4, { 240, 236, 220, 255 }); }
+    for (int i = 0; i < 19; i++) { float y = -0.14f + 0.28f * i / 18, w = a * 0.95f * sqrtf(fmaxf(0, 1 - (y / (bb * 0.95f)) * (y / (bb * 0.95f)))); r.Tube({ { -w, cy + y, 0 }, { w, cy + y, 0 } }, 0.0017f, 4, { 240, 236, 220, 255 }); }
+    r.Lathe({ { 0, 0 }, { 0.019f, 0.0f }, { 0.02f, 0.012f }, { 0.017f, 0.02f }, { 0.017f, 0.185f }, { 0.014f, 0.2f }, { 0, 0.2f } }, 8, [](float y, int) { return y < 0.016f ? Color{ 200, 30, 40, 255 } : Color{ 30, 30, 34, 255 }; });
+    racketFrame = f.Build(); racketRest = r.Build();
+  }
+  // ---- tennis ball: optic-yellow felt with the white curved seam ----
+  {
+    MeshBuilder b; b.Sphere({ 0, 0, 0 }, 1, { 214, 240, 60, 255 }, 14, 22);
+    std::vector<Vector3> seam; const float A = 1, B = 0.45f, C = 2 * sqrtf(A * B);
+    for (int i = 0; i < 96; i++) { float t = 2 * PI * i / 96; Vector3 p = Vector3Normalize({ A * cosf(t) + B * cosf(3 * t), A * sinf(t) - B * sinf(3 * t), C * sinf(2 * t) }); seam.push_back(Vector3Scale(p, 1.005f)); }
+    b.Tube(seam, 0.05f, 5, { 250, 250, 245, 255 }, true);
+    tennisBall = b.Build();
+  }
+  // ---- ten-pin: regulation profile (38.1 cm tall), two red neck stripes ----
+  {
+    std::vector<Vector2> p = { { 0, 0 }, { 0.026f, 0 }, { 0.04f, 0.02f }, { 0.058f, 0.09f }, { 0.0605f, 0.13f }, { 0.052f, 0.19f }, { 0.032f, 0.25f }, { 0.0235f, 0.28f }, { 0.029f, 0.32f }, { 0.032f, 0.35f }, { 0.024f, 0.375f }, { 0, 0.383f } };
+    MeshBuilder b; b.Lathe(Resample(p, 90), 28, [](float y, int) { return (y > 0.253f && y < 0.266f) || (y > 0.274f && y < 0.287f) ? Color{ 214, 40, 50, 255 } : Color{ 250, 250, 246, 255 }; });
+    pin = b.Build();
+  }
+  // ---- curling stone: polished granite, striking band, handle ----
+  {
+    std::vector<Vector2> p = { { 0, 0 }, { 0.06f, 0 }, { 0.12f, 0.006f }, { 0.138f, 0.018f }, { 0.145f, 0.04f }, { 0.145f, 0.075f }, { 0.138f, 0.097f }, { 0.12f, 0.109f }, { 0.07f, 0.114f }, { 0, 0.114f } };
+    MeshBuilder b; b.Lathe(Resample(p, 60), 36, [](float y, int i) { unsigned char g = (unsigned char)(120 + ((i * 37) % 11)); return y > 0.045f && y < 0.07f ? Color{ (unsigned char)(g - 25), (unsigned char)(g - 22), (unsigned char)(g - 18), 255 } : Color{ g, (unsigned char)(g + 2), (unsigned char)(g + 6), 255 }; });
+    stone = b.Build();
+    MeshBuilder h; h.Lathe({ { 0, 0.114f }, { 0.05f, 0.114f }, { 0.05f, 0.13f }, { 0.03f, 0.14f }, { 0, 0.14f } }, 20, [](float, int) { return WHITE; });
+    h.Tube({ { 0, 0.135f, 0 }, { 0, 0.165f, 0 }, { 0.03f, 0.19f, 0 }, { 0.13f, 0.19f, 0 } }, 0.014f, 10, WHITE);
+    stoneHandle = h.Build();
+  }
+  // ---- baseball bat: 84 cm maple, taped handle; baseball with red stitches ----
+  {
+    std::vector<Vector2> p = { { 0, 0 }, { 0.024f, 0 }, { 0.025f, 0.008f }, { 0.014f, 0.022f }, { 0.0135f, 0.26f }, { 0.019f, 0.42f }, { 0.028f, 0.58f }, { 0.033f, 0.74f }, { 0.033f, 0.82f }, { 0.028f, 0.838f }, { 0, 0.84f } };
+    MeshBuilder b; b.Lathe(Resample(p, 70), 20, [](float y, int) { return y > 0.03f && y < 0.25f ? Color{ 36, 36, 40, 255 } : Color{ 214, 168, 110, 255 }; });
+    bat = b.Build();
+    MeshBuilder s; s.Sphere({ 0, 0, 0 }, 1, { 250, 248, 240, 255 }, 12, 18);
+    std::vector<Vector3> seam; for (int i = 0; i < 80; i++) { float t = 2 * PI * i / 80; seam.push_back(Vector3Scale(Vector3Normalize({ cosf(t) + 0.45f * cosf(3 * t), sinf(t) - 0.45f * sinf(3 * t), 1.34f * sinf(2 * t) }), 1.01f)); }
+    s.Tube(seam, 0.045f, 4, { 210, 40, 40, 255 }, true);
+    baseball = s.Build();
+  }
+  // ---- hockey goal (unit size, mouth faces +X): red pipe frame, white mesh netting, back bar ----
+  {
+    MeshBuilder b; const Color GRED = { 210, 30, 40, 255 }, GNET = { 235, 238, 242, 255 };
+    b.Tube({ { 0, 0, -0.5f }, { 0, 1, -0.5f }, { 0, 1, 0.5f }, { 0, 0, 0.5f } }, 0.035f, 10, GRED);
+    std::vector<Vector3> back; for (int i = 0; i <= 16; i++) { float a = PI * i / 16; back.push_back({ -0.25f - sinf(a) * 0.45f, 0.02f, -0.5f * cosf(a) }); }
+    b.Tube(back, 0.025f, 8, GRED);
+    // netting: top + back curtain from the crossbar to the base hoop
+    for (int i = 0; i <= 16; i++) { float u = (float)i / 16, z = -0.5f + u; float a = acosf(Clamp(-z / 0.5f, -1, 1)); Vector3 base = { -0.25f - sinf(a) * 0.45f, 0.02f, z };
+      b.Tube({ { 0, 1, z }, { -0.35f, 0.92f, z }, base }, 0.006f, 3, GNET); }
+    for (int k = 1; k <= 8; k++) { float u = k / 9.f; std::vector<Vector3> row;
+      for (int i = 0; i <= 16; i++) { float z = -0.5f + i / 16.f, a = acosf(Clamp(-z / 0.5f, -1, 1)); Vector3 base = { -0.25f - sinf(a) * 0.45f, 0.02f, z }, mid = { -0.35f, 0.92f, z };
+        Vector3 p = u < 0.4f ? Vector3Lerp({ 0, 1, z }, mid, u / 0.4f) : Vector3Lerp(mid, base, (u - 0.4f) / 0.6f); row.push_back(p); }
+      b.Tube(row, 0.006f, 3, GNET); }
+    for (int s = -1; s <= 1; s += 2) for (int k = 1; k < 6; k++) { float y = k / 6.f; b.Tube({ { 0, y, s * 0.5f }, { -0.25f - 0.45f * 0.0f, y * 0.9f, s * 0.5f } }, 0.006f, 3, GNET); }
+    hockeyGoal = b.Build();
+  }
+  // ---- ice hockey stick: 1.5 m composite shaft, taped blade (grip end at the origin, shaft along +Y) ----
+  {
+    MeshBuilder b;
+    b.Box({ 0, 0.7f, 0 }, { 0.03f, 1.4f, 0.022f }, { 30, 32, 38, 255 });
+    b.Box({ 0, 0.08f, 0 }, { 0.034f, 0.16f, 0.026f }, { 235, 235, 235, 255 });  // knob tape
+    b.Box({ 0, 1.44f, 0.13f }, { 0.012f, 0.07f, 0.3f }, { 30, 32, 38, 255 });   // blade
+    b.Box({ 0.007f, 1.44f, 0.15f }, { 0.004f, 0.05f, 0.22f }, { 245, 245, 245, 255 });  // white tape on the blade
+    hockeyStick = b.Build();
+  }
+}
+
+Mesh BuildCrowd(const std::vector<Vector4>& seats, unsigned seed) {
+  MeshBuilder b; srand(seed);
+  const Color SKIN[] = { { 255, 220, 190, 255 }, { 232, 185, 150, 255 }, { 198, 140, 100, 255 }, { 141, 94, 64, 255 }, { 245, 205, 170, 255 } };
+  const Color SHIRT[] = { { 230, 57, 70, 255 }, { 69, 123, 157, 255 }, { 241, 196, 15, 255 }, { 46, 204, 113, 255 }, { 245, 245, 245, 255 }, { 155, 89, 182, 255 }, { 52, 73, 94, 255 }, { 230, 126, 34, 255 }, { 26, 188, 156, 255 } };
+  const Color HAIR[] = { { 30, 24, 20, 255 }, { 90, 60, 30, 255 }, { 200, 160, 80, 255 }, { 120, 120, 120, 255 } };
+  for (auto& s : seats) {
+    float yaw = s.w, cx = cosf(yaw), sx = sinf(yaw);
+    auto R = [&](float lx, float ly, float lz) { return Vector3{ s.x + lx * cx + lz * sx, s.y + ly, s.z - lx * sx + lz * cx }; };
+    Color shirt = SHIRT[rand() % 9], skin = SKIN[rand() % 5], hair = HAIR[rand() % 4];
+    float h = 0.9f + (rand() % 100) / 500.f;
+    b.Lathe({ { 0, 0 }, { 0.2f, 0.02f }, { 0.22f, 0.25f }, { 0.2f, 0.5f * h }, { 0.12f, 0.56f * h }, { 0, 0.58f * h } }, 8, [&](float, int) { return shirt; }, MatrixTranslate(s.x, s.y, s.z));
+    b.Sphere(R(0, 0.72f * h, 0), 0.13f, skin, 6, 8);
+    b.Sphere(R(0, 0.78f * h, -0.02f), 0.135f, hair, 4, 8, { 1, 0.6f, 1 });
+    if (rand() % 3 == 0) { b.Tube({ R(0.18f, 0.45f * h, 0), R(0.25f, 0.85f * h, 0.05f), R(0.22f, 1.1f * h, 0.05f) }, 0.05f, 5, shirt); }  // a raised arm
+  }
+  return b.Build();
+}

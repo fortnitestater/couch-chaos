@@ -1,5 +1,6 @@
 // Couch Chaos native core: window, bridge, lighting shader, primitives, particles, game registry.
 #include "cc.h"
+#include "mesh.h"
 #include <emscripten/emscripten.h>
 #include <sstream>
 #include "rlgl.h"
@@ -43,17 +44,17 @@ Color ParseColor(const std::string& hex) { unsigned v = 0x888888; if (hex.size()
 
 // ---------- lighting: sun + ambient + specular + distance fog (GLSL ES 1.0 for WebGL) ----------
 static const char* VS = R"(#version 100
-attribute vec3 vertexPosition; attribute vec3 vertexNormal; attribute vec2 vertexTexCoord;
+attribute vec3 vertexPosition; attribute vec3 vertexNormal; attribute vec2 vertexTexCoord; attribute vec4 vertexColor;
 uniform mat4 mvp; uniform mat4 matModel;
-varying vec3 vN; varying vec3 vW; varying vec2 vUV;
-void main() { vW = (matModel * vec4(vertexPosition, 1.0)).xyz; vN = normalize((matModel * vec4(vertexNormal, 0.0)).xyz); vUV = vertexTexCoord; gl_Position = mvp * vec4(vertexPosition, 1.0); })";
+varying vec3 vN; varying vec3 vW; varying vec2 vUV; varying vec4 vC;
+void main() { vC = vertexColor; vW = (matModel * vec4(vertexPosition, 1.0)).xyz; vN = normalize((matModel * vec4(vertexNormal, 0.0)).xyz); vUV = vertexTexCoord; gl_Position = mvp * vec4(vertexPosition, 1.0); })";
 static const char* FS = R"(#version 100
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
 precision mediump float;
 #endif
-varying vec3 vN; varying vec3 vW; varying vec2 vUV;
+varying vec3 vN; varying vec3 vW; varying vec2 vUV; varying vec4 vC;
 uniform vec4 colDiffuse; uniform vec3 lightDir; uniform vec3 camPos; uniform vec3 fogColor; uniform float fogDensity; uniform float ambient;
 uniform float pattern; uniform vec4 casters[24]; uniform float nCast; uniform float time; uniform vec3 sunCol; uniform vec3 skyCol;
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -61,7 +62,7 @@ float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
 float fbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 + 3.7) * 0.15; }
 void main() {
-  vec3 base = colDiffuse.rgb;
+  vec3 base = colDiffuse.rgb * vC.rgb;  // per-vertex colour (white unless a merged mesh brings its own)
   vec3 n = normalize(vN); vec3 L = normalize(-lightDir); vec3 V = normalize(camPos - vW);
   float spec = 0.35, gloss = 40.0;
   // ---- surface patterns ----
@@ -291,7 +292,7 @@ EMSCRIPTEN_KEEPALIVE void cc_init(float rs) {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
   g_rs = ClampRS(rs > 0 ? rs : 1); FW = (int)roundf(W * g_rs); FH = (int)roundf(H * g_rs);
   InitWindow(FW, FH, "Couch Chaos");
-  lit.Init(); prim.Init(); UI::Init(); PostInit();
+  lit.Init(); prim.Init(); UI::Init(); PostInit(); props.Init();
   rlSetClipPlanes(0.3, 600); // better depth precision = no z-fighting
 }
 // players: "name|#rrggbb|bot;name|#rrggbb|bot;..."

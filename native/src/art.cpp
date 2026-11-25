@@ -57,6 +57,11 @@ void Shadow(Rectangle r, float rad, float blur, Color c, float dy) {
 void Sky(Color top, Color bottom) { DrawRectangleGradientV(0, 0, W, H, top, bottom); }
 }
 
+ToonHold g_hold;
+Vector3 ToonPoint(Vector3 pos, float yaw, float sc, float hop, Vector3 local) {
+  Matrix base = MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
+  return Vector3Transform(local, base);
+}
 // ---------- toon character: a kid in a hooded onesie, big face, walking legs, a hat per player ----------
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc) {
   bool moving = hop > 0.02f;
@@ -91,6 +96,7 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
     float armSw = moving ? -swing * s * 0.18f : sinf(t * 2.2f + s) * 0.02f;
     Vector3 sh = { s * 0.33f, by + 0.2f, 0 };
     Vector3 hand = { s * (0.5f + 0.08f * up), by - 0.18f + up * 1.05f + (1 - up) * 0.02f, 0.05f + armSw };
+    if (g_hold.on && s == -1) hand = g_hold.hand;  // right hand gripping a racket / bat
     Lb(sh, hand, 0.08f, c);
     P(prim.sphere, hand, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, glove);
     P(prim.sphere, { hand.x + s * 0.02f, hand.y + 0.06f, hand.z + 0.07f }, { 0, 0, 0 }, { 0.08f, 0.1f, 0.08f }, glove);  // thumb
