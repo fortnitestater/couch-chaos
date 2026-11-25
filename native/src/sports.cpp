@@ -87,7 +87,8 @@ struct Bowling : Classic {
     }
     if (phase == "show") { wait -= dt; if (wait <= 0) { if (again) AimPhase(); else NextTurn(); } }
   }
-  void Draw() override {
+  void Draw() override { g_toonK = 1; DrawScene(); g_toonK = 1.4f; }
+  void DrawScene() {
     float tz = ball.on ? fminf(ball.z - 3.0f, 14.8f) : -3.4f; camZ += (tz - camZ) * 0.08f;
     cam.position = { ball.on ? ball.x * 0.4f : 0, ball.on ? 1.05f : 2.0f, camZ }; cam.target = { ball.on ? ball.x * 0.3f : 0, 0.1f, camZ + 13 };
     UI::Sky(Hex(0x0b0620), Hex(0x1a0b3a));
@@ -193,7 +194,8 @@ struct Derby : Classic {
       if (pt > T + 0.45f) Resolve();
     } else if (phase == "fly") { flyT -= dt; if (flyT <= 0) { for (auto& f : fly) f.on = false; NextPitch(); } }
   }
-  void Draw() override {
+  void Draw() override { g_toonK = 1; DrawScene(); g_toonK = 1.4f; }
+  void DrawScene() {
     bool flying = phase == "fly" && flyT < 2.9f;
     Vector3 cp = flying ? Vector3{ 0, 26, -22 } : Vector3{ 0, 4.6f, -10.5f }, ct = flying ? Vector3{ 0, 0, 60 } : Vector3{ 0, 0.9f, 12 };
     cam.position = Vector3Lerp(cam.position.z == 0 && cam.position.y == 0 ? cp : cam.position, cp, 0.06f); cam.target = Vector3Lerp(cam.target, ct, 0.06f);

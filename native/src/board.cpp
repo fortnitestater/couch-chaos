@@ -129,8 +129,14 @@ struct Four : Table {
   }
   int RowFor(int c) { for (int r = 0; r < 6; r++) if (!g[c][r]) return r; return -1; }
   void Push() {
-    std::vector<std::string> L; std::vector<bool> off; for (int c = 0; c < 7; c++) { L.push_back(std::to_string(c + 1)); off.push_back(RowFor(c) < 0); }
-    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == turn && drop.c < 0 && win < 0 ? Choice(std::string("Your turn (") + (side ? "🟡 YELLOW" : "🔴 RED") + ")! Pick a column", L, off, 7, true) : Msg(side ? "🟡" : "🔴", drop.c >= 0 ? "Dropping…" : P(turn).name + "'s turn", std::string("You are on ") + ((i % 2) ? "🟡 YELLOW" : "🔴 RED")));
+    // every phone shows the real board; on your turn you drag a disc over a column and let go
+    std::string b; for (int r = 5; r >= 0; r--) { b += std::string(r < 5 ? "," : "") + "["; for (int c = 0; c < 7; c++) b += std::string(c ? "," : "") + std::to_string(g[c][r]); b += "]"; }
+    std::string w; for (auto& q : line) w += std::string(w.empty() ? "" : ",") + "[" + std::to_string(q.first) + "," + std::to_string(5 - q.second) + "]";
+    for (int i = 0; i < N(); i++) if (!P(i).bot) {
+      bool my = i == turn && drop.c < 0 && win < 0; int mine = i % 2;
+      std::string text = win >= 0 ? (win == mine ? "🏆 Your team wins!" : "Your team lost this one") : my ? "Your turn! Drag your disc over a column and let go" : drop.c >= 0 ? "Dropping…" : P(turn).name + "'s turn";
+      Layout(i, "{\"name\":\"four\",\"my\":" + B(my) + ",\"side\":" + std::to_string(mine) + ",\"text\":" + Q(text) + ",\"board\":[" + b + "],\"win\":[" + w + "]}");
+    }
   }
   bool Wins(int who, std::vector<std::pair<int, int>>* out = nullptr) {
     int d[4][2] = { { 1, 0 }, { 0, 1 }, { 1, 1 }, { 1, -1 } };

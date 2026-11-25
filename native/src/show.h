@@ -58,7 +58,7 @@ struct Show : Game {
     for (int i = 0; i < N(); i++) {
       float x = PodX(i); bool h = hot ? hot(i) : false; Color c = P(i).color;
       float hop = cheer[i] > 0 ? fabsf(sinf(time * 9 + i)) * 0.35f * fminf(1, cheer[i]) : 0;
-      DrawToon({ x, 0.15f, 1.55f }, 0, c, time + i * 0.7f, hop, fminf(1, cheer[i]), 1.18f * r / 0.78f);
+      DrawToon({ x, 0.15f, 1.55f }, 0, c, time + i * 0.7f, hop, fminf(1, cheer[i]), 0.86f * r / 0.78f);
       lit.Draw(prim.cyl, TRS({ x, 0, 2.35f }, { 0, 0, 0 }, { r, 1.15f, r }), Shade(c, -0.2f));
       lit.Draw(prim.cyl, TRS({ x, 0.32f, 2.35f }, { 0, 0, 0 }, { r * 1.03f, 0.1f, r * 1.03f }), Hex(0xd9b25a));
       lit.Draw(prim.cyl, TRS({ x, 1.15f, 2.35f }, { 0, 0, 0 }, { r * 1.1f, 0.12f, r * 1.1f }), Hex(0xf2c66d));

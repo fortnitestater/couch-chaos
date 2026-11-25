@@ -184,8 +184,8 @@ struct Tennis : Classic {
   // the swing arc in the character's own space: the right arm sweeps from behind, across the front
   Vector3 HandLocal(const Pl& p, Vector3* dir, Vector3* face) {
     float sw = p.sw, ph = sw > 0 ? -1.7f + (1 - sw) * 3.4f : -0.35f;  // back → across
-    Vector3 sh = { -0.33f, 1.0f, 0 };
-    float reach = 0.52f, h = sw > 0 ? 0.95f + 0.12f * sinf((1 - sw) * PI) : 0.78f;
+    Vector3 sh = { -0.2f, 1.41f, 0 };
+    float reach = 0.5f, h = sw > 0 ? 1.12f + 0.12f * sinf((1 - sw) * PI) : 1.02f;
     Vector3 hand = { sh.x - reach * cosf(ph), h, reach * sinf(ph) };
     if (dir) *dir = Vector3Normalize({ -cosf(ph) * 0.8f, sw > 0 ? 0.35f : 0.9f, sinf(ph) * 0.8f });
     if (face) *face = { sinf(ph), 0, cosf(ph) };
@@ -198,7 +198,8 @@ struct Tennis : Classic {
     Matrix xf = RacketXf(Vector3Subtract(hand, Vector3Scale(Vector3Normalize(Vector3Subtract(tip, hand)), 0.06f)), Vector3Subtract(tip, hand), Vector3Subtract(fw, hand), 1.4f);
     DrawProp(props.racketFrame, xf, c); DrawProp(props.racketRest, xf, WHITE);
   }
-  void Draw() override {
+  void Draw() override { g_toonK = 1; DrawCourt(); g_toonK = 1.4f; }
+  void DrawCourt() {
     // broadcast camera: high behind the near baseline, drifting gently with the ball
     float bx = live ? Clamp(bp.x, -4, 4) * 0.25f : 0;
     cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 10.5f, -26 } : cam.position, { bx, 10.5f, -26.5f }, 0.05f);

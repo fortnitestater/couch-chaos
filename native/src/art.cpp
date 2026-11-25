@@ -57,119 +57,101 @@ void Shadow(Rectangle r, float rad, float blur, Color c, float dy) {
 void Sky(Color top, Color bottom) { DrawRectangleGradientV(0, 0, W, H, top, bottom); }
 }
 
-ToonHold g_hold;
+ToonHold g_hold; float g_toonK = 1.4f;
 Vector3 ToonPoint(Vector3 pos, float yaw, float sc, float hop, Vector3 local) {
+  sc *= g_toonK;
   Matrix base = MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
   return Vector3Transform(local, base);
 }
 // ---------- toon character: a kid in a hooded onesie, big face, walking legs, a hat per player ----------
+// ---------- a realistic person: real proportions (1.78 m at scale 1), jointed limbs, walk/run cycle, face, hair, clothes ----------
+// the shirt is the player's colour; hair, skin and shorts vary per player so everyone is recognisable
+static Vector3 Ik(Vector3 sh, Vector3 target, float l1, float l2, Vector3 pole) {  // elbow position for a two-bone arm
+  Vector3 d = Vector3Subtract(target, sh); float L = fminf(Vector3Length(d), l1 + l2 - 0.001f); if (L < 1e-4f) return Vector3Add(sh, { 0, -l1, 0 });
+  Vector3 u = Vector3Normalize(d); float a = (l1 * l1 + L * L - l2 * l2) / (2 * l1 * L); a = Clamp(a, -1, 1);
+  Vector3 pp = Vector3Subtract(pole, Vector3Scale(u, Vector3DotProduct(pole, u))); if (Vector3Length(pp) < 1e-4f) pp = { 0, -1, 0 };
+  pp = Vector3Normalize(pp); return Vector3Add(sh, Vector3Add(Vector3Scale(u, l1 * a), Vector3Scale(pp, l1 * sqrtf(1 - a * a))));
+}
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc) {
-  bool moving = hop > 0.02f;
-  float ph = t * 11.f, swing = moving ? sinf(ph) : 0.f;
-  float breath = sinf(t * 2.2f) * 0.015f;
-  float squash = 1 + breath + (moving ? 0.08f * cosf(ph * 2) : 0) + cheer * 0.04f * sinf(t * 12);
-  lit.Caster({ pos.x, pos.y, pos.z }, 0.62f * sc * (1 - fminf(hop, 1.2f) * 0.35f));
-  float lean = moving ? 0.12f : 0.f;
-  Matrix base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateX(lean)), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
-  auto P = [&](const Mesh& m, Vector3 p, Vector3 r, Vector3 s, Color col) { lit.Draw(m, MatrixMultiply(TRS(p, r, s), base), col); };
+  sc *= g_toonK;
+  bool moving = hop > 0.02f, flash = c.r == 255 && c.g == 255 && c.b == 255;
+  unsigned hsh = (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29;
+  const Color SKINS[] = { Hex(0xf2c9a8), Hex(0xe0ac82), Hex(0xc68a5e), Hex(0x8d5a3b), Hex(0xf6d5b8) };
+  const Color HAIRS[] = { Hex(0x2b1d14), Hex(0x5a3a1e), Hex(0xc9a063), Hex(0x1a1a1a), Hex(0x8a3b1c), Hex(0x6b6b6b) };
+  Color skin = flash ? WHITE : SKINS[hsh % 5], hair = flash ? WHITE : HAIRS[(hsh / 5) % 6];
+  Color shirt = c, shirtD = Shade(c, -0.25f), shorts = flash ? WHITE : ((hsh / 3) % 2 ? Hex(0x1f2a44) : Hex(0x2d2d33)), shoe = flash ? WHITE : Hex(0xf4f4f2), sole = Hex(0x3a3a40);
+  int style = (int)((hsh / 11) % 4);  // hair style
+  float ph = t * 9.5f, s1 = moving ? sinf(ph) : 0.f, run = moving ? fminf(1, hop * 4) : 0;
+  float bob = moving ? fabsf(cosf(ph)) * 0.04f : sinf(t * 2.2f) * 0.006f;
+  lit.Caster(pos, 0.38f * sc);
+  float lean = moving ? 0.1f * run : 0.f;
+  Matrix base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateX(lean)), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop * 0.35f + bob * sc, pos.z));
   auto X = [&](Vector3 p) { return Vector3Transform(p, base); };
+  auto E = [&](Vector3 p, Vector3 r, Vector3 s, Color col) { lit.Draw(prim.sphere, MatrixMultiply(TRS(p, r, s), base), col); };
   auto Lb = [&](Vector3 a, Vector3 b, float r, Color col) { Limb(X(a), X(b), r * sc, col); };
-  bool flash = c.r == 255 && c.g == 255 && c.b == 255;
-  Color dark = Shade(c, -0.35f), light = Shade(c, 0.35f), skin = Hex(0xffdcc0), ink = Hex(0x1c1633);
-  Color shoe = flash ? WHITE : Hex(0x2b2d42), glove = Hex(0xfdfdfd);
-  // legs + shoes
+  // ---- legs: hip -> knee -> ankle -> foot, with a real stride ----
   for (int s = -1; s <= 1; s += 2) {
-    float sw = swing * s, lift = moving ? fmaxf(0, -sw) * 0.1f : 0;
-    Vector3 hip = { s * 0.16f, 0.46f, 0 }, foot = { s * 0.17f, 0.15f + lift, sw * 0.17f };
-    Lb(hip, foot, 0.085f, dark);
-    P(prim.sphere, { foot.x, foot.y - 0.03f, foot.z + 0.07f }, { 0, 0, 0 }, { 0.25f, 0.18f, 0.36f }, shoe);
-    P(prim.sphere, { foot.x, foot.y - 0.09f, foot.z + 0.07f }, { 0, 0, 0 }, { 0.27f, 0.07f, 0.38f }, Hex(0xf1f3f5));
+    float sw = s1 * s, th = sw * (0.35f + 0.25f * run), bend = moving ? fmaxf(0, -sw) * (0.6f + 0.6f * run) + 0.1f : 0.05f;
+    Vector3 hip = { s * 0.095f, 0.93f, 0 };
+    Vector3 knee = Vector3Add(hip, { 0, -0.44f * cosf(th), 0.44f * sinf(th) });
+    Vector3 ank = Vector3Add(knee, { 0, -0.42f * cosf(th - bend), 0.42f * sinf(th - bend) });
+    Lb(hip, Vector3Lerp(hip, knee, 0.55f), 0.088f, shorts);   // thigh in shorts
+    Lb(Vector3Lerp(hip, knee, 0.45f), knee, 0.07f, skin);
+    Lb(knee, ank, 0.058f, skin);                                // calf
+    Lb(Vector3Lerp(knee, ank, 0.7f), ank, 0.047f, flash ? WHITE : Hex(0xf1f1f1));  // sock
+    Vector3 toe = Vector3Add(ank, { 0, -0.045f, 0.12f });
+    E({ (ank.x + toe.x) / 2, ank.y - 0.04f, (ank.z + toe.z) / 2 + 0.02f }, { 0, 0, 0 }, { 0.11f, 0.08f, 0.28f }, shoe);
+    E({ (ank.x + toe.x) / 2, ank.y - 0.075f, (ank.z + toe.z) / 2 + 0.02f }, { 0, 0, 0 }, { 0.115f, 0.03f, 0.29f }, sole);
   }
-  // body (onesie) with a zip and a lighter tummy
-  float by = 0.8f;
-  P(prim.sphere, { 0, by, 0 }, { 0, 0, 0 }, { 0.76f, 0.84f * squash, 0.66f }, c);
-  P(prim.sphere, { 0, by - 0.06f, 0.2f }, { 0, 0, 0 }, { 0.48f, 0.56f * squash, 0.3f }, light);
-  P(prim.cube, { 0, by + 0.05f, 0.335f }, { 0.25f, 0, 0 }, { 0.025f, 0.34f, 0.02f }, dark);
-  // arms with white cartoon gloves
+  // ---- torso: pelvis, waist, chest (shirt), shoulders, collar ----
+  E({ 0, 0.97f, 0 }, { 0, 0, 0 }, { 0.34f, 0.2f, 0.22f }, shorts);
+  // one smooth tapered trunk (waist narrower than chest) instead of stacked balls
+  lit.Draw(prim.cone, MatrixMultiply(TRS({ 0, 1.42f, 0.005f }, { PI, 0, 0 }, { 0.44f, 0.46f, 0.25f }), base), shirt);
+  lit.Draw(prim.cyl, MatrixMultiply(TRS({ 0, 0.98f, 0.005f }, { 0, 0, 0 }, { 0.32f, 0.2f, 0.21f }), base), shirt);
+  E({ 0, 1.4f, 0.005f }, { 0, 0, 0 }, { 0.44f, 0.12f, 0.25f }, shirt);   // shoulders
+  E({ 0, 1.28f, 0.03f }, { 0, 0, 0 }, { 0.38f, 0.24f, 0.21f }, shirt);   // chest
+  E({ 0, 1.465f, 0.015f }, { 0, 0, 0 }, { 0.13f, 0.04f, 0.11f }, shirtD);
+  E({ 0, 1.3f, -0.115f }, { 0, 0, 0 }, { 0.14f, 0.16f, 0.02f }, flash ? WHITE : Hex(0xf8f9fa));  // number patch on the back
+  // ---- arms: shoulder -> elbow -> wrist -> hand; swing while running, raise when cheering, grip when holding ----
   for (int s = -1; s <= 1; s += 2) {
-    float up = cheer * (0.9f + 0.15f * sinf(t * 12 + s));
-    float armSw = moving ? -swing * s * 0.18f : sinf(t * 2.2f + s) * 0.02f;
-    Vector3 sh = { s * 0.33f, by + 0.2f, 0 };
-    Vector3 hand = { s * (0.5f + 0.08f * up), by - 0.18f + up * 1.05f + (1 - up) * 0.02f, 0.05f + armSw };
-    if (g_hold.on && s == -1) hand = g_hold.hand;  // right hand gripping a racket / bat
-    Lb(sh, hand, 0.08f, c);
-    P(prim.sphere, hand, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, glove);
-    P(prim.sphere, { hand.x + s * 0.02f, hand.y + 0.06f, hand.z + 0.07f }, { 0, 0, 0 }, { 0.08f, 0.1f, 0.08f }, glove);  // thumb
+    Vector3 sh = { s * 0.205f, 1.41f, 0 }, wrist;
+    float up = cheer * (0.9f + 0.1f * sinf(t * 10 + s));
+    if (g_hold.on && s == -1) wrist = g_hold.hand;
+    else if (up > 0.05f) wrist = Vector3Lerp({ s * 0.3f, 0.95f, 0.05f }, { s * 0.32f, 1.98f + 0.04f * sinf(t * 12 + s), 0.08f }, fminf(1, up));
+    else { float a = -s1 * s * (0.45f + 0.35f * run); wrist = { s * 0.25f, 1.41f - 0.5f * cosf(a) + (moving ? 0.1f * run : 0), 0.5f * sinf(a) + (moving ? 0.12f * run : 0.04f) }; }
+    Vector3 el = Ik(sh, wrist, 0.29f, 0.26f, { s * 0.4f, -0.4f, -0.6f });
+    Vector3 elDir = Vector3Normalize(Vector3Subtract(el, sh));
+    Lb(sh, Vector3Add(sh, Vector3Scale(elDir, 0.14f)), 0.062f, shirt);    // sleeve
+    Lb(Vector3Add(sh, Vector3Scale(elDir, 0.12f)), el, 0.05f, skin);      // upper arm
+    Vector3 wd = Vector3Normalize(Vector3Subtract(wrist, el)); Vector3 wr = Vector3Add(el, Vector3Scale(wd, 0.26f));
+    Lb(el, wr, 0.043f, skin);                                               // forearm
+    Vector3 hc = Vector3Add(wr, Vector3Scale(wd, 0.06f));
+    E(hc, { 0, 0, 0 }, { 0.075f, 0.1f, 0.05f }, skin);                       // hand
+    E(Vector3Add(hc, { s * -0.03f, 0.02f, 0.03f }), { 0, 0, 0 }, { 0.03f, 0.05f, 0.03f }, skin);  // thumb
   }
-  // head: hood in the player colour, face peeking out
-  float hy = 1.4f + (squash - 1) * 0.6f + (moving ? 0.02f * fabsf(cosf(ph)) : 0);
-  P(prim.sphere, { 0, hy, -0.02f }, { 0, 0, 0 }, { 0.9f, 0.84f, 0.84f }, c);
-  P(prim.sphere, { 0, hy - 0.03f, 0.2f }, { 0, 0, 0 }, { 0.76f, 0.72f, 0.5f }, light);         // hood rim
-  P(prim.sphere, { 0, hy - 0.03f, 0.26f }, { 0, 0, 0 }, { 0.68f, 0.63f, 0.5f }, skin);          // face
-  // eyes: big, glossy, blink every few seconds, glance around
-  float bl = fmodf(t * 0.73f + 0.3f, 3.3f) < 0.11f ? 0.12f : 1.f;
-  float look = sinf(t * 0.6f) * 0.018f;
+  // ---- neck + head ----
+  Lb({ 0, 1.44f, 0 }, { 0, 1.56f, 0.01f }, 0.05f, skin);
+  float hy = 1.67f;
+  E({ 0, hy, 0.005f }, { 0, 0, 0 }, { 0.19f, 0.235f, 0.215f }, skin);
+  E({ 0, hy - 0.075f, 0.035f }, { 0, 0, 0 }, { 0.15f, 0.12f, 0.15f }, skin);   // jaw
   for (int s = -1; s <= 1; s += 2) {
-    P(prim.sphere, { s * 0.13f, hy + 0.02f, 0.465f }, { 0, 0, 0 }, { 0.17f, 0.23f * bl, 0.08f }, WHITE);
-    if (bl > 0.5f) {
-      P(prim.sphere, { s * 0.13f + look, hy + 0.0f, 0.5f }, { 0, 0, 0 }, { 0.115f, 0.155f, 0.04f }, ink);
-      P(prim.sphere, { s * 0.13f + look + 0.03f, hy + 0.05f, 0.52f }, { 0, 0, 0 }, { 0.04f, 0.045f, 0.02f }, WHITE);
-    }
-    if (cheer > 0.4f) P(prim.cube, { s * 0.14f, hy + 0.19f + cheer * 0.03f, 0.47f }, { 0, 0, s * 0.25f }, { 0.12f, 0.03f, 0.03f }, ink);  // eyebrows
-    P(prim.sphere, { s * 0.24f, hy - 0.1f, 0.42f }, { 0, 0, 0 }, { 0.12f, 0.07f, 0.04f }, Hex(0xff8fab, 200));                         // cheeks
+    E({ s * 0.097f, hy - 0.005f, -0.005f }, { 0, 0, 0 }, { 0.03f, 0.055f, 0.04f }, Shade(skin, -0.06f));  // ears
+    bool blink = fmodf(t + (float)(hsh % 7), 4.2f) < 0.12f;
+    E({ s * 0.04f, hy + 0.012f, 0.098f }, { 0, 0, 0 }, { 0.032f, blink ? 0.004f : 0.02f, 0.012f }, flash ? WHITE : Hex(0xfdfdfd));
+    if (!blink) E({ s * 0.04f, hy + 0.012f, 0.104f }, { 0, 0, 0 }, { 0.016f, 0.016f, 0.008f }, flash ? WHITE : Hex(0x3b2a1e));
+    E({ s * 0.042f, hy + 0.045f, 0.098f }, { 0, 0, s * 0.12f }, { 0.04f, 0.009f, 0.012f }, hair);  // brows
   }
-  // mouth: a D-shaped open smile that widens when cheering
-  float mo = 0.08f + 0.07f * cheer;
-  P(prim.hemi, { 0, hy - 0.13f, 0.47f }, { PI - 0.25f, 0, 0 }, { 0.17f + 0.05f * cheer, mo, 0.07f }, Hex(0x5c1626));
-  P(prim.sphere, { 0, hy - 0.13f - mo * 0.6f, 0.49f }, { 0, 0, 0 }, { 0.09f + 0.03f * cheer, 0.04f + 0.02f * cheer, 0.03f }, Hex(0xff6b81));
-  // accessory, picked from the colour so every player looks different
-  int acc = ((int)c.r * 7 + (int)c.g * 13 + (int)c.b * 29) % 8;
-  if (flash) acc = -1;
-  float top = hy + 0.4f;
-  switch (acc) {
-    case 0:  // beanie + pom-pom
-      P(prim.hemi, { 0, hy + 0.12f, -0.02f }, { -0.15f, 0, 0 }, { 0.93f, 0.6f, 0.88f }, dark);
-      P(prim.cyl, { 0, hy + 0.08f, -0.02f }, { -0.15f, 0, 0 }, { 0.95f, 0.11f, 0.9f }, light);
-      P(prim.sphere, { 0, top + 0.1f, -0.08f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }, WHITE);
-      break;
-    case 1:  // baseball cap
-      P(prim.hemi, { 0, hy + 0.15f, -0.02f }, { -0.1f, 0, 0 }, { 0.9f, 0.55f, 0.86f }, dark);
-      P(prim.cyl, { 0, hy + 0.17f, 0.38f }, { 0.12f, 0, 0 }, { 0.6f, 0.03f, 0.42f }, dark);
-      P(prim.sphere, { 0, top + 0.02f, -0.05f }, { 0, 0, 0 }, { 0.08f, 0.05f, 0.08f }, light);
-      break;
-    case 2: {  // golden crown
-      Color gold = Hex(0xffc93c);
-      P(prim.cyl, { 0, top - 0.1f, -0.02f }, { 0, 0, 0 }, { 0.56f, 0.18f, 0.56f }, gold);
-      for (int k = 0; k < 5; k++) { float a = k * 2 * PI / 5; P(prim.cone, { sinf(a) * 0.24f, top + 0.07f, cosf(a) * 0.24f - 0.02f }, { 0, 0, 0 }, { 0.15f, 0.2f, 0.15f }, gold); }
-      P(prim.sphere, { 0, top - 0.01f, 0.27f }, { 0, 0, 0 }, { 0.09f, 0.09f, 0.05f }, Hex(0xe03131));
-    } break;
-    case 3:  // bunny ears on the hood
-      for (int s = -1; s <= 1; s += 2) {
-        float wob = sinf(t * 3 + s) * 0.08f + (moving ? 0.15f * sinf(ph) * s : 0);
-        P(prim.sphere, { s * 0.17f, top + 0.18f, -0.05f }, { -0.1f, 0, s * (0.18f + wob) }, { 0.17f, 0.5f, 0.12f }, c);
-        P(prim.sphere, { s * 0.17f, top + 0.18f, 0.0f }, { -0.1f, 0, s * (0.18f + wob) }, { 0.08f, 0.36f, 0.04f }, Hex(0xffb3c6));
-      }
-      break;
-    case 4:  // headphones
-      for (int k = 0; k <= 8; k++) { float a = -PI / 2 + k * PI / 8; P(prim.sphere, { sinf(a) * 0.47f, hy + 0.02f + cosf(a) * 0.45f, -0.04f }, { 0, 0, 0 }, { 0.09f, 0.09f, 0.09f }, ink); }
-      for (int s = -1; s <= 1; s += 2) P(prim.cyl, { s * 0.42f, hy - 0.02f, -0.02f }, { 0, 0, PI / 2 }, { 0.3f, 0.14f, 0.3f }, Hex(0xff4d6d));
-      break;
-    case 5:  // party hat
-      P(prim.cone, { 0.04f, top - 0.06f, -0.02f }, { 0, 0, -0.12f }, { 0.36f, 0.52f, 0.36f }, Hex(0xffd43b));
-      P(prim.cyl, { 0.03f, top + 0.06f, -0.02f }, { 0, 0, -0.12f }, { 0.29f, 0.05f, 0.29f }, Hex(0xff6b81));
-      P(prim.sphere, { -0.03f, top + 0.47f, -0.02f }, { 0, 0, 0 }, { 0.13f, 0.13f, 0.13f }, Hex(0x4dabf7));
-      break;
-    case 6: {  // bobbing antenna
-      float b = sinf(t * 4) * 0.05f;
-      P(prim.cyl, { 0, top - 0.05f, -0.04f }, { b, 0, 0 }, { 0.04f, 0.3f, 0.04f }, ink);
-      P(prim.sphere, { 0, top + 0.28f, -0.04f + b * 0.3f }, { 0, 0, 0 }, { 0.15f, 0.15f, 0.15f }, Hex(0xfff3bf));
-    } break;
-    case 7:  // sprout
-      P(prim.cyl, { 0, top - 0.05f, -0.04f }, { 0, 0, 0 }, { 0.035f, 0.22f, 0.035f }, Hex(0x2f9e44));
-      for (int s = -1; s <= 1; s += 2) P(prim.sphere, { s * 0.1f, top + 0.18f, -0.04f }, { 0, 0, s * 0.5f + sinf(t * 2) * 0.1f }, { 0.22f, 0.07f, 0.13f }, Hex(0x51cf66));
-      break;
-    default:  // bear ears on the hood
-      for (int s = -1; s <= 1; s += 2) P(prim.sphere, { s * 0.27f, top - 0.04f, -0.06f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.12f }, c);
+  E({ 0, hy - 0.022f, 0.108f }, { 0.3f, 0, 0 }, { 0.026f, 0.045f, 0.03f }, Shade(skin, -0.04f));    // nose
+  E({ 0, hy - 0.07f, 0.095f }, { 0, 0, 0 }, { 0.05f, cheer > 0.3f ? 0.022f : 0.01f, 0.012f }, flash ? WHITE : Hex(cheer > 0.3f ? 0x7a2a2a : 0xb5655a));  // mouth
+  // hair: short crop, ponytail, curly top, or a cap in the shirt colour
+  if (style == 3) {
+    E({ 0, hy + 0.085f, -0.005f }, { 0, 0, 0 }, { 0.205f, 0.11f, 0.225f }, shirtD);
+    E({ 0, hy + 0.06f, 0.1f }, { 0.25f, 0, 0 }, { 0.17f, 0.02f, 0.12f }, shirtD);
+  } else {
+    E({ 0, hy + 0.05f, -0.02f }, { 0, 0, 0 }, { 0.205f, 0.17f, 0.215f }, hair);
+    E({ 0, hy - 0.01f, -0.06f }, { 0, 0, 0 }, { 0.2f, 0.18f, 0.15f }, hair);
+    if (style == 1) { E({ 0, hy - 0.02f, -0.13f }, { 0, 0, 0 }, { 0.07f, 0.07f, 0.07f }, hair); Lb({ 0, hy - 0.04f, -0.14f }, { 0, hy - 0.2f, -0.15f }, 0.03f, hair); }
+    if (style == 2) for (int k = 0; k < 5; k++) E({ -0.07f + k * 0.035f, hy + 0.11f, 0.02f - (k % 2) * 0.03f }, { 0, 0, 0 }, { 0.07f, 0.06f, 0.07f }, hair);
   }
 }
 

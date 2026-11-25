@@ -97,6 +97,7 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop = 0, float che
 // make the next DrawToon hold something: its right hand goes to 'hand' (toon-local space, before scale)
 struct ToonHold { bool on = false; Vector3 hand{}; };
 extern ToonHold g_hold;
+extern float g_toonK;  // people are drawn this much bigger than their nominal scale (1 = life size; party games use 1.4)
 Vector3 ToonPoint(Vector3 pos, float yaw, float sc, float hop, Vector3 local);  // toon-local point → world
 struct WinterBG {
   struct Flake { Vector3 p; float s, w; };

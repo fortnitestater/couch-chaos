@@ -187,7 +187,7 @@ struct RedLight : Classic {
     // the doll: back turned on green, staring at you on red
     bool red = light == "red" || light == "turn";
     Vector3 dp = W3(800, 70); Shadow(dp, 4);
-    DrawToon(dp, dollYaw, Hex(0xff922b), time, 0, red ? 0 : 0.4f, 4.0f);
+    DrawToon(dp, dollYaw, Hex(0xff922b), time, 0, red ? 0 : 0.4f, 2.4f);
     if (light == "red") for (int s = -1; s <= 1; s += 2) lit.Draw(prim.sphere, TRS({ dp.x + s * 0.55f + sinf(dollYaw) * 0.0f, dp.y + 5.0f, dp.z + 1.6f }, { 0, 0, 0 }, { 0.35f, 0.35f, 0.35f }), Hex(0xff2020));
     // traffic light
     Vector3 tl = W3(1300, 110);

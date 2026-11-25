@@ -117,11 +117,13 @@ void main() {
       sh *= 1.0 - 0.6 * (1.0 - smoothstep(0.25, 1.0, d));
     }
   }
-  vec3 hemi = mix(vec3(0.36, 0.3, 0.28) * ambient, skyCol * (ambient + 0.08), n.y * 0.5 + 0.5);
+  vec3 hemi = mix(vec3(0.5, 0.44, 0.4) * ambient, skyCol * (ambient + 0.12), n.y * 0.5 + 0.5);
   vec3 Hh = normalize(V + L);
   float s = pow(max(dot(n, Hh), 0.0), gloss) * spec * step(0.0, nd);
   float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-  vec3 col = base * (hemi * mix(0.72, 1.0, sh) + sunCol * 0.7 * diff * sh) + sunCol * s * sh + skyCol * fres * 0.22;
+  // key (sun) + sky fill + a soft fill light from the camera so faces and fronts are never in the dark
+  float camFill = max(dot(n, V), 0.0) * 0.16;
+  vec3 col = base * (hemi * mix(0.78, 1.0, sh) + sunCol * 0.95 * diff * sh + vec3(camFill)) + sunCol * s * sh + skyCol * fres * 0.25;
   float dist = length(camPos - vW); float f = 1.0 - exp(-pow(dist * fogDensity, 2.0));
   gl_FragColor = vec4(mix(col, fogColor, clamp(f, 0.0, 1.0)), colDiffuse.a);
 })";
@@ -135,11 +137,11 @@ void Lit::Init() {
   mat = LoadMaterialDefault(); mat.shader = shader;
 }
 void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
-  Vector3 L = Vector3Normalize({ -0.45f, -1.0f, -0.35f }); float amb = 0.4f;
+  Vector3 L = Vector3Normalize({ -0.45f, -1.0f, -0.35f }); float amb = 0.52f;
   // sky fill tinted by the scene's fog colour; dark scenes (night, rooms) get a cooler, dimmer fill
   float lum = fogColor.x * 0.3f + fogColor.y * 0.55f + fogColor.z * 0.15f;
   Vector3 sky = Vector3Lerp({ 0.75f, 0.82f, 1.0f }, fogColor, 0.35f);
-  if (lum < 0.3f) sky = Vector3Lerp({ 0.6f, 0.62f, 0.85f }, fogColor, 0.3f);
+  if (lum < 0.3f) sky = Vector3Lerp({ 0.78f, 0.8f, 0.95f }, fogColor, 0.15f);  // indoor / night scenes still get a bright fill
   Vector3 sun = { 1.0f, 0.95f, 0.86f };
   SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCam, &cam.position, SHADER_UNIFORM_VEC3);
   SetShaderValue(shader, locFog, &fogColor, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locFogD, &fogDensity, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locAmb, &amb, SHADER_UNIFORM_FLOAT);
@@ -204,10 +206,10 @@ void main() {
     c = clamp(cM + (cM - nb) * amt, min(min(cN, cS), min(cE, cW)), max(max(cN, cS), max(cE, cW)));
   }
   c += texture2D(bloom, uv).rgb * 0.38;
-  c = mix(c, c * c * (3.0 - 2.0 * c), 0.35);
+  c = mix(c, c * c * (3.0 - 2.0 * c), 0.15);
   float l = dot(c, lw); c = mix(vec3(l), c, 1.12);
   c += vec3(0.012, 0.0, -0.01) * smoothstep(0.4, 1.0, l) + vec3(-0.008, 0.0, 0.014) * (1.0 - smoothstep(0.0, 0.4, l));
-  vec2 v = uv - 0.5; c *= 1.0 - dot(v, v) * 0.55;
+  vec2 v = uv - 0.5; c *= 1.0 - dot(v, v) * 0.22;
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 })";
 static RenderTexture2D rtMain, rtA, rtB; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom; static bool postOk = false;

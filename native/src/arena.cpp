@@ -93,12 +93,12 @@ struct Arena : Classic {
       bool flash = m.inv > 0 && (int)(time * 12) % 2;
       float cheer = over && !o.empty() && o[0] == i ? 1.f : cheerF ? cheerF(i) : 0;
       float s = 1.3f * (m.alive ? 1 : m.fade);
-      Vector3 hl = { -0.46f, 0.72f, 0.36f }; if (Sticks()) { g_hold.on = true; g_hold.hand = hl; }
+      Vector3 hl = { -0.24f, 1.0f, 0.33f }; if (Sticks()) { g_hold.on = true; g_hold.hand = hl; }
       float hop = m.stun > 0 ? 0 : fabsf(sinf(time * 13 + i)) * 0.28f * fminf(1, sp / 200) + (cheer > 0 ? fabsf(sinf(time * 8)) * 0.5f : 0);
       Vector3 tp = { pos.x, groundY + (m.alive ? 0 : (1 - m.fade) * -1.5f), pos.z }; float yaw = PI / 2 - m.face;
       DrawToon(tp, yaw, flash ? WHITE : P(i).color, time + i, hop, cheer, s);
       if (Sticks()) { g_hold.on = false; float swing = m.dashT > 0 ? sinf(m.dashT * 10) * 0.6f : 0;
-        Vector3 h = ToonPoint(tp, yaw, s, hop, hl), tip = ToonPoint(tp, yaw, s, 0, { -0.2f + swing, 0.02f, 1.25f }), fc = ToonPoint(tp, yaw, s, 0, { -1.2f, 0.72f, 0.36f });
+        Vector3 h = ToonPoint(tp, yaw, s, hop, hl), tip = ToonPoint(tp, yaw, s, 0, { -0.2f + swing, 0.02f, 1.25f }), fc = ToonPoint(tp, yaw, s, 0, { -1.2f, 1.0f, 0.33f });
         DrawProp(props.hockeyStick, RacketXf(h, Vector3Subtract(tip, h), Vector3Subtract(fc, h), Vector3Distance(tip, h) / 1.45f)); }
     }
   }

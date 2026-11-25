@@ -395,6 +395,34 @@
     sh.addEventListener('pointerup', up); sh.addEventListener('pointercancel', up);
   }
 
+  // four in a row: the real board on your phone; drag your disc over a column and let go to drop it
+  function renderFour(L) {
+    const C = ['', '#ff3b5c', '#ffcc1a'], mine = C[L.side + 1], win = new Set((L.win || []).map(w => w[0] + ',' + w[1]));
+    stage.innerHTML = `<div class="fourC"><div class="fourTxt ${L.my ? 'my' : ''}">${esc(L.text || '')}</div>
+      <div class="fourRail" id="rail">${L.my ? `<div class="fdisc hold" id="fd" style="--dc:${mine}"></div>` : ''}</div>
+      <div class="fourBoard" id="fb">${L.board.map((row, r) => row.map((v, c) => `<div class="fcell" data-c="${c}"><i class="${v ? 'on' : ''} ${win.has(c + ',' + r) ? 'w' : ''}" style="--dc:${C[v] || 'transparent'}"></i></div>`).join('')).join('')}</div>
+      <div class="rhint">${L.my ? '👆 Drag the disc left / right above the board, let go to drop' : 'Watch the board — your turn is coming'}</div></div>`;
+    if (!L.my) return;
+    const fb = $('#fb'), rail = $('#rail'), fd = $('#fd'); let col = 3, id = null;
+    const colOf = x => { const r = fb.getBoundingClientRect(); return Math.max(0, Math.min(6, Math.floor((x - r.left) / (r.width / 7)))); };
+    const place = c => { const r = fb.getBoundingClientRect(), rr = rail.getBoundingClientRect(); fd.style.left = (r.left - rr.left + (c + 0.5) * r.width / 7) + 'px'; fb.querySelectorAll('.fcell').forEach(e => e.classList.toggle('hot', +e.dataset.c === c)); };
+    const full = c => L.board[0][c] !== 0;
+    place(col);
+    const z = stage.querySelector('.fourC'); z.style.touchAction = 'none';
+    z.addEventListener('pointerdown', e => { id = e.pointerId; try { z.setPointerCapture(id); } catch (_) {} const c = colOf(e.clientX); if (c !== col) { col = c; place(c); navigator.vibrate?.(6); } });
+    z.addEventListener('pointermove', e => { if (e.pointerId !== id) return; const c = colOf(e.clientX); if (c !== col) { col = c; place(c); navigator.vibrate?.(6); } });
+    const up = e => {
+      if (e.pointerId !== id) return; id = null;
+      if (full(col)) { fd.classList.remove('wiggle'); void fd.offsetWidth; fd.classList.add('wiggle'); navigator.vibrate?.(40); return; }
+      let row = 5; while (row > 0 && L.board[row][col] !== 0) row--;
+      const cell = fb.querySelector(`.fcell:nth-child(${row * 7 + col + 1})`), cr = cell.getBoundingClientRect(), dr = fd.getBoundingClientRect();
+      fd.style.transition = 'transform .38s cubic-bezier(.5,0,.75,0)'; fd.style.transform = `translate(-50%, ${cr.top - dr.top + 2}px)`;
+      navigator.vibrate?.([10, 30, 25]); setTimeout(() => sendMsg({ t: 'act', a: 'choice', i: col }), 300);
+      z.style.pointerEvents = 'none';
+    };
+    z.addEventListener('pointerup', up); z.addEventListener('pointercancel', up);
+  }
+
   // ---------- layouts ----------
   let camMode = false;
   function startCam() {
@@ -412,7 +440,7 @@
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);

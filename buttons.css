@@ -168,3 +168,19 @@ body.padBody { background:
 @keyframes turnPulse { 50% { transform: scale(1.05); } }
 .tcard { touch-action: none; border: 3.5px solid #fff !important; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 6px 0 2px color-mix(in oklab, var(--cc) 45%, #000), 0 10px 16px rgba(0,0,0,.4) !important; }
 .tcard.ok { box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 6px 0 2px color-mix(in oklab, var(--cc) 45%, #000), 0 0 22px color-mix(in oklab, var(--cc) 70%, #fff) !important; }
+
+/* four in a row on the phone */
+.fourC { height: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; }
+.fourTxt { font: 700 18px Fredoka, sans-serif; text-align: center; color: #dfe6ff; }
+.fourTxt.my { color: #ffe066; animation: turnPulse 1.4s ease-in-out infinite; }
+.fourRail { position: relative; width: min(94vw, 64vh); height: 56px; }
+.fdisc { position: absolute; top: 4px; width: calc(min(94vw, 64vh) / 7 * .8); aspect-ratio: 1; border-radius: 50%; transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--dc) 55%, #fff), var(--dc) 55%, color-mix(in oklab, var(--dc) 70%, #000));
+  border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.4), 0 6px 10px rgba(0,0,0,.4); transition: left .12s ease-out; z-index: 3; }
+.fourBoard { width: min(94vw, 64vh); aspect-ratio: 7 / 6; display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; padding: 6px; border-radius: 20px;
+  background: linear-gradient(180deg, #2f7bff, #1a55d6); border: 4px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 10px 0 2px #0f3a99, 0 16px 24px rgba(0,0,0,.5); }
+.fcell { display: grid; place-items: center; border-radius: 8px; transition: background .15s; }
+.fcell.hot { background: rgba(255,255,255,.14); }
+.fcell i { width: 80%; aspect-ratio: 1; border-radius: 50%; background: #0b1a4a; box-shadow: inset 0 4px 8px rgba(0,0,0,.6); }
+.fcell i.on { background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--dc) 55%, #fff), var(--dc) 55%, color-mix(in oklab, var(--dc) 70%, #000)); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.5); }
+.fcell i.w { animation: turnPulse .8s ease-in-out infinite; box-shadow: 0 0 0 4px #fff, 0 0 18px #fff; }
