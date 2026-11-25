@@ -175,6 +175,17 @@ void RealProps::Init() {
     for (int s = -1; s <= 1; s += 2) for (int k = 1; k < 6; k++) { float y = k / 6.f; b.Tube({ { 0, y, s * 0.5f }, { -0.25f - 0.45f * 0.0f, y * 0.9f, s * 0.5f } }, 0.006f, 3, GNET); }
     hockeyGoal = b.Build();
   }
+  // ---- human body: one smooth sculpted trunk (oval cross-section) for shirt + shorts, and a head shape ----
+  {
+    Matrix oval = MatrixScale(1, 1, 0.66f);
+    MeshBuilder a; a.Lathe(Resample({ { 0, 0.97f }, { 0.158f, 0.975f }, { 0.152f, 1.05f }, { 0.143f, 1.12f }, { 0.152f, 1.2f }, { 0.172f, 1.28f }, { 0.19f, 1.35f }, { 0.197f, 1.4f }, { 0.185f, 1.445f }, { 0.13f, 1.475f }, { 0.07f, 1.495f }, { 0, 1.5f } }, 40), 28, [](float, int) { return WHITE; }, oval);
+    torsoShirt = a.Build();
+    MeshBuilder b; b.Lathe(Resample({ { 0, 0.84f }, { 0.12f, 0.84f }, { 0.158f, 0.88f }, { 0.168f, 0.94f }, { 0.162f, 1.0f }, { 0, 1.0f } }, 20), 28, [](float, int) { return WHITE; }, MatrixScale(1, 1, 0.7f));
+    torsoShorts = b.Build();
+    // head: rounder cranium, narrower chin, real proportions (23 cm tall)
+    MeshBuilder h; h.Lathe(Resample({ { 0, -0.12f }, { 0.04f, -0.118f }, { 0.07f, -0.1f }, { 0.088f, -0.06f }, { 0.096f, -0.01f }, { 0.1f, 0.04f }, { 0.094f, 0.08f }, { 0.075f, 0.105f }, { 0.04f, 0.118f }, { 0, 0.12f } }, 30), 28, [](float, int) { return WHITE; }, MatrixScale(1, 1, 1.08f));
+    head = h.Build();
+  }
   // ---- ice hockey stick: 1.5 m composite shaft, taped blade (grip end at the origin, shaft along +Y) ----
   {
     MeshBuilder b;

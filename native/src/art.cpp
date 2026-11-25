@@ -1,5 +1,6 @@
 // Shared art: SDF UI cards, toon characters, winter backdrop, confetti.
 #include "cc.h"
+#include "mesh.h"
 #include "rlgl.h"
 
 // ---------- UI: anti-aliased rounded cards with gradient, border and soft shadow (one SDF shader) ----------
@@ -103,15 +104,10 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
     E({ (ank.x + toe.x) / 2, ank.y - 0.04f, (ank.z + toe.z) / 2 + 0.02f }, { 0, 0, 0 }, { 0.11f, 0.08f, 0.28f }, shoe);
     E({ (ank.x + toe.x) / 2, ank.y - 0.075f, (ank.z + toe.z) / 2 + 0.02f }, { 0, 0, 0 }, { 0.115f, 0.03f, 0.29f }, sole);
   }
-  // ---- torso: pelvis, waist, chest (shirt), shoulders, collar ----
-  E({ 0, 0.97f, 0 }, { 0, 0, 0 }, { 0.34f, 0.2f, 0.22f }, shorts);
-  // one smooth tapered trunk (waist narrower than chest) instead of stacked balls
-  lit.Draw(prim.cone, MatrixMultiply(TRS({ 0, 1.42f, 0.005f }, { PI, 0, 0 }, { 0.44f, 0.46f, 0.25f }), base), shirt);
-  lit.Draw(prim.cyl, MatrixMultiply(TRS({ 0, 0.98f, 0.005f }, { 0, 0, 0 }, { 0.32f, 0.2f, 0.21f }), base), shirt);
-  E({ 0, 1.4f, 0.005f }, { 0, 0, 0 }, { 0.44f, 0.12f, 0.25f }, shirt);   // shoulders
-  E({ 0, 1.28f, 0.03f }, { 0, 0, 0 }, { 0.38f, 0.24f, 0.21f }, shirt);   // chest
-  E({ 0, 1.465f, 0.015f }, { 0, 0, 0 }, { 0.13f, 0.04f, 0.11f }, shirtD);
-  E({ 0, 1.3f, -0.115f }, { 0, 0, 0 }, { 0.14f, 0.16f, 0.02f }, flash ? WHITE : Hex(0xf8f9fa));  // number patch on the back
+  // ---- torso: one smooth sculpted trunk (shirt) over the shorts ----
+  DrawProp(props.torsoShorts, base, shorts);
+  DrawProp(props.torsoShirt, base, shirt);
+  E({ 0, 1.47f, 0.02f }, { 0.25f, 0, 0 }, { 0.15f, 0.035f, 0.12f }, shirtD);   // collar
   // ---- arms: shoulder -> elbow -> wrist -> hand; swing while running, raise when cheering, grip when holding ----
   for (int s = -1; s <= 1; s += 2) {
     Vector3 sh = { s * 0.205f, 1.41f, 0 }, wrist;
@@ -132,17 +128,16 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
   // ---- neck + head ----
   Lb({ 0, 1.44f, 0 }, { 0, 1.56f, 0.01f }, 0.05f, skin);
   float hy = 1.67f;
-  E({ 0, hy, 0.005f }, { 0, 0, 0 }, { 0.19f, 0.235f, 0.215f }, skin);
-  E({ 0, hy - 0.075f, 0.035f }, { 0, 0, 0 }, { 0.15f, 0.12f, 0.15f }, skin);   // jaw
+  DrawProp(props.head, MatrixMultiply(MatrixTranslate(0, hy - 0.01f, 0.01f), base), skin);
   for (int s = -1; s <= 1; s += 2) {
-    E({ s * 0.097f, hy - 0.005f, -0.005f }, { 0, 0, 0 }, { 0.03f, 0.055f, 0.04f }, Shade(skin, -0.06f));  // ears
+    E({ s * 0.103f, hy - 0.005f, -0.005f }, { 0, 0, 0 }, { 0.03f, 0.055f, 0.04f }, Shade(skin, -0.06f));  // ears
     bool blink = fmodf(t + (float)(hsh % 7), 4.2f) < 0.12f;
-    E({ s * 0.04f, hy + 0.012f, 0.098f }, { 0, 0, 0 }, { 0.032f, blink ? 0.004f : 0.02f, 0.012f }, flash ? WHITE : Hex(0xfdfdfd));
-    if (!blink) E({ s * 0.04f, hy + 0.012f, 0.104f }, { 0, 0, 0 }, { 0.016f, 0.016f, 0.008f }, flash ? WHITE : Hex(0x3b2a1e));
-    E({ s * 0.042f, hy + 0.045f, 0.098f }, { 0, 0, s * 0.12f }, { 0.04f, 0.009f, 0.012f }, hair);  // brows
+    E({ s * 0.038f, hy + 0.012f, 0.108f }, { 0, 0, 0 }, { 0.03f, blink ? 0.004f : 0.018f, 0.012f }, flash ? WHITE : Hex(0xfdfdfd));
+    if (!blink) E({ s * 0.038f, hy + 0.012f, 0.114f }, { 0, 0, 0 }, { 0.015f, 0.015f, 0.008f }, flash ? WHITE : Hex(0x3b2a1e));
+    E({ s * 0.04f, hy + 0.04f, 0.11f }, { 0, 0, s * 0.12f }, { 0.04f, 0.009f, 0.012f }, hair);  // brows
   }
-  E({ 0, hy - 0.022f, 0.108f }, { 0.3f, 0, 0 }, { 0.026f, 0.045f, 0.03f }, Shade(skin, -0.04f));    // nose
-  E({ 0, hy - 0.07f, 0.095f }, { 0, 0, 0 }, { 0.05f, cheer > 0.3f ? 0.022f : 0.01f, 0.012f }, flash ? WHITE : Hex(cheer > 0.3f ? 0x7a2a2a : 0xb5655a));  // mouth
+  E({ 0, hy - 0.018f, 0.118f }, { 0.3f, 0, 0 }, { 0.024f, 0.042f, 0.028f }, Shade(skin, -0.04f));    // nose
+  E({ 0, hy - 0.062f, 0.1f }, { 0, 0, 0 }, { 0.044f, cheer > 0.3f ? 0.02f : 0.008f, 0.012f }, flash ? WHITE : Hex(cheer > 0.3f ? 0x7a2a2a : 0xa8584e));  // mouth
   // hair: short crop, ponytail, curly top, or a cap in the shirt colour
   if (style == 3) {
     E({ 0, hy + 0.085f, -0.005f }, { 0, 0, 0 }, { 0.205f, 0.11f, 0.225f }, shirtD);
