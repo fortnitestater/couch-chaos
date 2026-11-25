@@ -17,6 +17,24 @@ struct Arena : Classic {
   virtual void OnDash(int i) {}
   virtual void Rules(float dt) {}
   virtual bool IsOver() { return clockOn && T <= 0; }
+  // ---- live map on the phone: touch where you want to go ----
+  std::string theme = "arena"; float snapT = 0;
+  void TouchPads(const std::string& th, const std::string& btn, const std::string& hint) { theme = th; Layout(-1, TouchLayout(th, (X1 - X0) / (Y1 - Y0), "go", btn, hint)); }
+  Vector2 PhonePt(float x, float y) { return { (x - X0) / (X1 - X0), (y - Y0) / (Y1 - Y0) }; }
+  float PhoneR(float r) { return r / (X1 - X0); }
+  virtual bool Teams() { return false; }
+  virtual void TouchExtra(std::vector<TouchObj>& o) {}
+  virtual std::string TouchInfo(int i) { return ""; }
+  void Snap(float dt) {
+    snapT -= dt; if (snapT > 0 || k.empty()) return; snapT = 0.05f;
+    std::vector<TouchObj> base; TouchExtra(base);
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue;
+      std::vector<TouchObj> o = base;
+      for (int j = 0; j < N(); j++) { if (!k[j].alive) continue; Vector2 q = PhonePt(k[j].x, k[j].y); o.push_back({ q.x, q.y, PhoneR(Rad), P(j).color, j == i ? 1 : Teams() && k[j].team == k[i].team ? 2 : 3 }); }
+      SendSnap(i, o, TouchInfo(i));
+    }
+  }
   virtual std::vector<int> Rank() { return Sorted([&](int i) { return k[i].score; }); }
   virtual std::string Stat(int i) { return I((int)roundf(k[i].score)); }
   virtual std::string WinText() { auto o = Rank(); return P(o[0]).name + " WINS!"; }
@@ -45,7 +63,7 @@ struct Arena : Classic {
     return d;
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     if (Counting(dt, "GO!")) return;
     if (over) {
       overT -= dt; for (auto& m : k) { m.vx *= 0.9f; m.vy *= 0.9f; }
@@ -57,6 +75,10 @@ struct Arena : Classic {
       K& m = k[i]; if (!m.alive) { m.fade = fmaxf(0, m.fade - dt * 1.5f); continue; }
       Player& p = P(i); Vector2 in = p.stick; bool dash = (p.a && !p.pa) || (p.b && !p.pb);
       if (p.bot) in = Bot(i, dash);
+      else if (p.touch) {  // run toward the finger, slowing down as you arrive
+        Vector2 s = TouchAt(p); float tx = X0 + s.x * (X1 - X0), ty = Y0 + s.y * (Y1 - Y0), d = hypotf(tx - m.x, ty - m.y);
+        in = d < 8 ? Vector2{ 0, 0 } : Vector2Scale(Toward(m.x, m.y, tx, ty), fminf(1, d / 50));
+      }
       m.inv -= dt; m.squish = fmaxf(0, m.squish - dt * 3);
       if (m.stun > 0) { m.stun -= dt; in = { 0, 0 }; dash = false; }
       if (dash && m.dcd <= 0) { m.dashT = 0.3f; m.dcd = 1.0f; Sfx("dash"); fx.Burst(W3(m.x, m.y, 0.5f), 10, p.color, 5, 0.4f, 0.15f); OnDash(i); }
@@ -117,10 +139,12 @@ struct Arena : Classic {
 
 // ===================================================================================== HOT POTATO
 struct Potato : Arena {
+  void TouchExtra(std::vector<TouchObj>& o) override { if (holder >= 0 && holder < (int)k.size() && k[holder].alive) { Vector2 p = PhonePt(k[holder].x, k[holder].y); o.push_back({ p.x, p.y, PhoneR(Rad * 2.0f), Hex(0xff3b3b), 5 }); } }
+  std::string TouchInfo(int i) override { return i == holder ? "YOU HAVE THE BOMB! Touch someone!" : "Stay away from the red ring!"; }
   int holder = -1; float fuse = 0, passCd = 0, tickT = 0, wait = 0; Vector3 boomAt{};
   void Start() override {
     InitCam(44); sc.Init(30, 20, false); clockOn = false; speed = 330; boardTitle = "STILL STANDING"; Spawn();
-    Layout(-1, kit::Pad("xy", "DASH", "", "Got the bomb? Touch someone to pass it on before it blows!"));
+    TouchPads("arena", "DASH", "Touch where you want to run. Got the bomb (red ring)? Touch someone to pass it on!");
     NewBomb();
   }
   void NewBomb() {
@@ -186,11 +210,12 @@ struct Potato : Arena {
 
 // ===================================================================================== PAINT WARS
 struct Paint : Arena {
+  void TouchExtra(std::vector<TouchObj>& o) override { for (auto& b : bombs) { Vector2 p = PhonePt(b.x, b.y); o.push_back({ p.x, p.y, PhoneR(34), Hex(0xff6bd6), 4 }); } }
   static constexpr int C = 36, Rw = 18; std::vector<int> grid; struct PB { float x, y, t; }; std::vector<PB> bombs; float bombT = 3, cntT = 0;
   float CW() { return (X1 - X0) / C; } float CH() { return (Y1 - Y0) / Rw; }
   void Start() override {
     InitCam(44); sc.Init(30, 20, false); T = 60; speed = 350; boardTitle = "FLOOR PAINTED"; Spawn(); grid.assign(C * Rw, -1);
-    Layout(-1, kit::Pad("xy", "DASH", "", "Run around to paint the floor your colour! Grab the paint bombs!"));
+    TouchPads("arena", "DASH", "Touch where you want to run — paint the floor your colour! Grab the paint bombs (stars)!");
   }
   void PaintAt(float x, float y, float rad, int who) {
     int c0 = std::max(0, (int)((x - rad - X0) / CW())), c1 = std::min(C - 1, (int)((x + rad - X0) / CW()));
@@ -249,12 +274,16 @@ struct Paint : Arena {
 
 // ===================================================================================== COIN RUSH
 struct Coins : Arena {
+  void TouchExtra(std::vector<TouchObj>& o) override {
+    for (auto& b : bombs) { Vector2 p = PhonePt(b.x, b.y); o.push_back({ p.x, p.y, PhoneR(140), Hex(0xff3b3b), 5 }); }
+    for (auto& cn : coins) { Vector2 p = PhonePt(cn.x, cn.y); o.push_back({ p.x, p.y, PhoneR(cn.v > 1 ? 22 : 16), Hex(0xffd43b), 4 }); }
+  }
   struct Coin { float x, y, vx, vy, t; int v; }; struct Bm { float x, y, t; }; std::vector<Coin> coins; std::vector<Bm> bombs; float bombT = 4;
   void AddCoin(float x, float y, int v, float vx = 0, float vy = 0) { coins.push_back({ x, y, vx, vy, frand(0, 6), v }); }
   void Start() override {
     InitCam(44); sc.Init(30, 20, false); T = 60; speed = 350; boardTitle = "COINS"; Spawn();
     for (int i = 0; i < 12; i++) AddCoin(frand(X0 + 40, X1 - 40), frand(Y0 + 40, Y1 - 40), 1);
-    Layout(-1, kit::Pad("xy", "DASH", "", "Grab coins! DASH into people to steal one. Run from the red circles!"));
+    TouchPads("arena", "DASH", "Touch where you want to run. Grab the gold coins, stay out of the red circles!");
   }
   void Rules(float dt) override {
     if (coins.size() < 16 && frand(0, 1) < dt * 3.5f) AddCoin(frand(X0 + 40, X1 - 40), frand(Y0 + 40, Y1 - 40), frand(0, 1) < 0.1f ? 5 : 1);
@@ -312,12 +341,16 @@ struct Coins : Arena {
 
 // ===================================================================================== FROZEN LAKE
 struct Frozen : Arena {
+  void TouchExtra(std::vector<TouchObj>& o) override {
+    for (int r = 0; r < Rw; r++) for (int c = 0; c < C; c++) { auto& t = tl[r * C + c]; if (!t.s) continue;
+      Vector2 p = PhonePt(X0 + (c + 0.5f) * TW(), Y0 + (r + 0.5f) * TH()); o.push_back({ p.x, p.y, 0.5f / C, t.s == 1 ? Hex(0xff3b3b) : Hex(0x0b1b3a), t.s == 1 ? 6 : 7, 0.5f / Rw }); }
+  }
   static constexpr int C = 10, Rw = 6; struct Tl { int s = 0; float t = 0; }; std::vector<Tl> tl; float waveT = 3;
   float TW() { return (X1 - X0) / C; } float TH() { return (Y1 - Y0) / Rw; }
   Tl* At(float x, float y) { int c = (int)((x - X0) / TW()), r = (int)((y - Y0) / TH()); if (c < 0 || r < 0 || c >= C || r >= Rw) return nullptr; return &tl[r * C + c]; }
   void Start() override {
     InitCam(44); sc.Init(30, 20, true); clockOn = false; speed = 330; collide = true; groundY = 0.29f; boardTitle = "ON THE ICE"; Spawn(); tl.assign(C * Rw, Tl{});
-    Layout(-1, kit::Pad("xy", "DASH", "", "Red cracking ice is about to break — get off it!"));
+    TouchPads("ice", "DASH", "Touch where you want to skate. Red ice is cracking — get off it!");
   }
   void Rules(float dt) override {
     waveT -= dt;
@@ -367,6 +400,9 @@ struct Frozen : Arena {
 
 // ===================================================================================== ICE HOCKEY (teams)
 struct IceHockey : Arena {
+  bool Teams() override { return true; }
+  void TouchExtra(std::vector<TouchObj>& o) override { Vector2 p = PhonePt(px, py); o.push_back({ p.x, p.y, PhoneR(22), Hex(0x111111), 0 }); }
+  std::string TouchInfo(int i) override { int t = k[i].team; return "YOUR TEAM " + std::to_string(goals[t]) + " - " + std::to_string(goals[1 - t]); }
   float px = 800, py = 495, pvx = 0, pvy = 0, pause = 0; int goals[2] = { 0, 0 }, last = -1; std::vector<int> indiv;
   float GH = 150;
   void Start() override {
@@ -374,7 +410,7 @@ struct IceHockey : Arena {
     Spawn(); indiv.assign(N(), 0);
     for (int i = 0; i < N(); i++) k[i].team = i % 2;
     Reset();
-    Layout(-1, kit::Pad("xy", "SHOOT", "", "Red vs Blue! Run into the puck. SHOOT near it = blast it at their goal"));
+    TouchPads("rink", "SHOOT", "Touch where you want to skate. Run into the puck, SHOOT near it = blast it at their goal!");
   }
   void Reset() {
     float cy = (Y0 + Y1) / 2; int c[2] = { 0, 0 }, n[2] = { 0, 0 }; for (auto& m : k) n[m.team]++;

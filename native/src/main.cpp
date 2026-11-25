@@ -415,7 +415,7 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
 }
 EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {
   if (pid < 0 || pid >= (int)players.size()) return;
-  Player& p = players[pid]; p.stick = { x, y }; p.a = a; p.b = b;
+  Player& p = players[pid]; p.stick = { x, y }; p.a = (a & 1) != 0; p.b = b; p.touch = (a & 2) != 0;
 }
 EMSCRIPTEN_KEEPALIVE void cc_act(int pid, const char* kind, int i, float pw) { if (game) game->Act(pid, kind, i, pw); }
 EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {

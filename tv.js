@@ -68,7 +68,7 @@
     const isVip = p === vip() || (p.isCam && !vip());
     switch (m.t) {
       case 'in': {
-        const prev = p.input; p.input = { x: +m.x || 0, y: +m.y || 0, a: !!m.a, b: !!m.b };
+        const prev = p.input; p.input = { x: +m.x || 0, y: +m.y || 0, a: !!m.a, b: !!m.b, touch: !!m.touch };
         if (S.state === 'game' && S.game && S.game.onButton) { if (!prev.a && p.input.a) S.game.onButton(p, 'a'); if (!prev.b && p.input.b) S.game.onButton(p, 'b'); }
         break;
       }

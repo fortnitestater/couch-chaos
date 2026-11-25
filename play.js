@@ -253,6 +253,7 @@
   const keys = { left: false, right: false, up: false, down: false, a: false, b: false }, btn = { a: false, b: false }, stick = { active: false, x: 0, y: 0 };
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Space: 'a', KeyJ: 'a', Enter: 'a', ShiftLeft: 'b', ShiftRight: 'b', KeyK: 'b', KeyE: 'b' };
   function readInput() {
+    if (layout && layout.name === 'touch') { const f = TM.touching && TM.fing; return { x: f ? TM.fing.x * 2 - 1 : 0, y: f ? TM.fing.y * 2 - 1 : 0, a: keys.a || btn.a, b: false, touch: !!f }; }
     let x = 0, y = 0;
     if (keys.left) x -= 1; if (keys.right) x += 1; if (keys.up) y -= 1; if (keys.down) y += 1;
     if (stick.active) { x = stick.x; y = stick.y; }
@@ -264,10 +265,10 @@
   }
   let lastSent = { x: 0, y: 0, a: false, b: false };
   function flush(force) {
-    if (!conn || !conn.open || !layout || !['pad', 'button', 'swing'].includes(layout.name)) return;
-    const s = readInput();
-    if (!force && Math.abs(s.x - lastSent.x) < 0.03 && Math.abs(s.y - lastSent.y) < 0.03 && s.a === lastSent.a && s.b === lastSent.b) return;
-    s.x = +s.x.toFixed(2); s.y = +s.y.toFixed(2);
+    if (!conn || !conn.open || !layout || !['pad', 'button', 'swing', 'touch'].includes(layout.name)) return;
+    const s = readInput(), fine = layout.name === 'touch', eps = fine ? 0.004 : 0.03;
+    if (!force && Math.abs(s.x - lastSent.x) < eps && Math.abs(s.y - lastSent.y) < eps && s.a === lastSent.a && s.b === lastSent.b && s.touch === lastSent.touch) return;
+    s.x = +s.x.toFixed(fine ? 3 : 2); s.y = +s.y.toFixed(fine ? 3 : 2);
     try { conn.send({ t: 'in', ...s }); } catch (e) {}
     lastSent = s;
     drawYoke(s);
@@ -281,7 +282,7 @@
     if (R) R.style.opacity = s.x > 0.05 ? 0.35 + Math.min(1, s.x) * 0.65 : 0.15;
     const m = document.getElementById('yMeter'); if (m) m.style.left = (50 + s.x * 50) + '%';
   }
-  setInterval(() => flush(false), 33); setInterval(() => flush(true), 1000);
+  setInterval(() => flush(false), 25); setInterval(() => flush(true), 1000);
   function resetInput() { Object.keys(keys).forEach(k => keys[k] = false); btn.a = btn.b = false; stick.active = false; stick.x = stick.y = 0; flush(true); }
   function sendMsg(m) { if (conn && conn.open) { try { conn.send(m); } catch (e) {} } }
   let pumps = 0;
@@ -395,6 +396,109 @@
     sh.addEventListener('pointerup', up); sh.addEventListener('pointercancel', up);
   }
 
+
+  // ---------- live touch map: the TV streams the play area, your finger moves you ----------
+  // mode "drag": your piece sits under your finger (air hockey mallet). mode "go": tap/hold where you want to run.
+  const TM = { on: false, L: null, objs: [], info: '', fing: null, touching: false, raf: 0, cw: 0, ch: 0 };
+  function onSnap(m) {
+    if (!TM.on) return;
+    const n = m.o.map(a => ({ x: a[0], y: a[1], r: a[2], c: a[3], k: a[4], r2: a[5] }));
+    if (n.length === TM.objs.length && n.every((o, i) => o.k === TM.objs[i].k)) n.forEach((o, i) => { o.dx = TM.objs[i].dx; o.dy = TM.objs[i].dy; });
+    n.forEach(o => { if (o.dx === undefined) { o.dx = o.x; o.dy = o.y; } });
+    TM.objs = n;
+    if (m.i !== undefined && m.i !== TM.info) { TM.info = m.i; const e = document.getElementById('tInfo'); if (e) e.textContent = m.i; }
+    // "go" mode: arrived at the spot you tapped → stop
+    if (TM.L.mode === 'go' && TM.fing && !TM.down) { const me = n.find(o => o.k === 1); if (me && Math.hypot(me.x - TM.fing.x, (me.y - TM.fing.y) / TM.L.aspect) < 0.012) { TM.touching = false; TM.fing = null; flush(true); } }
+  }
+  function renderTouch(L) {
+    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = '';
+    stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw"><canvas id="tcv"></canvas></div>
+      <div class="touchBottom">${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${esc(L.btn)}</button>` : ''}<div class="rhint">${esc(L.hint || '')}</div></div></div>`;
+    stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
+    const tw = $('#tw'), cv = $('#tcv'), g = cv.getContext('2d');
+    const fit = () => {
+      const W = tw.clientWidth, H = tw.clientHeight; if (!W || !H) return;
+      TM.rot = L.aspect > 1.2 && H > W * 1.1; const asp = TM.rot ? 1 / L.aspect : L.aspect;
+      let cw = W, ch = W / asp; if (ch > H) { ch = H; cw = H * asp; }
+      const d = Math.min(2, devicePixelRatio || 1); cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+      TM.cw = cw; TM.ch = ch; TM.d = d;
+    };
+    fit(); addEventListener('resize', fit);
+    const at = e => { const r = cv.getBoundingClientRect(), fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)); return TM.rot ? { x: 1 - fy, y: fx } : { x: fx, y: fy }; };
+    let pid = null;
+    cv.style.touchAction = 'none';
+    cv.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (_) {} TM.fing = at(e); TM.touching = true; TM.down = true; navigator.vibrate?.(8); flush(true); });
+    cv.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; TM.fing = at(e); flush(); });
+    const up = e => { if (e.pointerId !== pid) return; pid = null; TM.down = false; if (L.mode === 'drag') { TM.touching = false; TM.fing = null; } flush(true); };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cancelAnimationFrame(TM.raf);
+    const frame = () => {
+      if (!TM.on || !document.body.contains(cv)) return;
+      if (!TM.cw) fit();
+      drawTouch(g, L); TM.raf = requestAnimationFrame(frame);
+    };
+    TM.raf = requestAnimationFrame(frame);
+  }
+  function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function drawTouch(g, L) {
+    const d = TM.d || 1, t = performance.now() / 1000, rot = !!TM.rot;
+    const W = (rot ? TM.ch : TM.cw) * d, H = (rot ? TM.cw : TM.ch) * d;  // logical (TV-oriented) size
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height);
+    if (rot) g.setTransform(0, -1, 1, 0, 0, W);  // turn the phone sideways and it lines up with the TV
+    // ---- the surface ----
+    const th = L.theme, R = 18 * d;
+    rr(g, 0, 0, W, H, R); g.save(); g.clip();
+    if (th === 'hockey' || th === 'rink') {
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#f4f9ff'); gr.addColorStop(1, '#dcebff'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.strokeStyle = '#ff4d5e'; g.lineWidth = 4 * d; g.beginPath();
+      if (th === 'hockey') { g.moveTo(0, H / 2); g.lineTo(W, H / 2); } else { g.moveTo(W / 2, 0); g.lineTo(W / 2, H); } g.stroke();
+      g.strokeStyle = '#4d9bff'; g.lineWidth = 3 * d; g.beginPath(); g.arc(W / 2, H / 2, Math.min(W, H) * 0.16, 0, 7); g.stroke();
+      g.fillStyle = '#16203f';
+      if (th === 'hockey') { const gw = W * 0.4167; g.fillRect((W - gw) / 2, 0, gw, 9 * d); g.fillRect((W - gw) / 2, H - 9 * d, gw, 9 * d);
+        g.globalAlpha = 0.08; g.fillStyle = '#2f7bff'; g.fillRect(0, H / 2, W, H / 2); g.globalAlpha = 1; }
+      else { const gh = H * 0.47; g.fillRect(0, (H - gh) / 2, 9 * d, gh); g.fillRect(W - 9 * d, (H - gh) / 2, 9 * d, gh); }
+    } else if (th === 'ice') {
+      g.fillStyle = '#cfe7ff'; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2 * d;
+      for (let i = 1; i < 10; i++) { g.beginPath(); g.moveTo(W * i / 10, 0); g.lineTo(W * i / 10, H); g.stroke(); }
+      for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(0, H * i / 6); g.lineTo(W, H * i / 6); g.stroke(); }
+    } else {
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#6cc45f'); gr.addColorStop(1, '#4fa548'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.fillStyle = 'rgba(255,255,255,.06)'; for (let i = 0; i < 12; i += 2) g.fillRect(W * i / 12, 0, W / 12, H);
+    }
+    // ---- objects (smoothed) ----
+    const objs = TM.objs; objs.forEach(o => { o.dx += (o.x - o.dx) * 0.45; o.dy += (o.y - o.dy) * 0.45; });
+    const order = [7, 6, 5, 4, 3, 2, 0, 1];
+    const meDrag = L.mode === 'drag' && TM.touching && TM.fing;
+    for (const k of order) for (const o of objs) {
+      if (o.k !== k) continue;
+      let x = o.dx * W, y = o.dy * H; const r = o.r * W;
+      if (k === 6 || k === 7) { const hw = o.r * W, hh = o.r2 * H; g.fillStyle = k === 6 ? `rgba(255,59,59,${0.55 + 0.3 * Math.sin(t * 10)})` : '#0b1b3a'; rr(g, x - hw + d, y - hh + d, hw * 2 - 2 * d, hh * 2 - 2 * d, 4 * d); g.fill(); continue; }
+      if (k === 5) { g.fillStyle = 'rgba(255,59,59,.28)'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = '#ff3b3b'; g.lineWidth = 3 * d; g.setLineDash([8 * d, 6 * d]); g.lineDashOffset = -t * 30 * d; g.stroke(); g.setLineDash([]); continue; }
+      if (k === 4) { g.shadowColor = o.c; g.shadowBlur = 12 * d; g.fillStyle = o.c; g.beginPath(); g.arc(x, y, Math.max(r, 6 * d), 0, 7); g.fill(); g.shadowBlur = 0; g.strokeStyle = '#fff'; g.lineWidth = 2 * d; g.stroke(); continue; }
+      if (k === 1 && meDrag) {  // your mallet sits right under your finger, kept on your half
+        const rn = r / H; x = TM.fing.x * W; y = Math.max(0.5 + rn, Math.min(1 - rn, TM.fing.y)) * H; x = Math.max(r, Math.min(W - r, x));
+      }
+      const rad = Math.max(r, (k === 0 ? 7 : 10) * d);
+      g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.arc(x + 2 * d, y + 4 * d, rad, 0, 7); g.fill();
+      const gr = g.createRadialGradient(x - rad * 0.35, y - rad * 0.4, rad * 0.1, x, y, rad); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.25, o.c); gr.addColorStop(1, o.c);
+      g.fillStyle = k === 0 ? '#1c1f26' : gr; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill();
+      if (k === 1) { g.strokeStyle = '#fff'; g.lineWidth = 4 * d; g.stroke(); g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2 * d; g.beginPath(); g.arc(x, y, rad + 7 * d + 3 * d * Math.sin(t * 6), 0, 7); g.stroke();
+        g.fillStyle = '#fff'; g.font = `800 ${12 * d}px Nunito, sans-serif`; g.textAlign = 'center'; g.fillText('YOU', x, y - rad - 10 * d); }
+      else if (k === 2) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2 * d; g.stroke(); }
+      else if (k === 0) { g.strokeStyle = '#555c6b'; g.lineWidth = 2 * d; g.stroke(); }
+      else { g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2 * d; g.stroke(); }
+    }
+    // "go" mode: where you are heading
+    if (L.mode === 'go' && TM.fing) {
+      const me = objs.find(o => o.k === 1), fx = TM.fing.x * W, fy = TM.fing.y * H;
+      if (me) { g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 3 * d; g.setLineDash([6 * d, 6 * d]); g.beginPath(); g.moveTo(me.dx * W, me.dy * H); g.lineTo(fx, fy); g.stroke(); g.setLineDash([]); }
+      g.strokeStyle = '#fff'; g.lineWidth = 3 * d; g.beginPath(); g.arc(fx, fy, (14 + 4 * Math.sin(t * 8)) * d, 0, 7); g.stroke();
+      g.beginPath(); g.arc(fx, fy, 4 * d, 0, 7); g.fillStyle = '#fff'; g.fill();
+    }
+    g.restore();
+    rr(g, 1 * d, 1 * d, W - 2 * d, H - 2 * d, R); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 3 * d; g.stroke();
+  }
+
   // four in a row: the real board on your phone; drag your disc over a column and let go to drop it
   function renderFour(L) {
     const C = ['', '#ff3b5c', '#ffcc1a'], mine = C[L.side + 1], win = new Set((L.win || []).map(w => w[0] + ',' + w[1]));
@@ -435,12 +539,12 @@
   function bindCamBtn() { const b = document.getElementById('camB'); if (b) b.onclick = startCam; }
   function render(L) {
     if (camMode) return; // the camera phone ignores game screens
-    layout = L; resetInput(); pumps = 0; shakeRoll = null;
+    layout = L; TM.on = false; cancelAnimationFrame(TM.raf); resetInput(); pumps = 0; shakeRoll = null;
     if ((L.name === 'pad' && L.stick) || L.name === 'swing') recenterSoon = true;
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour, touch: renderTouch };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -804,6 +908,7 @@
     else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') renderPanel(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; const f = document.getElementById('focusName'); if (f) f.textContent = `${m.emoji} ${m.name}`; }
+    else if (m.t === 'snap') onSnap(m);
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);
     else if (m.t === 'toast') toast(m.text);
     else if (m.t === 'full') joinErr('That room is full (8 players).');

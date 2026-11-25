@@ -422,8 +422,23 @@ struct Hockey : Classic {
     int cnt[2] = { 0, 0 }; for (int i = 0; i < N(); i++) cnt[i % 2]++;
     int j[2] = { 0, 0 };
     for (int i = 0; i < N(); i++) { int tm = i % 2; M q; q.team = tm; q.x = tm == 0 ? L + 140 : R - 140; q.y = CY + (j[tm]++ - (cnt[tm] - 1) / 2.f) * 150; m.push_back(q); }
-    Layout(-1, R"({"name":"pad","stick":"xy","hint":"Move your mallet. Hit the puck into their goal!"})");
+    for (int i = 0; i < N(); i++) Layout(i, TouchLayout("hockey", 600.f / 1100.f, "drag", "", "Your finger is your mallet: put it down and push the puck into their goal!", m[i].team));
     pause = 0.6f; px = 800 + (rand() % 2 ? 150.f : -150.f);
+  }
+  float snapT = 0;
+  // the phone shows the table from your own end: your goal at the bottom, theirs at the top
+  Vector2 ToPhone(int tm, float x, float y) { float u = (x - 800) / 550, v = (y - CY) / 300; return tm == 0 ? Vector2{ (v + 1) / 2, (1 - u) / 2 } : Vector2{ (1 - v) / 2, (1 + u) / 2 }; }
+  Vector2 FromPhone(int tm, Vector2 s) { float u = tm == 0 ? 1 - 2 * s.y : 2 * s.y - 1, v = tm == 0 ? 2 * s.x - 1 : 1 - 2 * s.x; return { 800 + u * 550, CY + v * 300 }; }
+  void Snap(float dt) {
+    snapT -= dt; if (snapT > 0) return; snapT = 0.05f;
+    for (int i = 0; i < N(); i++) {
+      if (P(i).bot) continue;
+      std::vector<TouchObj> o; int tm = m[i].team;
+      Vector2 p = ToPhone(tm, px, py); o.push_back({ p.x, p.y, PR / 600.f, Hex(0x212529), 0 });
+      for (int j = 0; j < N(); j++) { Vector2 q = ToPhone(tm, m[j].x, m[j].y); o.push_back({ q.x, q.y, MR / 600.f, P(j).color, j == i ? 1 : m[j].team == tm ? 2 : 3 }); }
+      char b[48]; snprintf(b, sizeof b, "YOU %d - %d THEM", score[tm], score[1 - tm]);
+      SendSnap(i, o, b);
+    }
   }
   int Closest(int tm) { int b = -1; float bd = 1e9f; for (int i = 0; i < N(); i++) if (m[i].team == tm) { float d = hypotf(m[i].x - px, m[i].y - py); if (d < bd) { bd = d; b = i; } } return b; }
   void Goal(int tm) {
@@ -440,7 +455,7 @@ struct Hockey : Classic {
     FinishOrder(o, [&](int i) { return std::to_string(score[m[i].team]) + "-" + std::to_string(score[1 - m[i].team]) + (m[i].goals ? " · " + std::to_string(m[i].goals) + " goals" : std::string("")); });
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     if (Counting(dt, "FACE OFF!")) return;
     if (over) return;
     T -= dt; pause -= dt; sndT -= dt;
@@ -467,7 +482,10 @@ struct Hockey : Classic {
         } else { float tx = gx + dir * 120, ty = Clamp(py, CY - 120, CY + 120); if (Closest(q.team) == i && !mine) {} else if (Closest(q.team) != i) { tx = gx + dir * (i % 4 < 2 ? 90.f : 260.f); ty = CY + (i % 4 < 2 ? 0.f : (py > CY ? -90.f : 90.f)); } in = Vector2Scale(Toward(q.x, q.y, tx, ty), fminf(1, hypotf(tx - q.x, ty - q.y) / 60) * 0.85f); }
       } else in = Norm(P(i).stick);
       q.back -= dt;
-      float k = fminf(1, dt * 16); q.vx += (in.x * 950 - q.vx) * k; q.vy += (in.y * 950 - q.vy) * k;
+      if (!P(i).bot && P(i).touch) {  // the mallet follows your finger (fast, but with real speed so hits feel right)
+        Vector2 t = FromPhone(q.team, TouchAt(P(i)));
+        q.vx = Clamp((t.x - q.x) * 20, -2600, 2600); q.vy = Clamp((t.y - q.y) * 20, -2600, 2600);
+      } else { float k = fminf(1, dt * 16); q.vx += (in.x * 950 - q.vx) * k; q.vy += (in.y * 950 - q.vy) * k; }
       q.x += q.vx * dt; q.y += q.vy * dt;
       float lo = q.team == 0 ? L + MR : 800 + MR, hi = q.team == 0 ? 800 - MR : R - MR;
       if (q.x < lo) { q.x = lo; q.vx = 0; } if (q.x > hi) { q.x = hi; q.vx = 0; }

@@ -38,7 +38,7 @@ void Img(const std::string& key, float x, float y, float w, float h, float radiu
 void RRect(float x, float y, float w, float h, float radius, Color fill, Color fill2, Color stroke, float lw, bool gradient = false, bool goldStroke = false);  // any message straight to one phone        // "pid:stat;pid:stat" best first
 
 // ---------- players ----------
-struct Player { int id; std::string name; Color color; bool bot; Vector2 stick{}; bool a = false, b = false, pa = false, pb = false; };
+struct Player { int id; std::string name; Color color; bool bot; Vector2 stick{}; bool a = false, b = false, pa = false, pb = false, touch = false; };
 
 // ---------- small helpers ----------
 inline float frand(float a, float b) { return a + (b - a) * (float)rand() / (float)RAND_MAX; }
