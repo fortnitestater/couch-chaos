@@ -421,6 +421,7 @@ EMSCRIPTEN_KEEPALIVE void cc_shell_frame(float dt) {
   float a = EaseOut(fade);
   hits.clear();
   bg.Update(dt);
+  lit.ShadowPass();
   PostBegin();
   rlEnableDepthMask(); ClearBackground(Hex(0x070b24));
   if (shown == "results") DrawResults(a, dt);

@@ -54,6 +54,12 @@ struct Lit {
   Shader shader{}; Material mat{}; int locLight, locCam, locFog, locFogD, locAmb, locPat, locCast, locNCast, locTime, locSun, locSky;
   std::vector<Vector4> cast, castPrev;  // soft contact shadows (x, groundY, z, radius), drawn one frame late
   float time = 0;
+  // real sun shadows: every opaque lit.Draw is recorded, and next frame the scene is rendered from the sun into a depth map
+  struct Rec { Mesh m; Matrix t; };
+  std::vector<Rec> rec; Camera3D lastCam{}; bool haveCam = false; float shOn = 0; Matrix lightVP{};
+  RenderTexture2D shRT{}; Shader shSh{}; Material shMat{}; int locLVP, locShOn, locShTex;
+  void ShadowPass();
+  void Reset() { rec.clear(); cast.clear(); castPrev.clear(); haveCam = false; shOn = 0; }
   void Init();
   void Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity);
   void Draw(const Mesh& m, Matrix t, Color c);

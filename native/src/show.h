@@ -34,37 +34,62 @@ struct Show : Game {
     lit.Begin(cam, { 0.05f, 0.06f, 0.16f }, 0.006f);
     BeginMode3D(cam);
     lit.Pattern(PAT_TILE);
-    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 90, 1, 90 }), Hex(0x22306a));
+    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 90, 1, 90 }), Hex(0x141c40));
     lit.Pattern(PAT_NONE);
-    // round stage riser with a gold edge
-    lit.Draw(prim.cyl, TRS({ 0, -0.3f, 1.2f }, { 0, 0, 0 }, { 10.5f, 0.42f, 5.2f }), Hex(0x2c3f8f));
-    lit.Draw(prim.cyl, TRS({ 0, -0.31f, 1.2f }, { 0, 0, 0 }, { 10.62f, 0.4f, 5.3f }), Hex(0xc9a24f));
-    // back wall: deep navy panels with gold seams
+    static Material glowM = LoadMaterialDefault();
+    auto Glow = [&](const Mesh& m, Matrix t, Color c) { glowM.maps[MATERIAL_MAP_DIFFUSE].color = c; DrawMesh(m, glowM, t); };
+    Color tintD = Shade(tint, -0.55f);
+    // stage riser: glossy dark deck with a glowing neon edge
+    Glow(prim.cyl, TRS({ 0, -0.3f, 1.2f }, { 0, 0, 0 }, { 10.75f, 0.36f, 5.4f }), tint);
+    lit.Draw(prim.cyl, TRS({ 0, -0.3f, 1.2f }, { 0, 0, 0 }, { 10.5f, 0.42f, 5.2f }), Hex(0x1a2350));
+    lit.Draw(prim.cyl, TRS({ 0, 0.11f, 1.2f }, { 0, 0, 0 }, { 9.4f, 0.02f, 4.5f }), Hex(0x222d63));
+    // back wall + the LED video wall in a bezel, with a moving light sweep
     float wz = -10;
-    lit.Draw(prim.cube, TRS({ 0, 8, wz }, { 0, 0, 0 }, { 70, 20, 0.5f }), Hex(0x16205a));
-    for (int i = -9; i <= 9; i++) lit.Draw(prim.cube, TRS({ i * 3.6f, 8, wz + 0.3f }, { 0, 0, 0 }, { 0.08f, 20, 0.05f }), Hex(0x8a6d2f));
-    // light-bulb arch
-    for (int k = 0; k <= 34; k++) {
-      float a = PI * k / 34.f; bool on = ((k + (int)(time * 6)) % 3) != 0;
-      Vector3 p = { cosf(a) * 10.5f, 0.6f + sinf(a) * 9.0f, wz + 0.6f };
-      lit.Draw(prim.sphere, TRS(p, { 0, 0, 0 }, { 0.32f, 0.32f, 0.32f }), on ? Hex(0xfff1c4) : Hex(0x9a7a3a));
+    lit.Draw(prim.cube, TRS({ 0, 8, wz - 0.4f }, { 0, 0, 0 }, { 70, 20, 0.5f }), Hex(0x0c1230));
+    lit.Draw(prim.cube, TRS({ 0, 6.3f, wz }, { 0, 0, 0 }, { 23.6f, 10.6f, 0.4f }), Hex(0x0a0e22));
+    for (int y = 0; y < 10; y++) for (int x = 0; x < 22; x++) {
+      float px = -10.5f + x, py = 1.75f + y, w = sinf(px * 0.35f + py * 0.25f - time * 1.6f) * 0.5f + 0.5f;
+      float sweep = expf(-powf(fmodf(px * 0.6f - py * 0.4f - time * 4.5f, 30.f) + 6, 2) * 0.05f);
+      Color c = ColorLerp(Hex(0x0e1640), tintD, 0.35f + 0.35f * w); c = ColorLerp(c, Shade(tint, -0.25f), sweep * 0.45f);
+      Glow(prim.cube, TRS({ px, py, wz + 0.22f }, { 0, 0, 0 }, { 0.96f, 0.96f, 0.05f }), c);
     }
-    // side light towers
-    for (int s = -1; s <= 1; s += 2) {
-      lit.Draw(prim.cube, TRS({ s * 13.5f, 4, -4 }, { 0, 0, 0 }, { 1.2f, 9, 1.2f }), Hex(0x141c46));
-      for (int k = 0; k < 6; k++) lit.Draw(prim.sphere, TRS({ s * 13.5f, 1 + k * 1.4f, -3.3f }, { 0, 0, 0 }, { 0.38f, 0.38f, 0.2f }), (k + (int)(time * 3)) % 2 ? Shade(tint, 0.5f) : Hex(0xfff1c4));
+    // neon bezel around the screen
+    Glow(prim.cube, TRS({ 0, 11.65f, wz + 0.25f }, { 0, 0, 0 }, { 23.8f, 0.12f, 0.1f }), Shade(tint, 0.3f));
+    Glow(prim.cube, TRS({ 0, 0.95f, wz + 0.25f }, { 0, 0, 0 }, { 23.8f, 0.12f, 0.1f }), Shade(tint, 0.3f));
+    for (int q = -1; q <= 1; q += 2) Glow(prim.cube, TRS({ q * 11.85f, 6.3f, wz + 0.25f }, { 0, 0, 0 }, { 0.12f, 10.8f, 0.1f }), Shade(tint, 0.3f));
+    // angled side walls with chevron neon stripes
+    for (int sd = -1; sd <= 1; sd += 2) {
+      lit.Draw(prim.cube, TRS({ sd * 16.5f, 7, wz + 3.2f }, { 0, -sd * 0.6f, 0 }, { 9, 14, 0.4f }), Hex(0x10183c));
+      for (int k = 0; k < 4; k++) {
+        Matrix m = MatrixMultiply(MatrixMultiply(MatrixScale(0.14f, 7.5f, 0.08f), MatrixRotateZ(sd * 0.55f)), MatrixTranslate(-1.5f * sd + k * 1.1f * sd, 6.5f, 0.25f));
+        m = MatrixMultiply(m, MatrixMultiply(MatrixRotateY(-sd * 0.6f), MatrixTranslate(sd * 16.5f, 0, wz + 3.2f)));
+        Glow(prim.cube, m, k % 2 ? Hex(0xe9f4ff) : Shade(tint, 0.2f));
+      }
     }
-    // podiums + characters
+    // lighting truss with spot cans
+    lit.Draw(prim.cube, TRS({ 0, 13.2f, 0 }, { 0, 0, 0 }, { 30, 0.35f, 0.35f }), Hex(0x6c7385));
+    lit.Draw(prim.cube, TRS({ 0, 13.8f, 0 }, { 0, 0, 0 }, { 30, 0.35f, 0.35f }), Hex(0x6c7385));
+    for (int k = 0; k < 9; k++) {
+      float x = -12 + k * 3;
+      lit.Draw(prim.cyl, TRS({ x, 12.4f, 0.2f }, { 0.5f, 0, 0 }, { 0.6f, 0.8f, 0.6f }), Hex(0x22252e));
+      Glow(prim.sphere, TRS({ x, 12.3f, 0.75f }, { 0, 0, 0 }, { 0.42f, 0.42f, 0.2f }), k % 2 ? Hex(0xfff4dc) : Shade(tint, 0.5f));
+    }
+    // host desks: dark glossy body, white top, glowing front panel in the player's colour
     float r = PodR();
     for (int i = 0; i < N(); i++) {
       float x = PodX(i); bool h = hot ? hot(i) : false; Color c = P(i).color;
       float hop = cheer[i] > 0 ? fabsf(sinf(time * 9 + i)) * 0.35f * fminf(1, cheer[i]) : 0;
       DrawToon({ x, 0.15f, 1.55f }, 0, c, time + i * 0.7f, hop, fminf(1, cheer[i]), 0.96f * r / 0.78f);
-      lit.Draw(prim.cyl, TRS({ x, 0, 2.35f }, { 0, 0, 0 }, { r, 0.98f, r }), Shade(c, -0.12f));
-      lit.Draw(prim.cyl, TRS({ x, 0.32f, 2.35f }, { 0, 0, 0 }, { r * 1.03f, 0.1f, r * 1.03f }), Hex(0xd9b25a));
-      lit.Draw(prim.cyl, TRS({ x, 0.98f, 2.35f }, { 0, 0, 0 }, { r * 1.1f, 0.12f, r * 1.1f }), Hex(0xf2c66d));
-      // answer light on top of the podium
-      lit.Draw(prim.sphere, TRS({ x, 1.16f, 2.35f + r * 0.55f }, { 0, 0, 0 }, { 0.16f, 0.12f, 0.16f }), h ? Shade(c, 0.6f) : Hex(0x2a3155));
+      float dw = r * 2.1f, dd = r * 1.25f, z = 2.35f;
+      lit.Draw(prim.cube, TRS({ x, 0.5f, z }, { 0, 0, 0 }, { dw, 0.98f, dd }), Hex(0x161d3c));
+      lit.Draw(prim.cube, TRS({ x, 1.0f, z }, { 0, 0, 0 }, { dw + 0.12f, 0.06f, dd + 0.12f }), Hex(0x2c3668));
+      Color panel = h ? Shade(c, 0.35f) : ColorLerp(Hex(0x101633), c, 0.55f + 0.08f * sinf(time * 2 + i));
+      Glow(prim.cube, TRS({ x, 0.5f, z + dd / 2 + 0.005f }, { 0, 0, 0 }, { dw - 0.2f, 0.78f, 0.02f }), panel);
+      Glow(prim.cube, TRS({ x, 0.94f, z + dd / 2 + 0.02f }, { 0, 0, 0 }, { dw + 0.1f, 0.05f, 0.03f }), Shade(c, 0.4f));
+      // answer light on the desk
+      lit.Draw(prim.cyl, TRS({ x + dw * 0.32f, 1.04f, z + 0.1f }, { 0, 0, 0 }, { 0.26f, 0.05f, 0.26f }), Hex(0x2a3155));
+      if (h) Glow(prim.sphere, TRS({ x + dw * 0.32f, 1.1f, z + 0.1f }, { 0, 0, 0 }, { 0.22f, 0.12f, 0.22f }), Shade(c, 0.6f));
+      else lit.Draw(prim.sphere, TRS({ x + dw * 0.32f, 1.1f, z + 0.1f }, { 0, 0, 0 }, { 0.22f, 0.12f, 0.22f }), Hex(0x3a4170));
     }
     Props3D();
     fx.Draw(); conf.Draw();
@@ -76,6 +101,8 @@ struct Show : Game {
       DrawCylinderEx({ s * 9.f, 12, -3 }, { s * 3.f + sw, 0, 2 }, 0.2f, 2.6f, 18, Fade(tint, 0.06f));
     }
     for (int i = 0; i < N(); i++) { float x = PodX(i); DrawCylinder({ x, 0.13f, 1.7f }, PodR() * 1.7f, PodR() * 1.7f, 0.01f, 32, Fade(Hex(0xffd89a), 0.05f)); }
+    for (int i = 0; i < N(); i++) { float x = PodX(i), dw = PodR() * 2.1f, z0 = 2.35f + PodR() * 0.625f; for (int k = 0; k < 5; k++) DrawCube({ x, 0.125f + k * 0.001f, z0 + 0.25f + k * 0.18f }, dw - 0.3f - k * 0.1f, 0.002f, 0.5f + k * 0.36f, Fade(P(i).color, 0.035f)); }
+    for (int k = 0; k < 6; k++) DrawCube({ 0, 0.005f, wz + 1.2f + k * 0.5f }, 22 - k * 1.5f, 0.002f, 1 + k, Fade(tint, 0.025f));
     BeginBlendMode(BLEND_ALPHA);
     rlDrawRenderBatchActive(); rlEnableDepthMask();
     EndMode3D();

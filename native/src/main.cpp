@@ -57,6 +57,24 @@ precision mediump float;
 varying vec3 vN; varying vec3 vW; varying vec2 vUV; varying vec4 vC;
 uniform vec4 colDiffuse; uniform vec3 lightDir; uniform vec3 camPos; uniform vec3 fogColor; uniform float fogDensity; uniform float ambient;
 uniform float pattern; uniform vec4 casters[24]; uniform float nCast; uniform float time; uniform vec3 sunCol; uniform vec3 skyCol;
+uniform sampler2D shadowMap; uniform mat4 lightVP; uniform float shOn; uniform float shTex;
+float unpackD(vec4 c) { return dot(c, vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0)); }
+float sunShadow(vec3 p, vec3 n, float nd) {
+  if (shOn < 0.5) return 1.0;
+  vec4 lp = lightVP * vec4(p + n * 0.035, 1.0);
+  vec3 q = lp.xyz * 0.5 + 0.5;
+  if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0) return 1.0;
+  float bias = 0.0005 + 0.0016 * (1.0 - clamp(nd, 0.0, 1.0));
+  float s = 0.0;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 o = vec2(float(x), float(y)) * shTex * 1.5;
+    s += step(q.z - bias, unpackD(texture2D(shadowMap, q.xy + o)));
+  }
+  s /= 9.0;
+  // fade out at the edge of the shadow map
+  vec2 e = min(q.xy, 1.0 - q.xy); float edge = smoothstep(0.0, 0.06, min(e.x, e.y));
+  return mix(1.0, s, edge);
+}
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -117,16 +135,32 @@ void main() {
       sh *= 1.0 - 0.6 * (1.0 - smoothstep(0.25, 1.0, d));
     }
   }
-  vec3 hemi = mix(vec3(0.5, 0.44, 0.4) * ambient, skyCol * (ambient + 0.12), n.y * 0.5 + 0.5);
+  float ssh = sunShadow(vW, n, nd);
+  sh *= mix(0.22, 1.0, ssh);
+  // cheap ambient occlusion: creases at the ground and under things get darker
+  float ao = mix(0.72, 1.0, smoothstep(-0.6, 0.5, n.y)) * mix(0.85, 1.0, ssh);
+  vec3 hemi = mix(vec3(0.5, 0.44, 0.4) * ambient, skyCol * (ambient + 0.12), n.y * 0.5 + 0.5) * ao;
   vec3 Hh = normalize(V + L);
   float s = pow(max(dot(n, Hh), 0.0), gloss) * spec * step(0.0, nd);
   float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
   // key (sun) + sky fill + a soft fill light from the camera so faces and fronts are never in the dark
   float camFill = max(dot(n, V), 0.0) * 0.16;
-  vec3 col = base * (hemi * mix(0.78, 1.0, sh) + sunCol * 0.95 * diff * sh + vec3(camFill)) + sunCol * s * sh + skyCol * fres * 0.25;
+  vec3 col = base * (hemi * mix(0.8, 1.0, sh) + sunCol * 1.02 * diff * sh + vec3(camFill)) + sunCol * s * sh * ssh + skyCol * fres * 0.25;
   float dist = length(camPos - vW); float f = 1.0 - exp(-pow(dist * fogDensity, 2.0));
   gl_FragColor = vec4(mix(col, fogColor, clamp(f, 0.0, 1.0)), colDiffuse.a);
 })";
+static const char* SH_VS = R"(#version 100
+attribute vec3 vertexPosition; uniform mat4 mvp; varying float vD;
+void main() { gl_Position = mvp * vec4(vertexPosition, 1.0); vD = gl_Position.z * 0.5 + 0.5; })";
+static const char* SH_FS = R"(#version 100
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying float vD;
+void main() { float d = clamp(vD, 0.0, 0.99999); vec4 e = fract(d * vec4(1.0, 255.0, 65025.0, 16581375.0)); e -= e.yzww * vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 0.0); gl_FragColor = e; })";
+static const int SHADOW_RES = 2048;
 Lit lit; Prims prim;
 void Lit::Init() {
   shader = LoadShaderFromMemory(VS, FS);
@@ -135,6 +169,36 @@ void Lit::Init() {
   locPat = GetShaderLocation(shader, "pattern"); locCast = GetShaderLocation(shader, "casters"); locNCast = GetShaderLocation(shader, "nCast"); locTime = GetShaderLocation(shader, "time");
   locSun = GetShaderLocation(shader, "sunCol"); locSky = GetShaderLocation(shader, "skyCol");
   mat = LoadMaterialDefault(); mat.shader = shader;
+  locLVP = GetShaderLocation(shader, "lightVP"); locShOn = GetShaderLocation(shader, "shOn"); locShTex = GetShaderLocation(shader, "shTex");
+  shSh = LoadShaderFromMemory(SH_VS, SH_FS); shMat = LoadMaterialDefault(); shMat.shader = shSh;
+  shRT = LoadRenderTexture(SHADOW_RES, SHADOW_RES);
+  SetTextureFilter(shRT.texture, TEXTURE_FILTER_POINT); SetTextureWrap(shRT.texture, TEXTURE_WRAP_CLAMP);
+  shader.locs[SHADER_LOC_MAP_NORMAL] = GetShaderLocation(shader, "shadowMap");
+  mat.maps[MATERIAL_MAP_NORMAL].texture = shRT.texture;
+}
+extern int g_post;
+// render last frame's opaque draws from the sun into the shadow map (before this frame draws anything)
+void Lit::ShadowPass() {
+  shOn = 0;
+  if (rec.empty() || !haveCam || !shRT.id || !g_post) { rec.clear(); haveCam = false; return; }
+  Vector3 L = Vector3Normalize({ -0.45f, -1.0f, -0.35f });
+  // cover what the camera looks at: centre on the ground point it aims at, sized by how far away it is
+  Vector3 c = lastCam.target; Vector3 fwd = Vector3Subtract(lastCam.target, lastCam.position);
+  float dist = Vector3Length(fwd);
+  float R = Clamp(dist * 0.85f, 6.0f, 34.0f); R = ceilf(R);
+  float tx = 2 * R / SHADOW_RES; c.x = roundf(c.x / tx) * tx; c.z = roundf(c.z / tx) * tx; c.y = roundf(c.y / tx) * tx;
+  Matrix view = MatrixLookAt(Vector3Subtract(c, Vector3Scale(L, 60)), c, { 0, 0, -1 });
+  Matrix proj = MatrixOrtho(-R, R, -R, R, 1, 140);
+  BeginTextureMode(shRT); ClearBackground(WHITE);
+  rlDrawRenderBatchActive();
+  rlMatrixMode(RL_PROJECTION); rlLoadIdentity(); rlMultMatrixf(MatrixToFloat(proj));
+  rlMatrixMode(RL_MODELVIEW); rlLoadIdentity(); rlMultMatrixf(MatrixToFloat(view));
+  rlEnableDepthTest(); rlEnableDepthMask(); rlDisableBackfaceCulling(); rlDisableColorBlend();
+  for (auto& r : rec) DrawMesh(r.m, shMat, r.t);
+  rlEnableColorBlend();
+  EndTextureMode();
+  lightVP = MatrixMultiply(view, proj); shOn = 1;
+  rec.clear(); haveCam = false;
 }
 void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
   Vector3 L = Vector3Normalize({ -0.45f, -1.0f, -0.35f }); float amb = 0.52f;
@@ -148,10 +212,21 @@ void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
   SetShaderValue(shader, locSun, &sun, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locSky, &sky, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locTime, &time, SHADER_UNIFORM_FLOAT);
   float nc = (float)castPrev.size(); SetShaderValue(shader, locNCast, &nc, SHADER_UNIFORM_FLOAT);
   if (!castPrev.empty()) SetShaderValueV(shader, locCast, castPrev.data(), SHADER_UNIFORM_VEC4, (int)castPrev.size());
+  if (!haveCam) { lastCam = cam; haveCam = true; }
+  SetShaderValue(shader, locShOn, &shOn, SHADER_UNIFORM_FLOAT);
+  float tex = 1.f / SHADOW_RES; SetShaderValue(shader, locShTex, &tex, SHADER_UNIFORM_FLOAT);
+  SetShaderValueMatrix(shader, locLVP, lightVP);
   Pattern(PAT_NONE);
 }
 void Lit::Pattern(int p) { float f = (float)p; SetShaderValue(shader, locPat, &f, SHADER_UNIFORM_FLOAT); }
-void Lit::Draw(const Mesh& m, Matrix t, Color c) { mat.maps[MATERIAL_MAP_DIFFUSE].color = c; rlDisableBackfaceCulling(); DrawMesh(m, mat, t); }
+void Lit::Draw(const Mesh& m, Matrix t, Color c) {
+  mat.maps[MATERIAL_MAP_DIFFUSE].color = c; rlDisableBackfaceCulling(); DrawMesh(m, mat, t);
+  // opaque, not-huge things cast sun shadows (floors, walls and sky domes only receive them)
+  if (c.a == 255 && rec.size() < 6000) {
+    float sx = t.m0 * t.m0 + t.m1 * t.m1 + t.m2 * t.m2, sy = t.m4 * t.m4 + t.m5 * t.m5 + t.m6 * t.m6, sz = t.m8 * t.m8 + t.m9 * t.m9 + t.m10 * t.m10;
+    if (fmaxf(sx, fmaxf(sy, sz)) < 30 * 30) rec.push_back({ m, t });
+  }
+}
 void Prims::Init() {
   cube = GenMeshCube(1, 1, 1); sphere = GenMeshSphere(0.5f, 22, 30); cyl = GenMeshCylinder(0.5f, 1, 24); cone = GenMeshCone(0.5f, 1, 24); plane = GenMeshPlane(1, 1, 1, 1);
   torus = GenMeshTorus(0.25f, 1, 16, 24); hemi = GenMeshHemiSphere(0.5f, 16, 24);
@@ -308,7 +383,7 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
     players.push_back({ i++, name, ParseColor(col), bot == "1" });
   }
   std::string g = id;
-  game.reset();
+  game.reset(); lit.Reset();
   if (g == "skybrawl") game = MakeSkyBrawl();
   else if (g == "sumo") game = MakeSumo();
   else if (g == "snowball") game = MakeSnowball();
@@ -348,13 +423,14 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   dt = fminf(dt, 0.05f);
   game->Update(dt);
   for (auto& p : players) { p.pa = p.a; p.pb = p.b; }
+  lit.ShadowPass();
   PostBegin();
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)
   game->Draw();
   PostEnd();
   lit.EndFrame(dt);
 }
-EMSCRIPTEN_KEEPALIVE void cc_stop() { game.reset(); }
+EMSCRIPTEN_KEEPALIVE void cc_stop() { game.reset(); lit.Reset(); }
 }
 
 int main() { return 0; }

@@ -27,7 +27,7 @@ struct Tennis : Classic {
       float u = (k + 0.5f) / 34; Vector3 p;
       if (s == 0) p = { -18 + u * 36, 1.2f + r * 1.1f, HL + 7 + r * 1.3f }; else if (s == 1) p = { -18 + u * 36, 1.2f + r * 1.1f, -HL - 8 - r * 1.3f };
       else if (s == 2) p = { -11.5f - r * 1.3f, 1.2f + r * 1.1f, -HL - 4 + u * (2 * HL + 8) }; else p = { 11.5f + r * 1.3f, 1.2f + r * 1.1f, -HL - 4 + u * (2 * HL + 8) };
-      if (frand(0, 1) < 0.9f) crowd.push_back({ p.x, p.y, p.z, (float)(rand() % 8) });
+      crowd.push_back({ p.x, p.y, p.z, (float)(rand() % 8) });
     }
     Layout(-1, kit::Msg("🎾", "Smash Tennis", "Get ready…"));
     SetupPoint();
@@ -209,7 +209,7 @@ struct Tennis : Classic {
     lit.Begin(cam, { 0.75f, 0.85f, 0.95f }, 0.004f);
     BeginMode3D(cam);
     lit.Pattern(PAT_GRASS); lit.Draw(prim.plane, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(0x2f8a4a)); lit.Pattern(PAT_NONE);
-    lit.Draw(prim.cube, TRS({ 0, -0.01f, 0 }, { 0, 0, 0 }, { 2 * DW + 7, 0.02f, 2 * HL + 12 }), Hex(0x2d7a4f));
+    lit.Draw(prim.cube, TRS({ 0, -0.01f, 0 }, { 0, 0, 0 }, { 2 * DW + 7, 0.02f, 2 * HL + 12 }), Hex(0x2b6a52));
     lit.Draw(prim.cube, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 2 * DW, 0.02f, 2 * HL }), Hex(0x2a6fb0));
     auto line = [&](float x0, float z0, float x1, float z1) { lit.Draw(prim.cube, TRS({ (x0 + x1) / 2, 0.015f, (z0 + z1) / 2 }, { 0, 0, 0 }, { fmaxf(0.05f, fabsf(x1 - x0)), 0.01f, fmaxf(0.05f, fabsf(z1 - z0)) }), WHITE); };
     for (float z : { -HL, HL }) line(-DW, z, DW, z);
@@ -224,18 +224,82 @@ struct Tennis : Classic {
     lit.Draw(prim.cube, TRS({ -DW - 1.6f, 2.0f, 0 }, { 0, 0, 0 }, { 0.8f, 0.12f, 0.8f }), Hex(0x2f9e44));
     lit.Draw(prim.cube, TRS({ -DW - 1.95f, 2.45f, 0 }, { 0, 0, 0 }, { 0.1f, 0.9f, 0.8f }), Hex(0x2f9e44));
     DrawToon({ -DW - 1.6f, 2.0f, 0 }, PI / 2, Hex(0xe9ecef), time, 0, 0, 0.8f);
-    // stands, crowd, boards
-    for (int s = 0; s < 4; s++) for (int r = 0; r < 7; r++) {
-      float y = 0.6f + r * 1.1f;
-      if (s == 0) lit.Draw(prim.cube, TRS({ 0, y, HL + 7 + r * 1.3f }, { 0, 0, 0 }, { 38, 1.1f, 1.3f }), Hex(0x2b3a67));
-      else if (s == 1) lit.Draw(prim.cube, TRS({ 0, y, -HL - 8 - r * 1.3f }, { 0, 0, 0 }, { 38, 1.1f, 1.3f }), Hex(0x2b3a67));
-      else lit.Draw(prim.cube, TRS({ (s == 2 ? -1 : 1) * (11.5f + r * 1.3f), y, 0 }, { 0, 0, 0 }, { 1.3f, 1.1f, 2 * HL + 8 }), Hex(0x2b3a67));
+    // player benches beside the umpire: two chairs, a cooler and a towel each
+    for (int s = -1; s <= 1; s += 2) {
+      float z = s * 1.6f, x = -DW - 1.9f;
+      for (int k = 0; k < 2; k++) {
+        float zz = z + s * k * 0.7f;
+        lit.Draw(prim.cube, TRS({ x, 0.45f, zz }, { 0, 0, 0 }, { 0.5f, 0.06f, 0.5f }), Hex(0x1e6b46));
+        lit.Draw(prim.cube, TRS({ x - 0.24f, 0.75f, zz }, { 0, 0, 0 }, { 0.05f, 0.6f, 0.5f }), Hex(0x1e6b46));
+        for (int q = -1; q <= 1; q += 2) lit.Draw(prim.cyl, TRS({ x, 0, zz + q * 0.2f }, { 0, 0, 0 }, { 0.04f, 0.45f, 0.04f }), Hex(0xced4da));
+      }
+      lit.Draw(prim.cube, TRS({ x + 0.1f, 0.2f, z + s * 1.5f }, { 0, 0, 0 }, { 0.45f, 0.4f, 0.35f }), Hex(0x1971c2));
+      lit.Draw(prim.cube, TRS({ x + 0.1f, 0.42f, z + s * 1.5f }, { 0, 0, 0 }, { 0.47f, 0.05f, 0.37f }), WHITE);
+      lit.Draw(prim.cube, TRS({ x - 0.2f, 0.62f, z }, { 0, 0, 0 }, { 0.08f, 0.35f, 0.4f }), WHITE);
     }
-    const unsigned CC[] = { 0xff6b6b, 0xffd43b, 0x4dabff, 0x51cf66, 0xf783ac, 0xffffff, 0xff922b, 0xcc5de8 };
+    // stands: concrete terraces down to the ground, padded front walls, ad boards
+    lit.Pattern(PAT_STONE);
+    for (int s = 0; s < 4; s++) for (int r = 0; r < 7; r++) {
+      float top = 1.15f + r * 1.1f; Color cc = r % 2 ? Hex(0x737b87) : Hex(0x7f8793);
+      if (s == 0) lit.Draw(prim.cube, TRS({ 0, top / 2, HL + 7 + r * 1.3f }, { 0, 0, 0 }, { 38, top, 1.3f }), cc);
+      else if (s == 1) lit.Draw(prim.cube, TRS({ 0, top / 2, -HL - 8 - r * 1.3f }, { 0, 0, 0 }, { 38, top, 1.3f }), cc);
+      else for (int q = -1; q <= 1; q += 2) lit.Draw(prim.cube, TRS({ (s == 2 ? -1 : 1) * (11.5f + r * 1.3f), top / 2, q * (HL + 4) / 2 }, { 0, 0, 0 }, { 1.3f, top, HL + 4 }), cc);
+    }
+    lit.Pattern(PAT_NONE);
+    // back walls behind the top rows
+    for (int s = -1; s <= 1; s += 2) {
+      lit.Draw(prim.cube, TRS({ s * (11.5f + 7 * 1.3f), 5.2f, -(HL + 4) / 2 }, { 0, 0, 0 }, { 0.4f, 10.4f, HL + 4 }), Hex(0x2c3e66));
+      lit.Draw(prim.cube, TRS({ s * (11.5f + 7 * 1.3f), 5.2f, (HL + 4) / 2 }, { 0, 0, 0 }, { 0.4f, 10.4f, HL + 4 }), Hex(0x2c3e66));
+    }
+    for (int q = -1; q <= 1; q += 2) lit.Draw(prim.cube, TRS({ q * 9.5f, 5.2f, HL + 7 + 7 * 1.3f }, { 0, 0, 0 }, { 19, 10.4f, 0.4f }), Hex(0x2c3e66));
+    // side stand front walls (dark green padding with a white cap)
+    for (int s = -1; s <= 1; s += 2) for (int q = -1; q <= 1; q += 2) {
+      lit.Draw(prim.cube, TRS({ s * 10.75f, 0.6f, q * (HL + 4) / 2 }, { 0, 0, 0 }, { 0.2f, 1.2f, HL + 4 }), Hex(0x1d4d3a));
+      lit.Draw(prim.cube, TRS({ s * 10.75f, 1.22f, q * (HL + 4) / 2 }, { 0, 0, 0 }, { 0.26f, 0.06f, HL + 4 }), Hex(0xf1f3f5));
+    }
+    // roofs over the side stands and the far stand, on steel columns (in panels so they cast shadows)
+    for (int s = -1; s <= 1; s += 2) {
+      for (int k = 0; k < 4; k++) {
+        float z = -HL - 4 + (k + 0.5f) * (2 * HL + 8) / 4;
+        lit.Draw(prim.cube, TRS({ s * 17.2f, 11.2f, z }, { 0, 0, s * 0.12f }, { 11.5f, 0.3f, (2 * HL + 8) / 4 + 0.02f }), Hex(0xe9ecef));
+        lit.Draw(prim.cube, TRS({ s * 17.2f, 11.0f, z }, { 0, 0, s * 0.12f }, { 11.4f, 0.12f, (2 * HL + 8) / 4 }), Hex(0x495057));
+      }
+      for (int k = 0; k < 5; k++) lit.Draw(prim.cyl, TRS({ s * 20.9f, 0, -HL - 4 + k * (2 * HL + 8) / 4 }, { 0, 0, 0 }, { 0.35f, 11.6f, 0.35f }), Hex(0xadb5bd));
+    }
+    for (int k = 0; k < 3; k++) lit.Draw(prim.cube, TRS({ -12.7f + k * 12.7f, 11.2f, HL + 12 }, { -0.12f, 0, 0 }, { 12.72f, 0.3f, 10.5f }), Hex(0xe9ecef));
+    // floodlight towers on the corners: steel masts with banks of lamps
+    for (int sx = -1; sx <= 1; sx += 2) for (int sz = -1; sz <= 1; sz += 2) {
+      Vector3 b0 = { sx * 22.5f, 0, (float)sz * (HL + 17) };
+      lit.Draw(prim.cyl, TRS(b0, { 0, 0, 0 }, { 0.5f, 19, 0.5f }), Hex(0x868e96));
+      float yaw = atan2f(-b0.x, -b0.z);
+      lit.Draw(prim.cube, TRS({ b0.x, 19.6f, b0.z }, { 0.5f, yaw, 0 }, { 4.2f, 2.6f, 0.4f }), Hex(0x343a40));
+    }
+    // big screen above the far stand
+    lit.Draw(prim.cube, TRS({ 0, 13.8f, HL + 17.5f }, { 0, 0, 0 }, { 11, 5.4f, 0.6f }), Hex(0x212529));
+    for (int k = -1; k <= 1; k += 2) lit.Draw(prim.cyl, TRS({ k * 4.f, 0, HL + 17.8f }, { 0, 0, 0 }, { 0.4f, 11.2f, 0.4f }), Hex(0x868e96));
+    // distant clouds
+    for (int k = 0; k < 7; k++) { float a = k * 0.9f - 2.7f; lit.Draw(prim.sphere, TRS({ sinf(a) * 140, 38.f + (k % 3) * 6, cosf(a) * 140 + 40 }, { 0, a, 0 }, { 46, 9, 20 }), WHITE); }
     float ex = phase == "point" ? 1.f : 0.25f;
-    (void)CC; if (!crowdMesh.vertexCount) { std::vector<Vector4> seats; for (auto& c : crowd) seats.push_back({ c.x, c.y - 0.1f, c.z, atan2f(-c.x, -c.z) }); crowdMesh = BuildCrowd(seats, 7); }
-    DrawProp(crowdMesh, MatrixTranslate(0, fabsf(sinf(time * 7)) * 0.06f * ex, 0));
-    for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ 0, 0.5f, s * (HL + 5.4f) }, { 0, 0, 0 }, { 2 * DW + 6, 1.0f, 0.15f }), s < 0 ? Hex(0x0b3d6e) : Hex(0x7b2cbf));
+    if (!crowdMesh.vertexCount) { std::vector<Vector4> seats; for (auto& c : crowd) seats.push_back({ c.x, c.y - 0.05f, c.z, atan2f(-c.x, -c.z) }); crowdMesh = BuildCrowd(seats, 7); }
+    DrawProp(crowdMesh, MatrixTranslate(0, fabsf(sinf(time * 7)) * 0.05f * ex, 0));
+    // back-stop ad boards: alternating panels
+    for (int s = -1; s <= 1; s += 2) for (int k = 0; k < 6; k++) {
+      float w = (2 * DW + 6) / 6;
+      lit.Draw(prim.cube, TRS({ -DW - 3 + w * (k + 0.5f), 0.5f, s * (HL + 5.4f) }, { 0, 0, 0 }, { w - 0.04f, 1.0f, 0.15f }), k % 2 ? Hex(0x0b3d6e) : Hex(0x2f6f4f));
+      lit.Draw(prim.cube, TRS({ -DW - 3 + w * (k + 0.5f), 0.5f, s * (HL + 5.4f) - s * 0.08f }, { 0, 0, 0 }, { w * 0.6f, 0.16f, 0.02f }), Hex(0xf1f3f5));
+    }
+    // emissive bits: lamp banks and the big screen glow (unlit, so they bloom)
+    for (int sx = -1; sx <= 1; sx += 2) for (int sz = -1; sz <= 1; sz += 2) {
+      Vector3 b0 = { sx * 22.5f, 0, (float)sz * (HL + 17) }; Vector3 d = Vector3Normalize({ -b0.x, 0, -b0.z });
+      for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) {
+        Vector3 rt = { -d.z, 0, d.x }; Vector3 p = Vector3Add({ b0.x, 19.0f + j * 1.1f, b0.z }, Vector3Add(Vector3Scale(rt, (i - 1) * 1.3f), Vector3Scale(d, 0.3f)));
+        DrawSphere(p, 0.42f, Hex(0xfffbe8));
+      }
+    }
+    DrawCube({ 0, 13.8f, HL + 17.15f }, 10.2f, 4.7f, 0.05f, Hex(0x1c7ed6));
+    DrawCube({ 0, 14.9f, HL + 17.1f }, 9.0f, 1.1f, 0.05f, Hex(0x74c0fc));
+    DrawCube({ -2.4f, 13.0f, HL + 17.1f }, 4.0f, 1.2f, 0.05f, Hex(0xffd43b));
+    DrawCube({ 2.4f, 13.0f, HL + 17.1f }, 4.0f, 1.2f, 0.05f, Hex(0xff8787));
     // players
     for (auto& p : on) {
       Color c = p.pid >= 0 ? P(p.pid).color : Hex(0xadb5bd);

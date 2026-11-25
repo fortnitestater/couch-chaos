@@ -3,6 +3,7 @@
 // Phones use the website's ready-made screens (card hand, choice grid, bingo card, dice, panel).
 
 #include "table.h"
+#include "mesh.h"
 
 namespace {
 
@@ -115,14 +116,53 @@ struct Eights : Table {
 // =====================================================================================
 // FOUR IN A ROW — red team vs yellow team, drop discs, line up four
 // =====================================================================================
+// the real Four in a Row frame: two moulded plates with 42 round holes, discs slide down the gap between them
+static Mesh BuildFourGrid(float cell, float hr) {
+  MeshBuilder b; const int seg = 24; float h = cell / 2; Color col = WHITE;
+  for (float zc : { 0.2f, -0.2f }) {
+    float zf = zc + 0.06f, zb = zc - 0.06f;
+    for (int c = 0; c < 7; c++) for (int r = 0; r < 6; r++) {
+      float x = (c - 3) * cell, y = 0.55f + r * cell;
+      for (int k = 0; k < seg; k++) {
+        float a0 = 2 * PI * k / seg, a1 = 2 * PI * (k + 1) / seg;
+        float c0 = cosf(a0), s0 = sinf(a0), c1 = cosf(a1), s1 = sinf(a1);
+        float m0 = fmaxf(fabsf(c0), fabsf(s0)), m1 = fmaxf(fabsf(c1), fabsf(s1));
+        Vector2 p0 = { x + c0 * hr, y + s0 * hr }, p1 = { x + c1 * hr, y + s1 * hr }, q0 = { x + c0 / m0 * h, y + s0 / m0 * h }, q1 = { x + c1 / m1 * h, y + s1 / m1 * h };
+        for (int f = 0; f < 2; f++) {
+          float z = f ? zb : zf; Vector3 n = { 0, 0, f ? -1.f : 1.f };
+          b.Tri({ q0.x, q0.y, z }, { p0.x, p0.y, z }, { p1.x, p1.y, z }, n, n, n, col);
+          b.Tri({ q0.x, q0.y, z }, { p1.x, p1.y, z }, { q1.x, q1.y, z }, n, n, n, col);
+        }
+        Vector3 n0 = { -c0, -s0, 0 }, n1 = { -c1, -s1, 0 };
+        b.Tri({ p0.x, p0.y, zf }, { p1.x, p1.y, zf }, { p1.x, p1.y, zb }, n0, n1, n1, col);
+        b.Tri({ p0.x, p0.y, zf }, { p1.x, p1.y, zb }, { p0.x, p0.y, zb }, n0, n1, n0, col);
+      }
+    }
+    // a rim along the top of each plate
+    b.Box({ 0, 0.55f + 5.5f * cell + 0.06f, zc }, { 7 * cell, 0.12f, 0.12f }, col);
+  }
+  // side and bottom edges close the gap between the plates
+  for (int s = -1; s <= 1; s += 2) b.Box({ s * (3.5f * cell + 0.1f), 0.55f + 2.5f * cell, 0 }, { 0.2f, 6 * cell + 0.24f, 0.52f }, col);
+  b.Box({ 0, 0.55f - 0.5f * cell - 0.08f, 0 }, { 7 * cell + 0.4f, 0.16f, 0.52f }, col);
+  return b.Build();
+}
+// a disc with a raised rim and a ring groove on both faces (axis along z)
+static Mesh BuildFourDisc() {
+  MeshBuilder b;
+  b.Lathe({ { 0, -0.085f }, { 0.22f, -0.085f }, { 0.25f, -0.072f }, { 0.28f, -0.085f }, { 0.34f, -0.09f }, { 0.39f, -0.075f }, { 0.41f, -0.04f }, { 0.41f, 0.04f },
+            { 0.39f, 0.075f }, { 0.34f, 0.09f }, { 0.28f, 0.085f }, { 0.25f, 0.072f }, { 0.22f, 0.085f }, { 0, 0.085f } }, 28, [](float, int) { return WHITE; }, MatrixRotateX(PI / 2));
+  return b.Build();
+}
 struct Four : Table {
+  Mesh gridM{}, discM{}; const float Y0 = -2.55f, F = -3.2f;
+  ~Four() { if (gridM.vertexCount) UnloadMesh(gridM); if (discM.vertexCount) UnloadMesh(discM); }
   int g[7][6] = {}; int team[2] = { 0, 0 }; int side = 0; std::vector<int> T[2];
   struct Drop { int c = -1, r = 0, who = 0; float y = 0, v = 0; } drop;
   int win = -1; std::vector<std::pair<int, int>> line; float botT = 1.5f, timer = 25;
   const Color TC[2] = { Hex(0xff4d6d), Hex(0xffd43b) };
   int Cur() { return T[side][team[side] % T[side].size()]; }
   void Start() override {
-    InitCam({ 0, 6.2f, 15.5f }, { 0, 3.3f, 0 }, 42);
+    InitCam({ 0, 2.4f, 15.2f }, { 0, 0.35f, 0 }, 42);
     for (int i = 0; i < N(); i++) T[i % 2].push_back(i);
     side = rand() % 2; turn = Cur(); Push();
     Banner("🔴 RED vs 🟡 YELLOW", 1800, "#ffd43b");
@@ -161,7 +201,7 @@ struct Four : Table {
     if (drop.c >= 0) {
       drop.v += 30 * dt; drop.y -= drop.v * dt; float ty = 0.55f + drop.r * 0.95f;
       if (drop.y <= ty) {
-        g[drop.c][drop.r] = drop.who; Sfx("pok"); fx.Burst({ (drop.c - 3) * 0.95f, ty, 0.4f }, 8, TC[drop.who - 1], 3, 0.4f, 0.1f);
+        g[drop.c][drop.r] = drop.who; Sfx("pok"); fx.Burst({ (drop.c - 3) * 0.95f, ty + Y0, 0.4f }, 8, TC[drop.who - 1], 3, 0.4f, 0.1f);
         int who = drop.who; drop.c = -1;
         if (Wins(who, &line)) { win = who - 1; over = true; endT = 4; conf.Spawn({ 0, 6, 0 }, 160, 6, 6); Sfx("win"); Banner(who == 1 ? "🔴 RED TEAM WINS!" : "🟡 YELLOW TEAM WINS!", 2600, who == 1 ? "#ff4d6d" : "#ffd43b"); Push(); return; }
         bool full = true; for (int c = 0; c < 7; c++) full &= RowFor(c) < 0;
@@ -175,27 +215,37 @@ struct Four : Table {
   }
   bool fin = false;
   void Draw() override {
-    Room();
-    // the stand
-    lit.Draw(prim.cube, TRS({ 0, 0.15f, 0 }, { 0, 0, 0 }, { 8.6f, 0.3f, 2.2f }), Hex(0x1c4f9c));
-    lit.Draw(prim.cube, TRS({ 0, 3.15f, -0.05f }, { 0, 0, 0 }, { 7.4f, 6.1f, 0.45f }), Hex(0x1971c2));
-    for (int c = 0; c < 7; c++) for (int r = 0; r < 6; r++) {
-      Vector3 p = { (c - 3) * 0.95f, 0.55f + r * 0.95f, 0.2f }; int v = g[c][r];
-      bool hl = false; for (auto& q : line) hl |= q.first == c && q.second == r;
-      Color col = v ? TC[v - 1] : Hex(0x0b1a33);
-      if (hl) col = Shade(col, 0.3f + 0.3f * sinf(time * 10));
-      lit.Draw(prim.cyl, TRS({ p.x, p.y, 0.0f }, { PI / 2, 0, 0 }, { 0.78f, 0.36f, 0.78f }), col);
+    Room(false);
+    if (!gridM.vertexCount) { gridM = BuildFourGrid(0.95f, 0.36f); discM = BuildFourDisc(); }
+    Color blue = Hex(0x1f5fd1), blueD = Hex(0x174ba8);
+    // legs: tall side posts on wide curved feet, and the release bar under the grid
+    for (int s = -1; s <= 1; s += 2) {
+      float x = s * (3.5f * 0.95f + 0.38f);
+      lit.Draw(prim.cube, TRS({ x, (F + Y0 + 5.6f) / 2, 0 }, { 0, 0, 0 }, { 0.36f, Y0 + 5.6f - F, 0.42f }), blueD);
+      lit.Draw(prim.cube, TRS({ x, F + 0.16f, 0 }, { 0, 0, 0 }, { 0.5f, 0.32f, 2.6f }), blueD);
+      for (int q = -1; q <= 1; q += 2) lit.Draw(prim.sphere, TRS({ x, F + 0.16f, q * 1.3f }, { 0, 0, 0 }, { 0.5f, 0.32f, 0.5f }), blueD);
+      lit.Draw(prim.sphere, TRS({ x, Y0 + 5.6f, 0 }, { 0, 0, 0 }, { 0.5f, 0.5f, 0.5f }), Hex(0xffd43b));
     }
-    if (drop.c >= 0) lit.Draw(prim.cyl, TRS({ (drop.c - 3) * 0.95f, drop.y, 0.0f }, { PI / 2, 0, 0 }, { 0.78f, 0.36f, 0.78f }), TC[drop.who - 1]);
+    lit.Draw(prim.cube, TRS({ 0, Y0 - 0.12f, 0 }, { 0, 0, 0 }, { 7 * 0.95f + 0.5f, 0.16f, 0.7f }), Hex(0xffd43b));
+    DrawProp(gridM, MatrixTranslate(0, Y0, 0), blue);
+    for (int c = 0; c < 7; c++) for (int r = 0; r < 6; r++) {
+      int v = g[c][r]; if (!v) continue;
+      bool hl = false; for (auto& q : line) hl |= q.first == c && q.second == r;
+      Color col = TC[v - 1]; if (hl) col = Shade(col, 0.25f + 0.25f * sinf(time * 10));
+      DrawProp(discM, MatrixTranslate((c - 3) * 0.95f, Y0 + 0.55f + r * 0.95f, 0), col);
+    }
+    if (drop.c >= 0) DrawProp(discM, MatrixTranslate((drop.c - 3) * 0.95f, Y0 + drop.y, 0), TC[drop.who - 1]);
+    // spare discs stacked beside the frame
+    for (int s = 0; s < 2; s++) for (int k = 0; k < 5; k++) DrawProp(discM, MatrixMultiply(MatrixRotateX(PI / 2), MatrixTranslate((s ? 1 : -1) * 4.25f, F + 0.09f + k * 0.18f, 1.6f)), TC[s]);
     // the teams cheering on both sides
     for (int s = 0; s < 2; s++) for (size_t k = 0; k < T[s].size(); k++) {
-      int i = T[s][k]; float x = (s ? 1 : -1) * (5.2f + (k % 2) * 1.5f), z = 0.8f + (k / 2) * 1.6f - 1.5f;
+      int i = T[s][k]; float x = (s ? 1 : -1) * (5.4f + (k % 2) * 1.6f), z = 0.8f + (k / 2) * 1.6f - 0.5f;
       bool hot = i == turn && !over; float ch = over && win == s ? fabsf(sinf(time * 6)) : 0;
-      if (hot) lit.Draw(prim.cyl, TRS({ x, -0.03f, z }, { 0, 0, 0 }, { 1.5f, 0.05f, 1.5f }), Fade(TC[s], 0.8f));
-      DrawToon({ x, 0, z }, s ? -0.5f : 0.5f, P(i).color, time + i, hot ? fabsf(sinf(time * 5)) * 0.2f : over && win == s ? fabsf(sinf(time * 6 + i)) * 0.5f : 0, ch, 1);
+      if (hot) lit.Draw(prim.cyl, TRS({ x, F + 0.03f, z }, { 0, 0, 0 }, { 1.5f, 0.03f, 1.5f }), Fade(TC[s], 0.8f));
+      DrawToon({ x, F, z }, s ? -0.5f : 0.5f, P(i).color, time + i, hot ? fabsf(sinf(time * 5)) * 0.2f : over && win == s ? fabsf(sinf(time * 6 + i)) * 0.5f : 0, ch, 1.3f);
     }
     End3D();
-    for (int s = 0; s < 2; s++) for (size_t k = 0; k < T[s].size(); k++) { int i = T[s][k]; float x = (s ? 1 : -1) * (5.2f + (k % 2) * 1.5f), z = 0.8f + (k / 2) * 1.6f - 1.5f; Vector2 sp = GetWorldToScreen({ x, 2.3f, z }, cam); Text(sp.x, sp.y, 20, i == turn ? Hex(0xffd43b) : WHITE, P(i).name, 0, TS_HEAVY); }
+    for (int s = 0; s < 2; s++) for (size_t k = 0; k < T[s].size(); k++) { int i = T[s][k]; float x = (s ? 1 : -1) * (5.4f + (k % 2) * 1.6f), z = 0.8f + (k / 2) * 1.6f - 0.5f; Vector2 sp = GetWorldToScreen({ x, F + 2.9f, z }, cam); Text(sp.x, sp.y, 20, i == turn ? Hex(0xffd43b) : WHITE, P(i).name, 0, TS_HEAVY); }
     if (!over) Title(std::string(side ? "🟡 " : "🔴 ") + P(turn).name + "'s turn", TC[side]);
     if (!over && !P(turn).bot && drop.c < 0) { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(timer)); Text(1540, 50, 34, timer < 8 ? Hex(0xff4d6d) : WHITE, b); }
     Hint("Pick a column on your phone · line up FOUR in a row (any direction)");
