@@ -10,7 +10,13 @@
 #include <cstdlib>
 #include <algorithm>
 
-constexpr int W = 1600, H = 900;
+constexpr int W = 1600, H = 900;  // the logical screen every game draws in
+// the real render resolution is W*g_rs x H*g_rs (matches the TV: 1.2 = 1920x1080, 2 = 3200x1800); games never need to care
+extern float g_rs;
+// world → screen in LOGICAL 1600x900 space (overlay text + 2D drawing use logical coordinates)
+inline Vector2 CC_WorldToScreen(Vector3 p, Camera3D c) { return GetWorldToScreenEx(p, c, W, H); }
+#define GetWorldToScreen(...) CC_WorldToScreen(__VA_ARGS__)
+inline void BeginScissorL(float x, float y, float w, float h) { BeginScissorMode((int)(x * g_rs), (int)(y * g_rs), (int)(w * g_rs), (int)(h * g_rs)); }
 
 // ---------- bridge to the website ----------
 // Text is drawn by the website with real fonts (emoji, names). align: 0 center, -1 left, 1 right. wrapW > 0 wraps lines.

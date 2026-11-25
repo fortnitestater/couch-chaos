@@ -10,6 +10,13 @@ function nativeFont(size, style) {
   const w = style & 16 ? 800 : style & 8 ? 500 : 700;
   return style & 1 ? `700 ${size}px Fredoka, Inter, system-ui, sans-serif` : `${w} ${size}px Inter, system-ui, sans-serif`;
 }
+// render the 3D at the screen's real resolution (1600x900 is only the layout size): 1080p TV = 1.2x, 4K = 2x (max)
+function nativeScale() {
+  const q = (location.search.match(/[?&]res=([\d.]+)/) || [])[1]; if (q) return Math.max(1, Math.min(2, +q));
+  const px = Math.max(innerWidth, innerHeight * 16 / 9) * (window.devicePixelRatio || 1);
+  return Math.max(1, Math.min(2, Math.round(px / 1600 * 20) / 20));
+}
+function nativeSetScale(rs) { if (NATIVE.mod && NATIVE.mod._cc_set_scale && Math.abs(rs - NATIVE.rs) > 0.01) { NATIVE.rs = rs; NATIVE.mod._cc_set_scale(rs); } }
 function nativeLoad() {
   if (NATIVE.loading) return NATIVE.loading;
   const cv = NATIVE.cv = document.createElement('canvas');
@@ -21,7 +28,7 @@ function nativeLoad() {
     s.onload = () => CCNative({ canvas: cv, print() {}, printErr: e => console.warn('[native]', e), locateFile: f => NATIVE.base + f + '?v=' + NATIVE.v })
       .then(m => {
         m.measure = (s, size, style) => { _mctx.font = nativeFont(size, style); return _mctx.measureText(s).width; };
-        NATIVE.mod = m; m._cc_init(); ok(m);
+        NATIVE.mod = m; NATIVE.rs = nativeScale(); m._cc_init(NATIVE.rs); ok(m);
       }, bad);
     s.onerror = bad; document.head.appendChild(s);
   });

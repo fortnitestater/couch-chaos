@@ -33,8 +33,10 @@ void Init() {
 static Vector4 V4(Color c) { return { c.r / 255.f, c.g / 255.f, c.b / 255.f, c.a / 255.f }; }
 static void Go(Rectangle r, Rectangle quad, float rad, Color a, Color b, float ang, float sh, Color bor, float bw) {
   // framebuffer y grows upward; the canvas is exactly W x H
-  Vector4 R = { r.x, (float)H - r.y - r.height, r.width, r.height };
-  Vector4 A = V4(a), B = V4(b), Bo = V4(bor); float rr = fminf(rad, fminf(r.width, r.height) * 0.5f);
+  // gl_FragCoord is in real framebuffer pixels (W*g_rs wide), so scale the box into that space
+  const float k = g_rs;
+  Vector4 R = { r.x * k, ((float)H - r.y - r.height) * k, r.width * k, r.height * k };
+  Vector4 A = V4(a), B = V4(b), Bo = V4(bor); float rr = fminf(rad, fminf(r.width, r.height) * 0.5f) * k; sh *= k; bw *= k;
   BeginShaderMode(uiS);
   SetShaderValue(uiS, uRect, &R, SHADER_UNIFORM_VEC4); SetShaderValue(uiS, uRad, &rr, SHADER_UNIFORM_FLOAT);
   SetShaderValue(uiS, uC1, &A, SHADER_UNIFORM_VEC4); SetShaderValue(uiS, uC2, &B, SHADER_UNIFORM_VEC4);

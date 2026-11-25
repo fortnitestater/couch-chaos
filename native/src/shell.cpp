@@ -225,7 +225,7 @@ void Cards(float a, float dt) {
   const float cw = 262, ch = 360, gap = 30, x0 = 120, top = 304;
   float want = fmaxf(0, fminf((float)fc - 1, (float)items.size() - 3.6f)) * (cw + gap);
   carousel.To(want, dt, 150, 24.5f);
-  BeginScissorMode(60, 230, 1140, 470); TextClip(60, 230, 1140, 470);
+  BeginScissorL(60, 230, 1140, 470); TextClip(60, 230, 1140, 470);
   for (size_t c = 0; c < items.size(); c++) {
     const J& it = items[c]; bool foc = (int)c == fc;
     std::string key = std::to_string(fr) + ":" + it["id"].str();
@@ -299,7 +299,7 @@ void DrawIntro(float a, float dt) {
   Rectangle art = { 40 + slide, 40, 700, 820 };
   UI::Shadow(art, 40, 50, A(a1, a * 0.6f), 16);
   UI::Box(art, 40, A(a1, a), A(a2, a), 115);
-  BeginScissorMode((int)art.x, (int)art.y, (int)art.width, (int)art.height);
+  BeginScissorL(art.x, art.y, art.width, art.height);
   Rays({ art.x + 350, art.y + 380 }, 900, T * 0.3f, A(Hex(0xffffff, 30), a), 18);
   for (int i = 0; i < 26; i++) { float px = art.x + fmodf(i * 137.f + T * (20 + i % 5 * 8), art.width), py = art.y + art.height - fmodf(i * 53.f + T * (40 + i % 7 * 9), art.height); DrawCircle((int)px, (int)py, 2 + i % 4, A(Hex(0xffffff, 90), a)); }
   EndScissorMode();

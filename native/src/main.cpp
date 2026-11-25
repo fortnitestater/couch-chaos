@@ -197,6 +197,10 @@ void main() {
   if (mx - mn > max(0.06, mx * 0.12)) {
     vec2 d = normalize(vec2(-(lN - lS), lE - lW) + 1e-5) * px;
     c = (S(uv + d * 0.5) + S(uv - d * 0.5) + cM * 2.0) * 0.25;
+  } else {
+    // gentle contrast-adaptive sharpening: crisper textures and outlines without halos
+    vec3 nb = (cN + cS + cE + cW) * 0.25; float amt = 0.35 * (1.0 - smoothstep(0.02, 0.25, mx - mn));
+    c = clamp(cM + (cM - nb) * amt, min(min(cN, cS), min(cE, cW)), max(max(cN, cS), max(cE, cW)));
   }
   c += texture2D(bloom, uv).rgb * 0.38;
   c = mix(c, c * c * (3.0 - 2.0 * c), 0.35);
@@ -206,34 +210,42 @@ void main() {
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 })";
 static RenderTexture2D rtMain, rtA, rtB; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom; static bool postOk = false;
+float g_rs = 1; static int FW = W, FH = H;
+static void LoadPostShaders();
 static void PostInit() {
-  rtMain = LoadRenderTexture(W, H); rtA = LoadRenderTexture(W / 4, H / 4); rtB = LoadRenderTexture(W / 4, H / 4);
+  if (rtMain.id) { UnloadRenderTexture(rtMain); UnloadRenderTexture(rtA); UnloadRenderTexture(rtB); }
+  rtMain = LoadRenderTexture(FW, FH); rtA = LoadRenderTexture(FW / 4, FH / 4); rtB = LoadRenderTexture(FW / 4, FH / 4);
   SetTextureFilter(rtMain.texture, TEXTURE_FILTER_BILINEAR); SetTextureFilter(rtA.texture, TEXTURE_FILTER_BILINEAR); SetTextureFilter(rtB.texture, TEXTURE_FILTER_BILINEAR);
+  if (!shFinal.id) LoadPostShaders();
+  if (!shFinal.id || shFinal.id == rlGetShaderIdDefault()) postOk = false; else postOk = rtMain.id > 0;
+}
+static void LoadPostShaders() {
   shBright = LoadShaderFromMemory(PVS, BRIGHT_FS); shBlur = LoadShaderFromMemory(PVS, BLUR_FS); shFinal = LoadShaderFromMemory(PVS, FINAL_FS);
   lBrightPx = GetShaderLocation(shBright, "px"); lBlurDir = GetShaderLocation(shBlur, "dir"); lFinalPx = GetShaderLocation(shFinal, "px"); lFinalBloom = GetShaderLocation(shFinal, "bloom");
-  postOk = rtMain.id > 0 && shFinal.id > 0 && shFinal.id != rlGetShaderIdDefault();
 }
+// draw in logical 1600x900 coordinates whatever the real framebuffer size is
+static void LogicalOrtho() { rlDrawRenderBatchActive(); rlMatrixMode(RL_PROJECTION); rlLoadIdentity(); rlOrtho(0, W, H, 0, 0.0, 1.0); rlMatrixMode(RL_MODELVIEW); rlLoadIdentity(); }
 static void Blit(Texture2D src, RenderTexture2D dst, Shader sh) {
   BeginTextureMode(dst); ClearBackground(BLACK); BeginShaderMode(sh);
   DrawTexturePro(src, { 0, 0, (float)src.width, (float)-src.height }, { 0, 0, (float)dst.texture.width, (float)dst.texture.height }, { 0, 0 }, 0, WHITE);
   EndShaderMode(); EndTextureMode();
 }
 extern int g_post;
-void PostBegin() { if (!postOk || !g_post) { BeginDrawing(); return; } BeginTextureMode(rtMain); }
+void PostBegin() { if (!postOk || !g_post) { BeginDrawing(); LogicalOrtho(); return; } BeginTextureMode(rtMain); LogicalOrtho(); }
 void PostEnd() {
   if (!postOk || !g_post) { EndDrawing(); return; }
   EndTextureMode();
-  Vector2 px = { 1.f / W, 1.f / H }; SetShaderValue(shBright, lBrightPx, &px, SHADER_UNIFORM_VEC2);
+  Vector2 px = { 1.f / FW, 1.f / FH }; SetShaderValue(shBright, lBrightPx, &px, SHADER_UNIFORM_VEC2);
   Blit(rtMain.texture, rtA, shBright);
   for (int k = 0; k < 2; k++) {
-    Vector2 d = { 4.f / W, 0 }; SetShaderValue(shBlur, lBlurDir, &d, SHADER_UNIFORM_VEC2); Blit(rtA.texture, rtB, shBlur);
-    d = { 0, 4.f / H }; SetShaderValue(shBlur, lBlurDir, &d, SHADER_UNIFORM_VEC2); Blit(rtB.texture, rtA, shBlur);
+    Vector2 d = { 4.f / FW, 0 }; SetShaderValue(shBlur, lBlurDir, &d, SHADER_UNIFORM_VEC2); Blit(rtA.texture, rtB, shBlur);
+    d = { 0, 4.f / FH }; SetShaderValue(shBlur, lBlurDir, &d, SHADER_UNIFORM_VEC2); Blit(rtB.texture, rtA, shBlur);
   }
   BeginDrawing(); ClearBackground(BLACK);
   BeginShaderMode(shFinal);
   SetShaderValue(shFinal, lFinalPx, &px, SHADER_UNIFORM_VEC2);
   SetShaderValueTexture(shFinal, lFinalBloom, rtA.texture);
-  DrawTextureRec(rtMain.texture, { 0, 0, (float)W, (float)-H }, { 0, 0 }, WHITE);
+  DrawTexturePro(rtMain.texture, { 0, 0, (float)FW, (float)-FH }, { 0, 0, (float)FW, (float)FH }, { 0, 0 }, 0, WHITE);
   EndShaderMode();
   EndDrawing();
 }
@@ -269,9 +281,16 @@ static std::unique_ptr<Game> game;
 int g_dbg = 0; int g_post = 1;
 extern "C" {
 EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) { if (m >= 100) g_post = m - 100; else g_dbg = m; }
-EMSCRIPTEN_KEEPALIVE void cc_init() {
+static float ClampRS(float rs) { return rs < 1 ? 1 : rs > 2 ? 2 : rs; }
+// change the render resolution on the fly (the website lowers it on slow TVs)
+EMSCRIPTEN_KEEPALIVE void cc_set_scale(float rs) {
+  g_rs = ClampRS(rs); FW = (int)roundf(W * g_rs); FH = (int)roundf(H * g_rs);
+  SetWindowSize(FW, FH); PostInit();
+}
+EMSCRIPTEN_KEEPALIVE void cc_init(float rs) {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
-  InitWindow(W, H, "Couch Chaos");
+  g_rs = ClampRS(rs > 0 ? rs : 1); FW = (int)roundf(W * g_rs); FH = (int)roundf(H * g_rs);
+  InitWindow(FW, FH, "Couch Chaos");
   lit.Init(); prim.Init(); UI::Init(); PostInit();
   rlSetClipPlanes(0.3, 600); // better depth precision = no z-fighting
 }
