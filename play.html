@@ -7,18 +7,25 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Couch Chaos — Controller</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Bungee&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1795648478">
-<link rel="stylesheet" href="tokens.css?v=1795648478">
-<link rel="stylesheet" href="buttons.css?v=1795648478">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=1795660424">
+<link rel="stylesheet" href="tokens.css?v=1795660424">
+<link rel="stylesheet" href="buttons.css?v=1795660424">
+<link rel="stylesheet" href="ui.css?v=1795660424">
 </head>
 <body class="padBody">
   <div id="joinScr" class="screen">
-    <h1 class="logo">COUCH<span>CHAOS</span></h1>
-    <label>Room code (on the TV)<input id="roomIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
-    <label>Your name<span class="nameRow"><input id="nameIn" maxlength="12" autocomplete="nickname"><button id="diceName" type="button" title="Random name">🎲</button></span></label>
-    <button id="joinBtn" class="big">Join the party</button>
-    <div id="joinErr" class="err"></div>
+    <div class="joinHead">
+      <h1 class="ccMark"><span class="w1">couch</span><span class="w2">chaos<em>os</em></span></h1>
+      <p>Your phone is the controller. Type the code shown on the TV.</p>
+    </div>
+    <div class="joinCard">
+      <label>Room code<input id="roomIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD"></label>
+      <label>Your name<span class="nameRow"><input id="nameIn" maxlength="12" autocomplete="nickname" placeholder="Pick a name"><button id="diceName" type="button" title="Random name" aria-label="Random name">🎲</button></span></label>
+      <button id="joinBtn" class="big">Join the party</button>
+      <div id="joinErr" class="err"></div>
+    </div>
+    <p class="joinFoot">Up to 8 players · no app or account needed</p>
   </div>
 
   <div id="ctrlScr" class="screen hidden">
@@ -36,10 +43,10 @@
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script>window.Peer || document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"><\/script>')</script>
-  <script src="turn-config.js?v=1795648478"></script>
-  <script src="shared.js?v=1795648478"></script>
-  <script src="cam.js?v=1795648478"></script>
-  <script src="play.js?v=1795648478"></script>
-  <script src="press.js?v=1795648478"></script>
+  <script src="turn-config.js?v=1795660424"></script>
+  <script src="shared.js?v=1795660424"></script>
+  <script src="cam.js?v=1795660424"></script>
+  <script src="play.js?v=1795660424"></script>
+  <script src="press.js?v=1795660424"></script>
 </body>
 </html>

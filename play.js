@@ -19,7 +19,7 @@
   let peer = null, conn = null, code = '', name = '', joined = false, layout = null, retryT = null, me = null, lastHand = null, vipFocus = null;
 
   function toast(t, ms = 2000) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
-  function setStatus(t) { $('#status').textContent = t; }
+  function setStatus(t) { const el = $('#status'); el.classList.toggle('warn', /🟠|🔴/.test(t)); el.textContent = t.replace(/^[🟢🟠🔴]\s*/u, ''); }
   function joinErr(t) { $('#joinErr').textContent = t; $('#joinBtn').disabled = false; $('#joinBtn').textContent = 'Join the party'; }
   const light = c => /^#(ffd43b|fcc419|f1f3f5|fff|ffffff|94d82d|ffe066|e9ecef)$/i.test(c);
 
@@ -127,7 +127,7 @@
   const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || layout.name === 'swing');
   function updateTiltUI() {
     const show = tiltApplies() && ctrlMode === 'motion';
-    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode || (layout && layout.name === 'song')); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
+    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode || (layout && /^(song|lobby|intro|choice|touch)$/.test(layout.name))); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
     $('#tiltBtn').classList.add('hidden');
     const kb = document.getElementById('calBtn'); if (kb) kb.classList.toggle('hidden', ctrlMode !== 'motion'); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
     $('#tiltBtn').textContent = tiltOn ? 'Tilt: ON' : 'Tilt: off'; $('#tiltBtn').classList.toggle('on', tiltOn);
@@ -515,7 +515,7 @@
       const gr = g.createRadialGradient(x - rad * 0.35, y - rad * 0.4, rad * 0.1, x, y, rad); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.25, o.c); gr.addColorStop(1, o.c);
       g.fillStyle = k === 0 ? '#1c1f26' : gr; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill();
       if (k === 1) { g.strokeStyle = '#fff'; g.lineWidth = 4 * d; g.stroke(); g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2 * d; g.beginPath(); g.arc(x, y, rad + 7 * d + 3 * d * Math.sin(t * 6), 0, 7); g.stroke();
-        g.fillStyle = '#fff'; g.font = `800 ${12 * d}px Nunito, sans-serif`; g.textAlign = 'center'; g.fillText('YOU', x, y - rad - 10 * d); }
+        g.fillStyle = '#fff'; g.font = `800 ${12 * d}px Inter, sans-serif`; g.textAlign = 'center'; g.fillText('YOU', x, y - rad - 10 * d); }
       else if (k === 2) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2 * d; g.stroke(); }
       else if (k === 0) { g.strokeStyle = '#555c6b'; g.lineWidth = 2 * d; g.stroke(); }
       else { g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2 * d; g.stroke(); }
@@ -571,7 +571,7 @@
     sendMsg({ t: 'camOn' }); CCCam.start(m => sendMsg(m), stage, toast);
   }
   addEventListener('cc-cam-stop', () => { camMode = false; sendMsg({ t: 'camOff' }); stage.innerHTML = '<div class="center"><p>Back to being a player…</p></div>'; });
-  const camBtnHtml = () => `<button class="camBtn" id="camB">📷 Use this phone as the AI camera<small>Body tracking for up to 4 players — no phones needed</small></button>`;
+  const camBtnHtml = () => `<button class="rowBtn noRb" id="camB"><i class="ic">📷</i><span><b>Use this phone as the camera</b><small>Body tracking for up to 4 players, no phones needed</small></span><i class="chev">›</i></button>`;
   function bindCamBtn() { const b = document.getElementById('camB'); if (b) b.onclick = startCam; }
   function render(L) {
     if (camMode) return; // the camera phone ignores game screens
@@ -587,31 +587,58 @@
     updateTiltUI();
   }
   function renderMsg(L) { stage.innerHTML = `<div class="center"><div class="bigEm">${esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
-  let showList = false;
+  const COVER = id => id ? `covers/sm/${String(id).replace(/^_/, 'q-')}.jpg` : '';
+  const ARROW = { up: 'M6 15l6-6 6 6', down: 'M6 9l6 6 6-6', left: 'M15 6l-6 6 6 6', right: 'M9 6l6 6-6 6' };
+  const arrowSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="${ARROW[d]}"/></svg>`;
+  function showFocus() {
+    const f = vipFocus, card = document.getElementById('nowCard'); if (!card || !f) return;
+    const id = f.id || '';
+    card.style.backgroundImage = id ? `url(${COVER(id)})` : '';
+    card.querySelector('h2').textContent = f.name; card.querySelector('.emo').textContent = id ? '' : f.emoji;
+    stage.querySelectorAll('.gtl').forEach(t => t.classList.toggle('cur', t.dataset.g === id));
+  }
   function renderLobby(L) {
+    const av = me ? esc(me.avatar) : '🎉', col = me ? esc(me.color) : '#3b7bff';
     if (!L.vip) {
-      stage.innerHTML = `<div class="center"><div class="bigEm">${esc(me ? me.avatar : '🎉')}</div><h2>You're in, ${esc(me ? me.name : '')}!</h2>${L.trophies ? `<p>🏆 ${L.trophies} trophies</p>` : ''}<p class="muted">👑 <b>${esc(L.vipName || 'The VIP')}</b> is picking a game on the TV…</p>${camBtnHtml()}</div>`;
+      stage.innerHTML = `<div class="lobby"><div class="waitCard">
+        <div class="waitAv" style="--c:${col}">${av}</div>
+        <h2>You're in, ${esc(me ? me.name : '')}!</h2>
+        ${L.trophies ? `<span class="tro">🏆 ${L.trophies} ${L.trophies === 1 ? 'trophy' : 'trophies'}</span>` : ''}
+        <p><b>${esc(L.vipName || 'The VIP')}</b> is choosing a game<span class="dots3"><i></i><i></i><i></i></span><br>Watch the TV.</p>
+      </div>${camBtnHtml()}</div>`;
       bindCamBtn(); return;
     }
-    const list = showList ? L.cats.map(c => `<div class="catH">${esc(c.name)}</div>` + L.games.filter(gm => gm.cat === c.id).map(gm => `<button class="gbtn" data-g="${esc(gm.id)}"><span class="ge">${gm.emoji}</span><span><b>${esc(gm.name)}</b></span></button>`).join('')).join('') : '';
-    stage.innerHTML = `<div class="remote">
-      <div class="muted">👑 You're the VIP — you control the TV</div>
-      <div class="focusCard">Selected<b id="focusName">${vipFocus ? esc(vipFocus.emoji + ' ' + vipFocus.name) : '—'}</b></div>
-      <div class="dpad"><span></span><button data-d="up">▲</button><span></span><button data-d="left">◀</button><button class="ok" data-d="ok">OK</button><button data-d="right">▶</button><span></span><button data-d="down">▼</button><span></span></div>
-      <div class="qbtns"><button id="partyB">🎉 Party Mode</button><button id="randB" class="alt">🎲 Surprise Me</button></div>
-      <button class="linkBtn" id="listT">${showList ? 'Hide game list' : 'Or pick from a list'}</button>
-      <div class="gbtns">${list}</div>${camBtnHtml()}</div>`;
-    bindCamBtn();
-    stage.querySelectorAll('.dpad button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); sendMsg({ t: 'nav', d: b.dataset.d }); navigator.vibrate?.(10); }));
-    $('#partyB').onclick = () => sendMsg({ t: 'party' }); $('#randB').onclick = () => sendMsg({ t: 'random' });
-    $('#listT').onclick = () => { showList = !showList; renderLobby(L); };
-    stage.querySelectorAll('.gbtn').forEach(b => b.onclick = () => { sendMsg({ t: 'pick', g: b.dataset.g }); navigator.vibrate?.(30); });
+    const shelves = L.cats.map(c => {
+      const gs = L.games.filter(gm => gm.cat === c.id); if (!gs.length) return '';
+      const nm = c.name.replace(/^\P{L}+/u, '');
+      return `<section class="shelf"><h3>${esc(nm)}<small>${gs.length}</small></h3><div class="shelfRow">${gs.map(gm =>
+        `<button class="gtl noRb" data-g="${esc(gm.id)}"><i style="background-image:url(${COVER(gm.id)})"></i><b>${esc(gm.name)}</b></button>`).join('')}</div></section>`;
+    }).join('');
+    stage.innerHTML = `<div class="lobby">
+      <div class="nowCard" id="nowCard"><div class="emo"></div><div class="nowTxt"><span class="lbl">👑 On the TV</span><h2>—</h2></div></div>
+      <div class="rpadWrap"><div class="rpad">${['up', 'left', 'right', 'down'].map(d => `<button class="noRb" data-d="${d}" aria-label="${d}">${arrowSvg(d)}</button>`).join('')}<button class="ok noRb" data-d="ok">OK</button></div></div>
+      <div class="secH">Quick start</div>
+      <div class="quick">
+        <button class="qcard noRb" id="partyB" style="background-image:url(${COVER('_party')})"><span><b>Party Mode</b><small>6 games in a row</small></span></button>
+        <button class="qcard noRb" id="randB" style="background-image:url(${COVER('_random')})"><span><b>Surprise Me</b><small>A random game</small></span></button>
+      </div>
+      <div class="secH">All games <b>${L.games.length}</b></div>
+      ${shelves}
+      ${camBtnHtml()}</div>`;
+    bindCamBtn(); showFocus();
+    stage.querySelectorAll('.rpad button').forEach(b => {
+      b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('on'); sendMsg({ t: 'nav', d: b.dataset.d }); navigator.vibrate?.(10); });
+      const off = () => b.classList.remove('on'); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+    });
+    $('#partyB').onclick = () => { sendMsg({ t: 'party' }); navigator.vibrate?.(30); }; $('#randB').onclick = () => { sendMsg({ t: 'random' }); navigator.vibrate?.(30); };
+    stage.querySelectorAll('.gtl').forEach(b => b.onclick = () => { sendMsg({ t: 'pick', g: b.dataset.g }); navigator.vibrate?.(30); });
   }
   function readyUp() { if (!layout || layout.name !== 'intro' || layout.ready) return; layout.ready = true; sendMsg({ t: 'ready' }); navigator.vibrate?.(30); renderIntro(layout); }
   function renderIntro(L) {
-    stage.innerHTML = `<div class="introC"><div class="bigEm">${esc(L.emoji)}</div><h2>${esc(L.title)}</h2><div class="muted">${esc(L.ctrl || '')}</div>
-      <ol>${(L.how || []).map(h => `<li>${esc(h)}</li>`).join('')}</ol>
-      <button class="readyBtn ${L.ready ? 'done' : ''}" id="readyB">${L.ready ? '✓ READY' : "I'M READY!"}</button></div>`;
+    stage.innerHTML = `<div class="introC"><div class="introHero" style="${L.id ? `background-image:url(${COVER(L.id)})` : ''}">${L.id ? '' : `<div class="emo">${esc(L.emoji)}</div>`}</div>
+      <div class="introBody2"><h2>${esc(L.title)}</h2>${L.ctrl ? `<span class="ctrlPill">${esc(L.ctrl)}</span>` : ''}
+      <ol class="steps">${(L.how || []).map(h => `<li>${esc(h)}</li>`).join('')}</ol></div>
+      <button class="readyBtn ${L.ready ? 'done' : ''}" id="readyB">${L.ready ? '✓ Ready — waiting for others' : "I'm ready"}</button></div>`;
     $('#readyB').onclick = readyUp;
   }
   function renderChoice(L) {
@@ -937,13 +964,13 @@
     if (m.t === 'welcome') {
       joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
-      $('#meDot').style.background = m.color; $('#meName').textContent = `${m.avatar} ${m.name}`;
+      $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });
     } else if (m.t === 'layout') render(m.layout);
     else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') renderPanel(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
-    else if (m.t === 'focus') { vipFocus = m; const f = document.getElementById('focusName'); if (f) f.textContent = `${m.emoji} ${m.name}`; }
+    else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);
     else if (m.t === 'toast') toast(m.text);

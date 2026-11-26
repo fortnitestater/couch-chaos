@@ -1,102 +1,79 @@
 /* =====================================================================
-   COUCH CHAOS — REAL BUTTONS
-   Every button is a physical keycap: a glossy candy top, a solid lip it
-   sits on, a soft drop shadow. Pressing sinks it onto the lip (instant),
-   letting go springs it back up with a tiny overshoot. press.js adds the
-   .rb class to every button, sets --bc from its color and handles .press.
+   COUCH CHAOS — BUTTONS
+   Console-controller keys: a solid colour body, a soft top light, a
+   darker edge underneath that gives it depth. Pressing sinks the key
+   onto its edge instantly; letting go springs it back. press.js adds the
+   .rb class to every button, sets --bc from its colour and handles .press.
    ===================================================================== */
 .rb {
-  /* jelly-candy game button: saturated body, thick white outline, glossy blob top-left, dark lip under it */
-  --bc: #2f86ff; --depth: 6px; --lip: color-mix(in oklab, var(--bc) 45%, #05060d);
-  position: relative; isolation: isolate; overflow: hidden;
+  --bc: #2a3560; --depth: 5px; --lip: color-mix(in oklab, var(--bc) 52%, #04060f);
+  position: relative; isolation: isolate;
   background-color: var(--bc) !important;
-  background-image:
-    radial-gradient(120% 90% at 30% 18%, color-mix(in oklab, var(--bc) 62%, #fff) 0%, rgba(255,255,255,0) 58%),
-    linear-gradient(180deg, rgba(255,255,255,.12) 0%, rgba(0,0,0,0) 50%, color-mix(in oklab, var(--bc) 55%, #000) 100%) !important;
-  border: 3.5px solid #fff !important;
+  background-image: linear-gradient(180deg, color-mix(in oklab, var(--bc) 82%, #fff) 0%, var(--bc) 46%, color-mix(in oklab, var(--bc) 88%, #000) 100%) !important;
+  border: 0 !important;
   box-shadow:
-    inset 0 -5px 0 color-mix(in oklab, var(--bc) 70%, #000),
-    inset 0 3px 0 rgba(255,255,255,.35),
-    0 0 0 2px rgba(0,0,0,.45),
-    0 var(--depth) 0 2px var(--lip),
-    0 calc(var(--depth) + 6px) 16px rgba(0,0,0,.5) !important;
+    inset 0 1px 0 rgba(255,255,255,.28),
+    inset 0 0 0 1px rgba(255,255,255,.06),
+    0 var(--depth) 0 var(--lip),
+    0 calc(var(--depth) + 4px) 14px rgba(0,0,0,.38) !important;
   color: #fff !important;
-  font-family: 'Fredoka', 'Inter', system-ui, sans-serif !important; font-weight: 700 !important; letter-spacing: .01em;
+  font-family: var(--font-ui, Inter, system-ui, sans-serif) !important; font-weight: 700 !important; letter-spacing: -.005em;
   transform: translateY(0) !important;
-  transition: transform 260ms var(--ease-bounce, cubic-bezier(.3,1.6,.5,1)), box-shadow 260ms var(--ease-bounce, ease-out), filter 160ms !important;
-  text-shadow: 0 2px 0 color-mix(in oklab, var(--bc) 45%, #000), 0 0 3px rgba(0,0,0,.35);
+  transition: transform 240ms var(--ease-bounce, cubic-bezier(.3,1.6,.5,1)), box-shadow 240ms var(--ease-bounce, ease-out), filter 160ms !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,.25);
   -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: manipulation;
-  margin-bottom: calc(var(--depth) + 2px);
+  margin-bottom: var(--depth);
 }
-/* the shiny highlight blob in the top-left corner (like a jelly sweet) */
-.rb::before {
-  content: ''; position: absolute; z-index: -1; left: 9%; top: 9%; width: min(34%, 56px); height: min(26%, 22px);
-  border-radius: 50% 50% 45% 45%; pointer-events: none; transform: rotate(-14deg);
-  background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.55) 60%, rgba(255,255,255,0));
-  opacity: .9; transition: opacity 160ms;
-}
-.rb::after {
-  content: ''; position: absolute; z-index: -1; left: calc(9% + min(34%, 56px) + 4px); top: 11%; width: 9px; height: 9px; border-radius: 50%;
-  background: rgba(255,255,255,.75); pointer-events: none;
-}
-.rb.light { color: #fff !important; }
-/* pressed: the button squashes onto its lip */
+.rb.light { color: #14182b !important; text-shadow: none; }
 .rb.press, .rb.on {
-  transform: translateY(calc(var(--depth) - 1px)) scale(.985, .97) !important;
-  box-shadow:
-    inset 0 -2px 0 color-mix(in oklab, var(--bc) 70%, #000),
-    inset 0 4px 8px rgba(0,0,0,.25),
-    0 0 0 2px rgba(0,0,0,.45),
-    0 1px 0 2px var(--lip),
-    0 3px 6px rgba(0,0,0,.4) !important;
-  filter: brightness(.95) saturate(1.1);
-  transition: transform 45ms ease-out, box-shadow 45ms ease-out, filter 45ms !important;
+  transform: translateY(calc(var(--depth) - 1px)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 2px 8px rgba(0,0,0,.22), 0 1px 0 var(--lip), 0 2px 4px rgba(0,0,0,.3) !important;
+  filter: brightness(.94);
+  transition: transform 40ms ease-out, box-shadow 40ms ease-out, filter 40ms !important;
 }
-.rb.press::before, .rb.on::before { opacity: .55; }
-.rb:disabled { filter: saturate(.2) brightness(.65); opacity: .6; border-color: rgba(255,255,255,.5) !important;
-  box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 2px 0 2px var(--lip) !important; transform: translateY(calc(var(--depth) - 2px)) !important; }
-/* the one you picked stays pressed in and glows */
-.rb.picked { filter: none; opacity: 1; border-color: #ffe066 !important;
-  transform: translateY(calc(var(--depth) - 1px)) !important; box-shadow: inset 0 4px 8px rgba(0,0,0,.22), 0 0 0 2px rgba(0,0,0,.45), 0 1px 0 2px var(--lip), 0 0 30px color-mix(in oklab, var(--bc) 60%, #fff) !important; }
+.rb:disabled { filter: saturate(.25) brightness(.7); opacity: .55;
+  box-shadow: 0 1px 0 var(--lip) !important; transform: translateY(calc(var(--depth) - 1px)) !important; }
+/* the one you picked stays pressed in, with a gold ring */
+.rb.picked { filter: none; opacity: 1;
+  transform: translateY(calc(var(--depth) - 1px)) !important;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.2), 0 1px 0 var(--lip), 0 0 0 3px #f2c66d, 0 0 26px rgba(242,198,109,.45) !important; }
 
-/* sizes / depths */
+/* sizes / colours: one palette — gold = main action, navy = neutral, red/blue = game keys */
 .rb.d-sm { --depth: 4px; }
-.pbtn.rb { --depth: 10px; border-radius: 50% !important; }
-.pbtn.rb.pa { --bc: #ff4d6d; }
-.pbtn.rb.pb { --bc: #3d8bff; }
-.tapBig.rb { --depth: 16px; --bc: #ff4d6d; }
-.readyBtn.rb { --depth: 9px; --bc: #2fb54a; color: #fff !important; }
-.readyBtn.rb.done { --bc: #3a4670; color: #c9d0ec !important; }
-.big.rb { --depth: 8px; --bc: #ffae1a; color: #fff !important; }
-.dpad button.rb { --depth: 7px; --bc: #1f6fe0; color: #fff; border-radius: 22px !important; }
-.dpad .ok.rb { --bc: #ffae1a; color: #fff !important; border-radius: 50% !important; }
-.qbtns button.rb { --bc: #ff7a1a; color: #fff !important; }
-.qbtns button.alt.rb { --bc: #8e44ff; color: #fff; }
-.gbtn.rb { --bc: #2c3e8f; --depth: 5px; color: #fff; }
-.chip.rb, .ctrlBtn.rb { --bc: #3a4a8a; --depth: 3px; color: #fff !important; margin-bottom: 4px; border-width: 2.5px !important; }
-.chip.rb::after, .ctrlBtn.rb::after { display: none; }
-.chip.rb.on { --bc: #f7f8fc; color: #0b0d1 !important7 !important; }
-.ctrlBtn.rb.on { --bc: #6d4bff; color: #fff !important; }
-.cardBtns button.rb, .diceBtns button.rb { --bc: #3d8bff; color: #fff; }
-.diceBtns button.done.rb { --bc: #34c77b; color: #06240f !important; }
-.bingoBtn.rb { --depth: 9px; --bc: #ff4d6d; color: #fff; }
-.bcard button.rb { --depth: 4px; --bc: #f7f6f1; color: #1a1438 !important; text-shadow: none; }
-.bcard button.rb.mk { --bc: #ff4d6d; color: #fff; }
-.bcard button.rb.free { --bc: #ffd166; }
-.bcard button.rb.called:not(.mk) { --bc: #dcecff; }
-.suitPick button.rb { --bc: #ffffff; --depth: 8px; color: #1a1a2e !important; }
-.drawTools button.rb { --depth: 4px; border-radius: 50% !important; }
+.pbtn.rb { --depth: 9px; border-radius: 50% !important; }
+.pbtn.rb.pa { --bc: #ff4f68; }
+.pbtn.rb.pb { --bc: #3b7bff; }
+.tapBig.rb { --depth: 14px; --bc: #ff4f68; }
+.readyBtn.rb { --depth: 7px; --bc: #2fbf71; color: #fff !important; }
+.readyBtn.rb.done { --bc: #2a3358; color: #b9c2dc !important; }
+.big.rb { --depth: 6px; --bc: #f2b84b; color: #241503 !important; text-shadow: none; }
+.dpad button.rb { --depth: 5px; --bc: #232c52; color: #e8ecf8; }
+.dpad .ok.rb { --bc: #f2b84b; color: #241503 !important; text-shadow: none; }
+.qbtns button.rb { --bc: #232c52; color: #fff !important; }
+.gbtn.rb { --bc: #1a2244; --depth: 4px; color: #fff; }
+.chip.rb, .ctrlBtn.rb { --bc: #222b4e; --depth: 2px; color: #dfe5f5 !important; margin-bottom: 2px; }
+.chip.rb.on { --bc: #f2b84b; color: #241503 !important; text-shadow: none; }
+.ctrlBtn.rb.on { --bc: #f2b84b; color: #241503 !important; text-shadow: none; }
+.cardBtns button.rb, .diceBtns button.rb { --bc: #3b7bff; color: #fff; }
+.diceBtns button.done.rb { --bc: #2fbf71; color: #fff !important; }
+.bingoBtn.rb { --depth: 8px; --bc: #ff4f68; color: #fff; }
+.bcard button.rb { --depth: 3px; --bc: #f4f2ec; color: #1a1d2e !important; text-shadow: none; }
+.bcard button.rb.mk { --bc: #ff4f68; color: #fff !important; }
+.bcard button.rb.free { --bc: #f2b84b; color: #241503 !important; }
+.bcard button.rb.called:not(.mk) { --bc: #dce9ff; }
+.suitPick button.rb { --bc: #ffffff; --depth: 7px; color: #1a1d2e !important; text-shadow: none; }
+.drawTools button.rb { --depth: 3px; border-radius: 50% !important; }
 .drawTools button.rb.sel { outline: 3px solid #fff; outline-offset: 2px; }
-.drawTools .clr.rb { --bc: #3a4670; color: #fff; border-radius: 14px !important; width: auto; padding: 0 12px; }
-.songBtns button.rb, .songHost button.rb { --bc: #3d5bd9; }
-.songBtns button#sgSkip.rb { --bc: #6d4bff; }
-.songHost button.end.rb { --bc: #e03131; }
-.songSug button.rb { --bc: #2f2566; --depth: 4px; }
-.songIn button.rb { --bc: #2f3a66; --depth: 4px; }
-.camBtn.rb { --bc: #2c3e8f; --depth: 5px; }
-.camRemote button.rb { --depth: 4px; --bc: #2f3a66; }
-.camRemote button.ok.rb { --bc: #ffd166; color: #1a0f00; }
-#diceName.rb { --bc: #2f3a66; --depth: 5px; }
+.drawTools .clr.rb { --bc: #232c52; color: #fff; border-radius: 14px !important; width: auto; padding: 0 12px; }
+.songBtns button.rb, .songHost button.rb { --bc: #3b7bff; }
+.songBtns button#sgSkip.rb { --bc: #232c52; }
+.songHost button.end.rb { --bc: #e5484d; }
+.songSug button.rb { --bc: #1a2244; --depth: 3px; }
+.songIn button.rb { --bc: #232c52; --depth: 3px; }
+.camBtn.rb { --bc: #161d3b; --depth: 3px; }
+.camRemote button.rb { --depth: 3px; --bc: #232c52; }
+.camRemote button.ok.rb { --bc: #f2b84b; color: #241503 !important; }
+#diceName.rb { --bc: #232c52; --depth: 4px; }
 
 /* the joystick: a real rubber thumbstick in a recessed socket */
 .jsBase { background: radial-gradient(circle at 50% 40%, #0b0e1a 0%, #151a2c 55%, #232a44 100%) !important;

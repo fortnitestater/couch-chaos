@@ -193,7 +193,7 @@
     const el = $(`#rows .tile[data-r="${focus.r}"][data-c="${focus.c}"]`);
     if (el) { el.classList.add('focus'); if (!noScroll) el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); }
     setHero(focusedDef());
-    const v = vip(), d = focusedDef(); if (v && d) send(v, { t: 'focus', name: d.name, emoji: d.emoji });
+    const v = vip(), d = focusedDef(); if (v && d) send(v, { t: 'focus', id: d.id, name: d.name, emoji: d.emoji });
   }
   function setHero(d) {
     if (!d || d === heroDef) return; heroDef = d;
@@ -239,7 +239,7 @@
     const v = vip();
     const games = GAMES.map(({ id, name, emoji, cat, ctrl }) => ({ id, name, emoji, cat, ctrl })), cats = CATEGORIES;
     for (const p of humans()) { p.layout = { name: 'lobby', vip: p === v, vipName: v ? v.name : '', games, cats, trophies: p.trophies, party: !!S.party }; p.inGame = false; send(p, { t: 'layout', layout: p.layout }); }
-    if (v && focusedDef()) send(v, { t: 'focus', name: focusedDef().name, emoji: focusedDef().emoji });
+    if (v && focusedDef()) send(v, { t: 'focus', id: focusedDef().id, name: focusedDef().name, emoji: focusedDef().emoji });
   }
   function show(which) {
     $('#home').classList.toggle('hidden', which !== 'home');
@@ -271,7 +271,7 @@
     for (const p of humans()) sendIntro(p);
     clearTimeout(launchT); launchT = null;
   }
-  function sendIntro(p) { const d = S.def; p.layout = { name: 'intro', emoji: d.emoji, title: d.name, how: d.how, ctrl: CTRL_LABEL[d.ctrl], ready: S.ready.has(p) }; send(p, { t: 'layout', layout: p.layout }); }
+  function sendIntro(p) { const d = S.def; p.layout = { name: 'intro', id: d.id, emoji: d.emoji, title: d.name, how: d.how, ctrl: CTRL_LABEL[d.ctrl], ready: S.ready.has(p) }; send(p, { t: 'layout', layout: p.layout }); }
   function renderReady() { $('#introReady').innerHTML = humans().filter(p => !p.cam || camFits()).map(p => p.cam ? `<span class="rchip ok" style="--c:${p.color}">📷 ${p.avatar} ${esc(p.name)}</span>` : `<span class="rchip ${S.ready.has(p) ? 'ok' : ''}" style="--c:${p.color}">${S.ready.has(p) ? '✓ ' : ''}${p.avatar} ${esc(p.name)}</span>`).join(''); }
   function launchSoon(s) { if (launchT) return; launchT = setTimeout(() => { launchT = null; launch(); }, s * 1000); }
   // big diagonal colour wipe between screens
