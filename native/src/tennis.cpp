@@ -13,10 +13,10 @@ struct Tennis : Classic {
   struct Pl { int pid; int team; Vector3 pos, goal, vel{}; float sw = 0, swDir = 1, cool = 0; };
   std::vector<int> teamQ[2]; std::vector<Pl> on;  // players on court
   Vector3 bp{}, bv{}; bool live = false, bounced = false, smashLive = false; int lastHitTeam = -1, bounces = 0; float spin = 0;
-  int pts[2] = { 0, 0 }, games[2] = { 0, 0 }, server = 0, serveTeam = 0, GAMES = 2;
+  int pts[2] = { 0, 0 }, games[2] = { 0, 0 }, server = 0, serveTeam = 0, GAMES = 2, ptTeam = -1;
   std::string phase = "intro", call, radar; float t = 2.5f, callT = 0, radarT = 0, hitAt = -1, tossT = -1; int recv = -1; Vector3 hitPt{};
   std::vector<Vector4> crowd; bool fin = false; int rally = 0; std::vector<int> hits;
-  std::vector<Vector3> trail; Mesh crowdMesh{};
+  std::vector<Vector3> trail; Mesh crowdMesh{}; int camShot = -1; float shotT = 0;
   ~Tennis() { if (crowdMesh.vertexCount) UnloadMesh(crowdMesh); }
 
   void Start() override {
@@ -128,7 +128,7 @@ struct Tennis : Classic {
   void Act(int p, const std::string& k, int, float pw) override { if (k.rfind("swing", 0) == 0) Swing(p, Clamp(pw > 0 ? pw : 0.65f, 0.2f, 1)); }
   void Point(int team, const std::string& why) {
     if (phase == "point") return;
-    pts[team]++; phase = "point"; t = 2.6f; live = false; call = why; callT = 2.2f; Sfx(why.find("ACE") != std::string::npos ? "cheer" : "applause");
+    pts[team]++; ptTeam = team; phase = "point"; t = 2.6f; live = false; call = why; callT = 2.2f; Sfx(why.find("ACE") != std::string::npos ? "cheer" : "applause");
     int a = pts[team], b = pts[1 - team];
     if (a >= 4 && a - b >= 2) {
       games[team]++; pts[0] = pts[1] = 0; call = (team ? TeamName(1) : TeamName(0)) + " WIN THE GAME!"; callT = 2.4f; Sfx("cheer");
@@ -216,9 +216,17 @@ struct Tennis : Classic {
   void Draw() override { g_toonK = 1; DrawCourt(); g_toonK = 1.4f; }
   void DrawCourt() {
     // broadcast camera: high behind the near baseline, drifting gently with the ball
+    // ...holding a close-up on the server before the serve, and cutting in on the winner after the point
     float bx = live ? Clamp(bp.x, -4, 4) * 0.25f : 0;
-    cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 7.4f, -25 } : cam.position, { bx, 7.4f, -25.5f }, 0.05f);
-    cam.target = Vector3Lerp(cam.target, { bx * 0.6f, 0.9f, 1.8f }, 0.05f); cam.fovy = 42;
+    // (close-ups are cuts that slowly push in; the pull back to the wide shot on the toss is one smooth crane move)
+    int shot = phase == "serve" && tossT < 0 && server >= 0 && server < (int)on.size() ? 1 : phase == "point" && ptTeam >= 0 ? 2 : 0;
+    if (shot != camShot) { if (shot) rig.Cut(); camShot = shot; shotT = 0; }
+    shotT += g_frameDt; float push = 1.3f - 0.3f * EaseOutQ(shotT / 2.4f);
+    Vector3 wp = { bx + 0.6f * sinf(time * 0.12f), 7.4f + 0.3f * sinf(time * 0.17f), -25.5f }, wt = { bx * 0.6f, 0.9f, 1.8f }; float wf = 42, k = 2.6f;
+    const Pl* hero = nullptr;
+    if (shot == 1) hero = &on[server]; else if (shot == 2) for (auto& o : on) if (o.team == ptTeam) { hero = &o; break; }
+    if (hero) { float sd = -Side(hero->team); wt = { hero->pos.x + 0.2f * sd, 1.1f, hero->pos.z }; wp = Vector3Add(wt, Vector3Scale({ 2.8f * sd, 0.35f, 3.9f * sd }, push)); wf = 34; k = 3.0f; }
+    { Camera3D rc = rig.Go(wp, wt, wf, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     if (smashLive && live) cine::Follow(bp);
     if (g_dbg == 7 && !on.empty()) { Pl& q = on[0]; cam.position = { q.pos.x + 2.2f, 1.6f, q.pos.z + (q.team ? -2.6f : 2.6f) }; cam.target = { q.pos.x + 0.3f, 1.0f, q.pos.z }; cam.fovy = 40; }
     UI::Sky(Hex(0x4a90e2), Hex(0xcfe8ff));
@@ -321,7 +329,7 @@ struct Tennis : Classic {
       Color c = p.pid >= 0 ? P(p.pid).color : Hex(0xadb5bd);
       float yaw = p.team == 0 ? 0 : PI; bool moving = Vector3Length(p.vel) > 0.6f;
       g_hold.on = true; g_hold.hand = HandLocal(p, nullptr, nullptr);
-      DrawToon(p.pos, yaw, c, time + p.pid, moving ? 0.12f : 0, 0, 1.05f);
+      DrawToon(p.pos, yaw, c, time + p.pid, moving ? 0.12f : 0, phase == "point" && p.team == ptTeam ? 1.f : 0, 1.05f);
       g_hold.on = false;
       Racket(p, c);
     }

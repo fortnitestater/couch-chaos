@@ -353,6 +353,7 @@ void main() {
 })";
 static int lFxA = -1, lFxB = -1, lFxC = -1;
 static RenderTexture2D rtMain, rtA, rtB, rtC, rtD, rtE; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom, lFinalDof, lFinalDepth, lFinalTime, lFinalFocus, lFinalDofOn; static bool postOk = false, dofOk = false;
+float g_frameDt = 1 / 60.f;
 float g_cineT = 0, g_focus = 15, g_dofAmt = 0.9f; bool g_cineOn = false; static int lFinalDofAmt;
 // the main scene target keeps its depth in a texture, so the final pass can focus by distance
 static RenderTexture2D LoadSceneTarget(int w, int h) {
@@ -545,6 +546,7 @@ EMSCRIPTEN_KEEPALIVE void cc_act(int pid, const char* kind, int i, float pw) { i
 EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   if (!game) return;
   dt = fminf(dt, 0.05f);
+  g_frameDt = dt;
   g_cineT += dt;
   cine::Update(dt);
   float gdt = dt * cine::TimeScale();   // hit-stop and slow motion during a big moment

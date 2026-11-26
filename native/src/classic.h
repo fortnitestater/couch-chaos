@@ -101,6 +101,7 @@ struct Scenery {
 
 struct Classic : Game {
   Camera3D cam{}; Scenery sc; Particles3D fx; Confetti conf; float time = 0, cd = 3.5f, lastTick = 4;
+  CamRig rig;
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitCam(float fov) { cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; }

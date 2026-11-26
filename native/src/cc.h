@@ -23,6 +23,25 @@ void CC_EndMode3D();
 #define EndMode3D() CC_EndMode3D()
 inline Vector2 CC_WorldToScreen(Vector3 p, Camera3D c) { return GetWorldToScreenEx(p, CineCam(c), W, H); }
 #define GetWorldToScreen(...) CC_WorldToScreen(__VA_ARGS__)
+// ---------- smooth camera rigs: every game camera glides like a dolly / crane instead of snapping ----------
+extern float g_frameDt;   // real seconds this frame
+struct CamRig {
+  Vector3 p{}, t{}, vp{}, vt{}; float f = 40, vf = 0; bool on = false;
+  void Cut() { on = false; }   // the next shot starts exactly where it wants to be (a director's cut, not a swoop)
+  // a critically damped spring toward the wanted shot; k = how quickly it settles (per second)
+  Camera3D Go(Vector3 wp, Vector3 wt, float wf, float k = 2.4f) {
+    float dt = fminf(g_frameDt, 0.05f);
+    if (!on) { p = wp; t = wt; f = wf; vp = vt = {}; vf = 0; on = true; }
+    auto S = [&](Vector3& x, Vector3& v, Vector3 w) { Vector3 a = Vector3Subtract(Vector3Scale(Vector3Subtract(w, x), k * k), Vector3Scale(v, 2 * k)); v = Vector3Add(v, Vector3Scale(a, dt)); x = Vector3Add(x, Vector3Scale(v, dt)); };
+    S(p, vp, wp); S(t, vt, wt); float af = (wf - f) * k * k - vf * 2 * k; vf += af * dt; f += vf * dt;
+    Camera3D c{}; c.position = p; c.target = t; c.up = { 0, 1, 0 }; c.fovy = f; c.projection = CAMERA_PERSPECTIVE; return c;
+  }
+};
+// a crane move around what the camera looks at: swing sideways (yaw, rad), raise (lift, world units), dolly in/out (k)
+inline Vector3 Jib(Vector3 pos, Vector3 tgt, float yaw, float lift, float k) {
+  Vector3 d = Vector3Subtract(pos, tgt); float c = cosf(yaw), s = sinf(yaw);
+  d = { d.x * c + d.z * s, d.y, -d.x * s + d.z * c }; d = Vector3Scale(d, k); d.y += lift; return Vector3Add(tgt, d);
+}
 inline void BeginScissorL(float x, float y, float w, float h) { BeginScissorMode((int)(x * g_rs), (int)(y * g_rs), (int)(w * g_rs), (int)(h * g_rs)); }
 
 // ---------- bridge to the website ----------

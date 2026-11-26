@@ -154,6 +154,7 @@ static Mesh BuildFourDisc() {
   return b.Build();
 }
 struct Four : Table {
+  bool Focus(Vector3& p, float& w) override { if (drop.c >= 0) { p = { (drop.c - 3) * 0.95f, 0.4f, 0 }; w = 0.7f; return true; } return false; }
   Mesh gridM{}, discM{}; const float Y0 = -2.55f, F = -3.2f;
   ~Four() { if (gridM.vertexCount) UnloadMesh(gridM); if (discM.vertexCount) UnloadMesh(discM); }
   int g[7][6] = {}; int team[2] = { 0, 0 }; int side = 0; std::vector<int> T[2];
@@ -162,7 +163,7 @@ struct Four : Table {
   const Color TC[2] = { Hex(0xff4d6d), Hex(0xffd43b) };
   int Cur() { return T[side][team[side] % T[side].size()]; }
   void Start() override {
-    InitCam({ 0, 2.4f, 15.2f }, { 0, 0.35f, 0 }, 42);
+    InitCam({ 2.6f, 1.8f, 14.6f }, { 0, 0.45f, 0 }, 40);   // low three-quarter view of the board
     for (int i = 0; i < N(); i++) T[i % 2].push_back(i);
     side = rand() % 2; turn = Cur(); Push();
     Banner("🔴 RED vs 🟡 YELLOW", 1800, "#ffd43b");
@@ -363,6 +364,8 @@ struct Snakes : Table {
 // BLACKJACK — everyone plays the dealer at once. Get closer to 21 than the dealer without going over.
 // =====================================================================================
 struct Blackjack : Table {
+  // everyone plays at once, so the camera holds the table, then leans in on the dealer's cards
+  bool Focus(Vector3& p, float& w) override { if (phase == "dealer" || phase == "settle") { p = { 0, 0.3f, 2.9f }; w = 0.8f; return true; } return false; }
   std::vector<Card> deck; std::vector<std::vector<Card>> hand; std::vector<Card> dealer;
   std::vector<int> pts, state, delta;  // state: 0 playing, 1 stand, 2 bust, 3 blackjack
   std::string phase = "deal"; float t = 0, botT = 0; int hno = 0, HANDS = 6; bool holeUp = false;

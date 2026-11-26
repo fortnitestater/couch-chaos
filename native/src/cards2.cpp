@@ -311,6 +311,8 @@ const Chance TCH[] = { { "🏆 You won the ski race!", 0, 100 }, { "🛷 Your sl
   { "💥 Caught in an avalanche — to the Hot Tub!", 3, 0 }, { "🎂 Snow party! Every player pays you $20.", 4, 20 }, { "☕ You buy everyone cocoa: pay $20 each.", 4, -20 }, { "🔨 Free cabin on one of your sets!", 5, 0 },
   { "🎁 Holiday bonus!", 0, 150 }, { "🧊 You slipped on ice. Doctor bill:", 0, -40 } };
 struct Tycoon : GameNight {
+  // the camera follows the token of whoever is moving around the board
+  bool Focus(Vector3& p, float& w) override { if (over || turn < 0 || turn >= N()) return false; p = Cell3(st[turn].pos, 0); w = 1.3f; return true; }
   struct St { int pos = 0, cash = 1500, skip = 0; bool out = false; float shown = 1500; };
   std::vector<St> st; int own[NB], cab[NB], pot = 0, round = 1, ROUNDS = 8, dice[2] = { 1, 1 }, steps = 0; std::string state = "roll"; float timer = 25, botT = 1.3f, rollAnim = 0, stepT = 0, skipT = 0; std::vector<int> outOrder; bool fin = false;
   void Start() override {

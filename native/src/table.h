@@ -34,16 +34,27 @@ std::string Msg(const std::string& emoji, const std::string& text, const std::st
 // =====================================================================================
 struct Table : Game {
   Camera3D cam{}; Particles3D fx; Confetti conf; float time = 0; int turn = -1; bool over = false; float endT = 0;
+  CamRig rig; Camera3D master{};
   Color felt = Hex(0x2b8a3e), wood = Hex(0x8a5a35);
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
-  void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; }
+  void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; master = cam; }
+  // what the camera should favour right now (default: the player whose turn it is); w = how strongly
+  virtual bool Focus(Vector3& p, float& w) { if (over || turn < 0 || turn >= N()) return false; p = Seat(turn, 5.6f); p.y = 0.4f; w = 1; return true; }
   void TableCam() { InitCam({ 2.4f, 7.4f, 13.4f }, { 0.3f, 0.1f, -2.6f }, 40); }   // low, a little off-centre: a film angle on the table
   // seats run around the far half of the table so nobody blocks the view
   float SeatA(int i) { int n = N(); float span = n <= 2 ? 1.2f : n == 3 ? 1.9f : n == 4 ? 2.3f : 3.5f; return -PI / 2 + (n == 1 ? 0 : -span / 2 + span * i / (n - 1)); }
   Vector3 Seat(int i, float r = 7.4f) { float a = SeatA(i); return { cosf(a) * r, 0, sinf(a) * r * 0.78f }; }
   Vector3 Front(int i, float r = 4.6f, float h = 0.05f) { Vector3 s = Seat(i, r); s.y = h; return s; }
   void Room(bool table = true) {
+    { // a slow crane move; when the turn changes the camera glides over to favour that player
+      Vector3 fp{}; float fw = 0; bool f = Focus(fp, fw);
+      float yaw = 0.075f * sinf(time * 0.1f) + 0.025f * sinf(time * 0.29f), lift = 0.35f * sinf(time * 0.12f + 1), dolly = 1 + 0.03f * sinf(time * 0.16f);
+      Vector3 tg = master.target;
+      if (f) { tg = Vector3Lerp(tg, fp, 0.28f * fw); yaw -= Clamp(fp.x / 7, -1, 1) * 0.1f * fw; dolly -= 0.07f * fw; }
+      Camera3D c = rig.Go(Vector3Add(Jib(master.position, master.target, yaw, lift, dolly), Vector3Subtract(tg, master.target)), tg, master.fovy, 1.7f);
+      cam.position = c.position; cam.target = c.target; cam.fovy = c.fovy;
+    }
     UI::Sky(Hex(0x2a1d16), Hex(0x4a3324));
     lit.Begin(cam, { 0.2f, 0.15f, 0.12f }, 0.01f);
     BeginMode3D(cam);

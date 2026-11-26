@@ -568,7 +568,9 @@ struct Hockey : Classic {
     }
   }
   void Draw() override {
-    cam.position = { 0, 24, 16.5f }; cam.target = { 0, 0, 0.8f };
+    { // lower and closer than a top-down view (the phone shows the whole table); the camera leans with the puck
+      Vector3 pw = W3(px, py); float sw = sinf(time * 0.1f);
+      Camera3D rc = rig.Go({ pw.x * 0.12f + 1.2f * sw, 13.0f, 19.8f }, { pw.x * 0.25f, 0, 0.7f }, 42, 1.6f); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     UI::Sky(Hex(0x0d0826), Hex(0x24124f));
     lit.Begin(cam, { 0.06f, 0.04f, 0.14f }, 0.005f);
     BeginMode3D(cam);

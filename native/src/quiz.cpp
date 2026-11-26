@@ -332,6 +332,7 @@ struct Bomb : QuizShow {
       if (any) cine::Moment(cine::REVEAL, { 0, 4.15f, -2.6f }, 2.4f, Hex(0x51cf66), "DEFUSED!", "", 0.1f);
     }
   }
+  float JibK() override { return 0.45f; }
   void DebugShot(int k) override { if (k == cine::BOOM) cine::Moment(cine::BOOM, { 0, 4.15f, -2.6f }, 2.4f, Hex(0xff922b), "BOOM!", "Wrong wire!", 0.1f); else QuizShow::DebugShot(k); }
   float WY(int i) { int n = (int)wires.size(); return 5.35f - (i + 0.5f) * (2.4f / n); }
   void Props3D() override {

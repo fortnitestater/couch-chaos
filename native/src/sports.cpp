@@ -103,7 +103,13 @@ struct Bowling : Classic {
   void Draw() override { g_toonK = 1; DrawScene(); g_toonK = 1.4f; }
   void DrawScene() {
     float tz = ball.on ? fminf(ball.z - 3.0f, 14.8f) : -3.4f; camZ += (tz - camZ) * 0.08f;
-    cam.position = { ball.on ? ball.x * 0.4f : 0, ball.on ? 1.05f : 2.0f, camZ }; cam.target = { ball.on ? ball.x * 0.3f : 0, 0.1f, camZ + 13 };
+    // aiming: a low three-quarter shot past the bowler down the lane · rolling: a chase cam on the ball ·
+    // after the roll: the pin deck, so everyone sees what's left standing · springs glide between them
+    Vector3 wp, wt; float wf = 50, k = 2.2f;
+    if (phase == "roll") { wp = { ball.x * 0.4f, 1.0f, camZ }; wt = { ball.x * 0.3f, 0.12f, camZ + 13 }; k = 6; }
+    else if (phase == "show") { wp = { 1.25f, 1.15f, 16.2f }; wt = { -0.05f, 0.18f, 19.4f }; wf = 38; k = 2.4f; }
+    else { float s = sinf(time * 0.15f); wp = { 2.0f + 0.25f * s, 1.45f, -1.9f }; wt = { 0.0f, 0.3f, 9.0f }; wf = 42; }   // over the bowler's shoulder
+    { Camera3D rc = rig.Go(wp, wt, wf, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     UI::Sky(Hex(0x0b0620), Hex(0x1a0b3a));
     lit.Begin(cam, { 0.04f, 0.02f, 0.1f }, 0.02f);
     BeginMode3D(cam);

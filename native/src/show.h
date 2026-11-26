@@ -9,10 +9,12 @@ struct Show : Game {
   std::vector<int> pts; std::vector<Spring> shown; std::vector<float> cheer, pop, lit_; std::vector<std::string> popTxt;
   Color tint = Hex(0x3d8bff);  // stage light colour
   bool fin = false; float endT = -1;
+  CamRig rig; Camera3D master{}; std::vector<char> wasHot; int glance = -1; float glanceT = 0;
+  virtual float JibK() { return 1; }   // how far the studio camera roams (Bomb Squad keeps its wire board steady)
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitStage() {
-    cam.position = { 0, 4.75f, 15.0f }; cam.target = { 0, 4.1f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 40; cam.projection = CAMERA_PERSPECTIVE;
+    cam.position = { 0, 4.0f, 14.6f }; cam.target = { 0, 3.75f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 39; cam.projection = CAMERA_PERSPECTIVE; master = cam;
     pts.assign(N(), 0); shown.assign(N(), Spring{}); cheer.assign(N(), 0); pop.assign(N(), 0); lit_.assign(N(), 0); popTxt.assign(N(), "");
   }
   float PodX(int i) { float sp = fminf(2.0f, 13.2f / fmaxf(1, N())); return (i - (N() - 1) / 2.f) * sp; }
@@ -34,6 +36,17 @@ struct Show : Game {
   virtual void Props3D() {}  // extra 3D things on stage (drawn inside the scene)
   void Stage(std::function<bool(int)> hot = nullptr) {
     UI::Sky(Hex(0x070d26), Hex(0x1a1250));
+    { // studio crane: a slow sweep across the stage that never stops; it glances at whoever just locked in an answer
+      if (wasHot.size() != (size_t)N()) wasHot.assign(N(), 0);
+      for (int i = 0; i < N(); i++) { bool h = hot && hot(i); if (h && !wasHot[i]) { glance = i; glanceT = 1.6f; } wasHot[i] = h; }
+      glanceT -= g_frameDt;
+      float jk = JibK(), tt = time;
+      float yaw = jk * (0.11f * sinf(tt * 0.105f) + 0.035f * sinf(tt * 0.31f + 1)), lift = jk * 0.45f * sinf(tt * 0.083f + 2), dolly = 1 + jk * 0.045f * sinf(tt * 0.13f);
+      Vector3 tg = master.target;
+      if (glance >= 0 && glance < N() && glanceT > 0) { float gx = PodX(glance); tg.x += gx * 0.3f * jk; yaw -= Clamp(gx / 7, -1, 1) * 0.07f * jk; dolly -= 0.06f * jk; }
+      Camera3D c = rig.Go(Vector3Add(Jib(master.position, master.target, yaw, lift, dolly), Vector3Subtract(tg, master.target)), tg, master.fovy, 1.9f);
+      cam.position = c.position; cam.target = c.target; cam.fovy = c.fovy;
+    }
     if (g_dbg >= 8 && g_dbg <= 12) { int q = g_dbg >= 9 ? std::min(N() - 1, g_dbg - 9) : 0; float z = g_dbg >= 9 ? 3.1f : 4.6f; cam.position = { PodX(q) + 0.3f, 2.3f, z }; cam.target = { PodX(q), g_dbg >= 9 ? 2.5f : 2.1f, 1.55f }; }
     lit.Begin(cam, { 0.05f, 0.06f, 0.16f }, 0.006f);
     BeginMode3D(cam);
