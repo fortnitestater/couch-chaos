@@ -56,7 +56,7 @@ struct SkyBrawl : Game {
     // archipelago
     for (int i = 0; i < 40 && isles.size() < 7; i++) { Vector3 c = { frand(-44, 44), 0, frand(-26, 26) }; bool ok = true; for (auto& o : isles) if (Vector3Distance(c, o.p) < 16) ok = false; if (ok) isles.push_back({ c, frand(2.8f, 5.5f), frand(1.2f, 3.5f), (int)frand(1, 4.9f), frand(0, 100) }); }
     for (int i = 0; i < 8; i++) clouds.push_back({ { frand(-60, 60), frand(1.0f, 2.5f), frand(-30, 30) }, frand(1.6f, 3.0f), frand(0.6f, 1.6f) });
-    Layout(-1, TouchLayout("sea", 1600.f / 900.f, "go", "FIRE", "Tap where to fly. Your plane shoots by itself!", -1, "BOOST"));
+    Layout(-1, TouchLayout("sea", 1600.f / 900.f, "go", "FIRE", "Tap where to fly · it fires at planes ahead by itself · FIRE for extra shots", -1, "BOOST"));
     Banner("✈️ SKY BRAWL!", 1600, "#ffffff");
     cam.fovy = 46; cam.up = { 0, 1, 0 }; cam.projection = CAMERA_PERSPECTIVE;
   }

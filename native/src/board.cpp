@@ -345,7 +345,7 @@ struct Snakes : Table {
     End3D();
     for (int i = 0; i < N(); i++) { Vector3 v = PawnPos(i); Vector2 sp = GetWorldToScreen({ v.x, v.y + 1.25f, v.z }, cam); Text(sp.x, sp.y, 18, P(i).color, P(i).name, 0, TS_HEAVY); }
     Board("🐍 RACE TO 100", Sorted([&](int i) { return pw[i].finish ? 1000.f - pw[i].finish : (float)pw[i].sq; }), [&](int i) { return pw[i].finish ? std::string("🏆") : std::to_string(pw[i].sq); });
-    if (phase == "roll") { int left = 0; for (auto& p : pw) left += !p.rolled; Title("🎲 EVERYONE ROLL!"); Hint(std::to_string(left) + " still to roll · press ROLL on your phone", Hex(0xffd43b)); }
+    if (phase == "roll") { int left = 0; for (auto& p : pw) left += !p.rolled; Title("🎲 EVERYONE ROLL!"); Hint(std::to_string(left) + " still to roll · flick the dice on your phone", Hex(0xffd43b)); }
     else Hint("🪜 Ladders take you up · 🐍 snakes slide you down · land exactly on 100");
   }
 };
@@ -598,7 +598,7 @@ struct Memory : Table {
   Vector3 Pos(int k) { int c = k % 5, r = k / 5; return { (c - 2) * 1.55f, 0.06f, (r - 1.5f) * 1.85f + 0.5f }; }
   void Push() {
     std::vector<std::string> L; std::vector<bool> off; for (int k = 0; k < 20; k++) { L.push_back(std::to_string(k + 1)); off.push_back(cs[k].gone || std::find(sel.begin(), sel.end(), k) != sel.end()); }
-    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == turn && waitT <= 0 && !over ? Choice(sel.empty() ? "Your turn! Pick a card" : "Now pick the 2nd card", L, off, 5) : Msg("🧠", over ? "All pairs found!" : P(turn).name + "'s turn", "Watch the cards and remember!"));
+    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == turn && waitT <= 0 && !over ? Choice(sel.empty() ? "Your turn! Pick a card" : "Now pick the 2nd card", L, off, 5, false, std::vector<std::string>(L.size(), "#2a3560")) : Msg("🧠", over ? "All pairs found!" : P(turn).name + "'s turn", "Watch the cards and remember!"));
   }
   void Flip(int k) {
     if (over || waitT > 0 || k < 0 || k >= 20 || cs[k].gone || std::find(sel.begin(), sel.end(), k) != sel.end() || sel.size() >= 2) return;
@@ -641,8 +641,8 @@ struct Memory : Table {
       bool faceUp = u > 0.5f; Color col = cs[k].gone && cs[k].who >= 0 ? P(cs[k].who).color : Hex(0xfdfcf7);
       lit.Draw(prim.cube, TRS({ p.x + 0.06f, 0.02f, p.z + 0.08f }, { 0, 0, 0 }, { 1.25f * sq, 0.01f, 1.6f }), Hex(0, 50));
       lit.Draw(prim.cube, TRS({ p.x, p.y + lift, p.z }, { 0, 0, 0 }, { 1.25f * sq, 0.05f, 1.6f }), faceUp ? (cs[k].gone ? Shade(col, 0.6f) : col) : Hex(0x1971c2));
-      if (!faceUp) lit.Draw(prim.cube, TRS({ p.x, p.y + lift + 0.03f, p.z }, { 0, PI / 4, 0 }, { 0.6f * sq, 0.01f, 0.6f }), Hex(0x4dabf7));
-      if (sq > 0.35f) Label({ p.x, p.y + lift + 0.06f, p.z }, 1.25f * sq, faceUp ? cs[k].e : std::to_string(k + 1), faceUp ? WHITE : Hex(0xffffff), faceUp ? 1.15f : 0.75f);
+      if (!faceUp) lit.Draw(prim.cube, TRS({ p.x, p.y + lift + 0.03f, p.z }, { 0, PI / 4, 0 }, { 0.78f * sq, 0.01f, 0.78f }), Hex(0x0d2b5e));
+      if (sq > 0.35f) Label({ p.x, p.y + lift + 0.06f, p.z }, 1.25f * sq, faceUp ? cs[k].e : std::to_string(k + 1), faceUp ? WHITE : Hex(0xffffff), faceUp ? 1.15f : 1.05f);
     }
     End3D();
     SeatNames([&](int i) { return std::to_string(pts[i]) + " pairs"; });

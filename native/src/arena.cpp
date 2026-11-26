@@ -124,7 +124,7 @@ struct Arena : Classic {
         DrawProp(props.hockeyStick, RacketXf(h, Vector3Subtract(tip, h), Vector3Subtract(fc, h), Vector3Distance(tip, h) / 1.45f)); }
     }
   }
-  void Names() { for (int i = 0; i < N(); i++) if (k[i].alive) NameTag({ W3(k[i].x, k[i].y).x, 3.4f, W3(k[i].x, k[i].y).z }, i, 18); }
+  void Names() { for (int i = 0; i < N(); i++) if (k[i].alive) NameTag({ W3(k[i].x, k[i].y).x, 3.4f, W3(k[i].x, k[i].y).z }, i, 24); }
   void Fence(Color post = WHITE) {
     int nx = 26, nz = 14;
     for (int i = 0; i <= nx; i++) for (float y : { Y0 - 30, Y1 + 30 }) lit.Draw(prim.cube, TRS(W3(X0 - 30 + (X1 - X0 + 60) * i / nx, y, 0.35f), { 0, 0, 0 }, { 0.15f, 0.7f, 0.15f }), post);
@@ -186,8 +186,8 @@ struct Potato : Arena {
   }
   void Draw() override {
     ArenaCam(); sc.snow = false; sc.Begin(cam);
-    lit.Pattern(PAT_TILE);
-    lit.Draw(prim.cube, TRS(W3(800, (Y0 + Y1) / 2, 0.01f), { 0, 0, 0 }, { (X1 - X0 + 60) * SC, 0.02f, (Y1 - Y0 + 60) * SC }), Hex(0xffe0b8));
+    lit.Pattern(PAT_WOOD);
+    lit.Draw(prim.cube, TRS(W3(800, (Y0 + Y1) / 2, 0.01f), { 0, 0, 0 }, { (X1 - X0 + 60) * SC, 0.02f, (Y1 - Y0 + 60) * SC }), Hex(0xd4945a));
     lit.Pattern(PAT_NONE);
     Fence(Hex(0xff922b)); sc.Trees(time);
     Toons([&](int i) { return i == holder ? Hex(0xff6b3c, 200) : BLANK; });
@@ -235,7 +235,14 @@ struct Paint : Arena {
       }
     }
     cntT -= dt;
+    if (cntT <= 0) { SendPaint(); }
     if (cntT <= 0) { cntT = 0.25f; std::vector<int> cnt(N(), 0); for (int v : grid) if (v >= 0) cnt[v]++; for (int i = 0; i < N(); i++) k[i].score = 100.f * cnt[i] / grid.size(); }
+  }
+  // the floor on the phone map: one character per cell ('.' = bare, 'a'+player = painted), 4 times a second
+  void SendPaint() {
+    std::string g; g.reserve(grid.size()); for (int v : grid) g += v < 0 ? '.' : (char)('a' + v);
+    std::string cols; for (int i = 0; i < N(); i++) cols += std::string(i ? "," : "") + "\"" + kit::Hx(P(i).color) + "\"";
+    for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, "{\"t\":\"paint\",\"w\":" + I(C) + ",\"h\":" + I(Rw) + ",\"g\":\"" + g + "\",\"c\":[" + cols + "]}");
   }
   std::string Stat(int i) override { return I((int)roundf(k[i].score)) + "%"; }
   Vector2 Bot(int i, bool& dash) override {
@@ -249,7 +256,7 @@ struct Paint : Arena {
   }
   void Draw() override {
     ArenaCam(); sc.Begin(cam);
-    Floor(Hex(0xf1f3f5), PAT_TILE);
+    Floor(Hex(0x76829e), PAT_TILE);
     // painted floor, merged into runs so it stays fast
     for (int r = 0; r < Rw; r++) {
       int c = 0;
@@ -320,7 +327,7 @@ struct Coins : Arena {
   }
   void Draw() override {
     ArenaCam(); sc.Begin(cam);
-    Floor(Hex(0xffe9a8), PAT_TILE);
+    Floor(Hex(0xd9a64e), PAT_STONE);
     Fence(Hex(0xf59f00)); sc.Trees(time);
     for (auto& b : bombs) {
       Vector3 p = W3(b.x, b.y); float k2 = 1 - b.t / 2.2f;
@@ -500,7 +507,7 @@ struct Targets : Classic {
   void Start() override {
     cam = {}; InitCam(52); cam.position = { 0, 3.5f, 16 }; cam.target = { 0, 8.5f, 0 };
     for (int i = 0; i < N(); i++) cr.push_back({ 300.f + i * 150, 500 });
-    Layout(-1, TouchLayout("carnival", 0.75f, "aim", "SHOOT", "Tap a balloon to pop it! ★ gold = +5 · black bombs = −3"));
+    Layout(-1, TouchLayout("carnival", 2.0f, "aim", "", "Tap a balloon to pop it · ★ gold = +5 · black bombs = −3"));
   }
   Vector2 Scr(const B& b) { return GetWorldToScreen(b.p, cam); }
   SnapTimer snap;
@@ -509,7 +516,7 @@ struct Targets : Classic {
     std::vector<TouchObj> base;
     for (auto& b : bl) {
       if (b.dead) continue; Vector2 s = Scr(b); if (s.y < 60 || s.y > 940) continue;
-      base.push_back({ (s.x - 20) / 1560, (s.y - 100) / 780, b.r * 46 / 1000, b.kind == 1 ? Hex(0xfcc419) : b.c, b.kind == 2 ? 10 : b.kind == 1 ? 4 : 9 });
+      base.push_back({ (s.x - 20) / 1560, (s.y - 100) / 780, b.r * 60 / 1000, b.kind == 1 ? Hex(0xfcc419) : b.c, b.kind == 2 ? 10 : b.kind == 1 ? 4 : 9 });
     }
     for (int i = 0; i < N(); i++) {
       if (P(i).bot) continue; std::vector<TouchObj> o = base;
@@ -535,8 +542,8 @@ struct Targets : Classic {
         if (!p.ptouch && cd <= 0 && !over) {  // pick the balloon you tapped on the phone (the phone map is squeezed, so judge it there)
           int best = -1; float bd = 1e9f;
           for (size_t j = 0; j < bl.size(); j++) {
-            if (bl[j].dead) continue; Vector2 q = Scr(bl[j]); float dx = s.x - (q.x - 20) / 1560, dy = (s.y - (q.y - 100) / 780) / 0.75f, d = hypotf(dx, dy);
-            bool bomb = bl[j].kind == 2; float reach = bl[j].r * 46 / 1000 + (bomb ? 0.01f : 0.08f), score = bomb ? d * 3 : d;  // bombs only when you tap right on them
+            if (bl[j].dead) continue; Vector2 q = Scr(bl[j]); float dx = s.x - (q.x - 20) / 1560, dy = (s.y - (q.y - 100) / 780) * 0.5f, d = hypotf(dx, dy);
+            bool bomb = bl[j].kind == 2; float reach = bl[j].r * 60 / 1000 + (bomb ? 0.01f : 0.06f), score = bomb ? d * 3 : d;  // bombs only when you tap right on them
             if (d < reach && score < bd) { bd = score; best = (int)j; }
           }
           if (best >= 0) { Vector2 q = Scr(bl[best]); c.x = q.x; c.y = q.y; c.cd = 0; Shoot(i); }

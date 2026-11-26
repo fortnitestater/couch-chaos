@@ -21,7 +21,7 @@ struct Elf : Show {
     order.clear(); for (int i = 0; i < N(); i++) order.push_back(i); Shuffle(order);
     phase = "clue"; t = tMax = 60; phaseT = 0; ready.assign(N(), false); votes.assign(N(), -1); cnt.assign(N(), 0);
     for (int i = 0; i < N(); i++) if (!P(i).bot)
-      Layout(i, Choice(i == elf ? "🧝 YOU are the ODD ELF! Category: " + cat + ". Blend in — fake a clue!" : "Secret word: " + word + "   (category: " + cat + ")", { "✅ Ready to vote" }, 1, true, { "#34c77b" }, {}, 0, true));
+      Layout(i, Choice(i == elf ? "You are the\n🧝 ODD ELF\nCategory: " + cat + " — blend in, fake a clue!" : "Your secret word\n" + word + "\nCategory: " + cat, { "✅ Ready to vote" }, 1, true, { "#34c77b" }, {}, 0, true));
     Sfx("whoosh");
   }
   void Act(int p, const std::string& k, int i, float) override {

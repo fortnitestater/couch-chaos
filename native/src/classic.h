@@ -108,11 +108,11 @@ struct Classic : Game {
   }
   void Recount() { cd = 3.5f; lastTick = 4; }
   void DrawCount() { if (cd > 0 && cd <= 3) { float f = cd - floorf(cd); Text(800, 420, 160 + 80 * f, Fade(WHITE, fminf(1, f * 2 + 0.3f)), std::to_string((int)ceilf(cd)), 0, TS_DISPLAY | TS_SHADOW); } }
-  void NameTag(Vector3 at, int pid, float size = 19) { Vector2 s = GetWorldToScreen(at, cam); Text(s.x, s.y, size, P(pid).color, P(pid).name); }
-  void Board(const std::string& title, const std::vector<int>& order, std::function<std::string(int)> val) {
-    UI::Box({ 18, 18, 280, 48 + order.size() * 34.f }, 18, Hex(0x0b1020, 165));
-    Text(36, 42, 18, Hex(0xadb5bd), title, -1);
-    for (size_t i = 0; i < order.size(); i++) { float y = 76 + i * 34.f; int p = order[i]; DrawCircle(44, (int)y, 8, P(p).color); Text(60, y, 20, WHITE, P(p).name, -1); Text(280, y, 22, Hex(0xffd43b), val(p), 1); }
+  void NameTag(Vector3 at, int pid, float size = 24) { Vector2 s = GetWorldToScreen(at, cam); Text(s.x, s.y, size, P(pid).color, P(pid).name, 0, TS_HEAVY | TS_SHADOW); }
+  void Board(const std::string& title, const std::vector<int>& order, std::function<std::string(int)> val) {  // sized to read from the couch
+    UI::Box({ 18, 18, 350, 60 + order.size() * 44.f }, 20, Hex(0x0b1020, 175));
+    Text(40, 46, 20, Hex(0xc9d3f2), title, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
+    for (size_t i = 0; i < order.size(); i++) { float y = 92 + i * 44.f; int p = order[i]; DrawCircle(50, (int)y, 11, P(p).color); Text(72, y, 26, WHITE, P(p).name, -1, TS_HEAVY); Text(348, y, 28, Hex(0xffd43b), val(p), 1, TS_DISPLAY); }
   }
   void Clock(float T, float x = 800) { int m = (int)ceilf(fmaxf(0, T)); char b[16]; snprintf(b, sizeof b, "%d:%02d", m / 60, m % 60); UI::Box({ x - 70, 14, 140, 58 }, 29, Hex(0x0b1020, 150)); Text(x, 44, 40, m <= 10 ? Hex(0xff4d6d) : WHITE, b); }
   void Hint(const std::string& s, Color c = WHITE) { float w = Measure(s, 26, TS_HEAVY) + 60; UI::Box({ 800 - w / 2, 832, w, 50 }, 25, Hex(0x0b1020, 170)); Text(800, 857, 26, c, s, 0, TS_HEAVY | TS_PLAIN); }

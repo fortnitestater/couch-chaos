@@ -158,7 +158,7 @@ class NativeGame {
   layout(pid, json) { const L = JSON.parse(json); if (pid < 0) this.c.setLayout('all', L); else if (this.ps[pid]) this.c.setLayout(this.ps[pid], L); }
   sfx(n) { const f = this.c.sfx[n]; if (typeof f === 'function') f.call(this.c.sfx); }
   banner(s, ms, col) { this.c.banner(s, ms, col); }
-  sendTo(pid, json) { const p = this.ps[pid]; if (!p || p.bot) return; const m = JSON.parse(json); if (m.t !== 'snap') (this.sent = this.sent || {})[pid] = m; this.c.send(p, m); }
+  sendTo(pid, json) { const p = this.ps[pid]; if (!p || p.bot) return; const m = JSON.parse(json); if (m.t !== 'snap' && m.t !== 'paint') (this.sent = this.sent || {})[pid] = m; this.c.send(p, m); }
   buzz(pid, ms) { const p = this.ps[pid]; if (p && !p.bot) this.c.send(p, { t: 'buzz', ms }); }
   finish(s) {
     if (this.dead) return; this.dead = true;

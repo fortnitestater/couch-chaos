@@ -42,7 +42,7 @@ struct QuizShow : Show {
     std::vector<std::string> cols; for (size_t i = 0; i < q.opts.size(); i++) cols.push_back(i < q.colors.size() ? Hx(q.colors[i]) : OPT[i % 10]);
     int c = q.cols ? q.cols : (q.opts.size() > 4 ? 3 : q.opts.size() == 3 ? 3 : 2);
     for (int i = 0; i < N(); i++) {
-      if (!P(i).bot) { std::string pl = PhoneLayout(); Layout(i, pl.empty() ? Choice(q.phone.empty() ? q.text : q.phone, q.opts, c, q.big, cols) : pl); }
+      if (!P(i).bot) { std::string pl = PhoneLayout(); std::string ch = Choice(q.phone.empty() ? q.text : q.phone, q.opts, c, q.big, cols); ch.insert(ch.size() - 1, ",\"letters\":true"); Layout(i, pl.empty() ? ch : pl); }
       else botAt[i] = frand(1.6f, fmaxf(2.0f, fminf(8.0f, tMax - 2)));
     }
     Sfx("whoosh");

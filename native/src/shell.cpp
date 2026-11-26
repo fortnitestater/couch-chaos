@@ -139,7 +139,27 @@ void Icon(int kind, float cx, float cy, float s, Color c) {
     DrawCircleSector({ cx - s * 0.3f, cy + s * 0.45f }, s * 0.45f, 180, 360, 16, c); DrawCircleSector({ cx + s * 0.3f, cy + s * 0.45f }, s * 0.45f, 180, 360, 16, c);
   }
 }
+static bool Joined() { return D["players"].size() > 0; }
+// once someone has joined, the big panel folds into a small "more players" card so the games get the room
+void JoinCard(float a) {
+  Rectangle r = { 1306, 262, 200, 338 };
+  UI::Shadow(r, 26, 30, A(Hex(0x000000, 150), a), 14);
+  UI::Box(r, 26, A(Hex(0x1a2647, 235), a), A(Hex(0x0d1530, 240), a), 90, A(Hex(0xd9aa5a, 140), a), 1.4f);
+  float cx = r.x + r.width / 2;
+  Text(cx, r.y + 30, 13, A(Hex(0xe6e9f5), a), "MORE PLAYERS?", 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
+  Rectangle qr = { cx - 74, r.y + 56, 148, 148 };
+  UI::Box(qr, 18, A(WHITE, a));
+  const J& q = D["qr"]; int n = q["n"].i(); const std::string& m = q["m"].str();
+  if (n > 0 && (int)m.size() >= n * n) {
+    float cell = 128.f / n, ox = qr.x + 10, oy = qr.y + 10;
+    for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (m[y * n + x] == '1') DrawRectangleRec({ ox + x * cell, oy + y * cell, cell + 0.6f, cell + 0.6f }, A(Hex(0x0a1024), a));
+  }
+  Text(cx, r.y + 232, 13, A(Hex(0xb9c2dc), a), "Scan or enter code", 0, TS_PLAIN);
+  std::string code = D["code"].str(), spaced; for (char ch : code) { spaced += ch; spaced += ' '; }
+  Text(cx, r.y + 282, 34, A(CREAM, a), spaced, 0, TS_DISPLAY | TS_PLAIN);
+}
 void ConnectPanel(float a) {
+  if (Joined()) { JoinCard(a); return; }
   Rectangle r = { 1214, 96, 292, 596 };
   UI::Shadow(r, 30, 40, A(Hex(0x000000, 150), a), 16);
   UI::Box(r, 30, A(Hex(0x1a2647, 235), a), A(Hex(0x0d1530, 240), a), 90, A(Hex(0xd9aa5a, 150), a), 1.4f);
@@ -225,7 +245,7 @@ void Cards(float a, float dt) {
   const float cw = 262, ch = 360, gap = 30, x0 = 120, top = 304;
   float want = fmaxf(0, fminf((float)fc - 1, (float)items.size() - 3.6f)) * (cw + gap);
   carousel.To(want, dt, 150, 24.5f);
-  BeginScissorL(60, 230, 1140, 470); TextClip(60, 230, 1140, 470);
+  float clipW = Joined() ? 1230 : 1140; BeginScissorL(60, 230, clipW, 470); TextClip(60, 230, clipW, 470);
   for (size_t c = 0; c < items.size(); c++) {
     const J& it = items[c]; bool foc = (int)c == fc;
     std::string key = std::to_string(fr) + ":" + it["id"].str();
@@ -233,7 +253,7 @@ void Cards(float a, float dt) {
     s.To(foc ? 1.065f : 1, dt, 230, 26);
     float stag = Clamp(rowIn.x * 1.25f - c * 0.07f, 0, 1), ia = a * stag;
     float x = x0 + c * (cw + gap) - carousel.x + (1 - stag) * 60;
-    if (x > 1220 || x + cw < 40 || ia < 0.01f) continue;
+    if (x > (Joined() ? 1300 : 1220) || x + cw < 40 || ia < 0.01f) continue;
     float w = cw * s.x, h = ch * s.x, lift = (s.x - 1) / 0.065f * 8;
     Rectangle r = { x + cw / 2 - w / 2, top + ch / 2 - h / 2 - lift, w, h };
     float fk = Clamp((s.x - 1) / 0.065f, 0, 1);
@@ -260,7 +280,7 @@ void Cards(float a, float dt) {
   EndScissorMode(); TextUnclip();
   // edge fades hint that the row scrolls
   if (carousel.x > 4) DrawRectangleGradientH(60, 280, 70, 420, A(Hex(0x0a1838, 230), a), Hex(0x0a1838, 0));
-  if (items.size() > 4 && carousel.x < (items.size() - 3.6f) * (cw + gap) - 4) DrawRectangleGradientH(1130, 280, 70, 420, Hex(0x0a1838, 0), A(Hex(0x0a1838, 230), a));
+  if (items.size() > 4 && carousel.x < (items.size() - 3.6f) * (cw + gap) - 4) DrawRectangleGradientH(60 + clipW - 70, 280, 70, 420, Hex(0x0a1838, 0), A(Hex(0x0a1838, 230), a));
   // ---- focused game: one line of description ----
   if (fc >= 0 && fc < (int)items.size()) {
     const J& it = items[fc]; std::string id = it["id"].str();

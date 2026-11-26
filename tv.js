@@ -220,7 +220,7 @@
     if (d.id === '_party') startParty(); else if (d.id === '_random') surprise(); else startIntro(GAMES.find(x => x.id === d.id));
   }
   function focusGame(id) { rowsData.forEach((row, r) => row.items.forEach((it, c) => { if (it.id === id && r > 0) focus = { r, c }; })); applyFocus(); }
-  function fitting() { const n = Math.max(1, humans().length); return GAMES.filter(gm => { const [a, b] = gm.players.split('-').map(Number); return n >= a - 1 && n <= b; }); }
+  function fitting() { const n = Math.max(1, humans().length); return GAMES.filter(gm => { const [a, b] = gm.players.split('-').map(Number); return n >= (gm.ctrl === 'talk' ? 3 : a - 1) && n <= b; }); }
   function surprise() { const d = pick(fitting()); focusGame(d.id); SFX.whoosh(); setTimeout(() => startIntro(d), 600); }
   function startParty() {
     if (!humans().length) return banner('Join first! Scan the code 📱', 1600, '#ff4d6d');
@@ -261,6 +261,7 @@
   function startIntro(def) {
     if (!def || (S.state !== 'home' && S.state !== 'results')) return;
     if (!humans().length) return banner('Join first! Scan the code 📱', 1600, '#ff4d6d');
+    if (def.ctrl === 'talk' && humans().length < 3) return banner(`${def.name} needs 3 players with phones — it's a talking game`, 2600, '#ffd43b');
     SFX.init(); S.state = 'intro'; S.def = def; S.ready = new Set(); introLeft = 15;
     const ia = $('#introArt'); ia.style.setProperty('--a1', def.art[0]); ia.style.setProperty('--a2', def.art[1]);
     $('#introEmoji').textContent = def.emoji; $('#introTitle').textContent = def.name;
@@ -326,7 +327,7 @@
       const aw = !r.p.bot && i < 3 && results.length > 1 ? awards[i] : 0; r.aw = aw;
       r.p.trophies = (r.p.trophies || 0) + aw;
       if (S.party && !r.p.bot) S.party.pts.set(r.p, (S.party.pts.get(r.p) || 0) + aw);
-      if (!r.p.bot) send(r.p, { t: 'layout', layout: { name: 'msg', emoji: ['🏆', '🥈', '🥉'][i] || '🫠', text: `You finished #${i + 1}!`, sub: aw ? `+${aw} trophies` : 'Next time!' } });
+      if (!r.p.bot) send(r.p, { t: 'layout', layout: { name: 'msg', emoji: ['🏆', '🥈', '🥉'][i] || '🫠', text: `You finished #${i + 1}!`, sub: aw ? `+${aw} trophies` : results.length < 2 ? 'Play with others to win trophies' : i === 0 ? 'Winner!' : 'Next time!' } });
     });
     $('#resKicker').textContent = S.party ? `🎉 PARTY GAME ${S.party.i + 1} OF ${S.party.list.length}` : 'RESULTS';
     $('#resTitle').textContent = `${S.def.emoji} ${S.def.name}`;

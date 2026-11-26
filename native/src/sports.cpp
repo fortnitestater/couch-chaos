@@ -129,7 +129,12 @@ struct Bowling : Classic {
     Vector2 sg = GetWorldToScreen({ 0, 2.45f, 22 }, cam);
     if (sg.y > 0) Text(sg.x, sg.y, fminf(60, 900 / fmaxf(4, 22 - camZ)), ColorFromHSV(fmodf(time * 90, 360), 0.7f, 1), "STRIKE ZONE", 0, TS_DISPLAY | TS_SHADOW);
     Board("FRAME " + I(std::min(frameNo, frames)) + "/" + I(frames), Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return I(pts[i]); });
-    if (popT > 0) Text(800, 300, 70 + 20 * EaseBack(fminf(1, (2.2f - popT) * 3)), Fade(popC, fminf(1, popT * 2)), pop, 0, TS_DISPLAY | TS_SHADOW);
+    if (popT > 0) {  // whose turn: a pill at the top, clear of the lane
+      float a = fminf(1, popT * 2), k = EaseBack(fminf(1, (2.2f - popT) * 3)), fs = 44, w = Measure(pop, fs, TS_DISPLAY) + 90;
+      UI::Box({ 800 - w / 2, 96 - 8 * (1 - k), w, 76 }, 38, Hex(0x0b1020, (unsigned char)(200 * a)));
+      DrawCircle((int)(800 - w / 2 + 40), (int)(134 - 8 * (1 - k)), 12, Fade(popC, a));
+      Text(800 + 14, 134 - 8 * (1 - k), fs, Fade(WHITE, a), pop, 0, TS_DISPLAY | TS_SHADOW);
+    }
     if (phase == "aim") Hint(P(cur).bot ? P(cur).name + " is aiming…" : "🎳 " + P(cur).name + ": tilt / drag to aim, then SWING! (bumpers are up)", P(cur).color);
   }
 };

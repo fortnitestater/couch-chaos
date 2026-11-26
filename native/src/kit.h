@@ -40,16 +40,11 @@ inline void Tile(float x, float y, float w, float h, Color c, float alpha = 1, f
   Color lip = Shade(c, -0.45f); lip.a = A;
   RRect(x, y + 8, w, h, 22, lip, lip, BLANK, 0);
   Color top = Shade(c, 0.22f), bot = Shade(c, -0.12f); top.a = bot.a = A;
-  // jelly-candy look: body, dark outer ring, thick white outline, shiny blob top-left
+  // console-key look (matches the phone buttons): solid body, soft top light, dark lip, no outline or gloss blobs
   float ty = y + 8 - d;
-  RRect(x - 3, ty - 3, w + 6, h + 6, 25, BLANK, BLANK, Hex(0x000000, (unsigned char)(110 * alpha)), 3, false);
   RRect(x, ty, w, h, 22, top, bot, BLANK, 0, true);
-  Color rim = Shade(c, -0.3f); rim.a = (unsigned char)(170 * alpha);
-  RRect(x + 4, ty + h - 14, w - 8, 10, 6, Hex(0, 0), rim, BLANK, 0, true);
-  RRect(x, ty, w, h, 22, BLANK, BLANK, goldRim ? Hex(0xffffff, A) : Hex(0xffffff, A), goldRim ? 7 : 5, false, goldRim);
-  float bw = fminf(70, w * 0.22f), bh = fminf(26, h * 0.22f);
-  RRect(x + 74, ty + 10, bw, bh, bh / 2, Hex(0xffffff, (unsigned char)(200 * alpha)), Hex(0xffffff, (unsigned char)(90 * alpha)), BLANK, 0, true);
-  RRect(x + 80 + bw, ty + 12, 11, 11, 5.5f, Hex(0xffffff, (unsigned char)(170 * alpha)), Hex(0xffffff, (unsigned char)(170 * alpha)), BLANK, 0);
+  RRect(x + 10, ty + 3, w - 20, 3, 1.5f, Hex(0xffffff, (unsigned char)(70 * alpha)), Hex(0xffffff, (unsigned char)(70 * alpha)), BLANK, 0);
+  if (goldRim) RRect(x - 2, ty - 2, w + 4, h + 4, 24, BLANK, BLANK, Hex(0xf2b84b, A), 6, false, true);
 }
 inline float TileTop(float y, float press = 0) { return y + 8 - 8 * (1 - press); }
 // a gold title with a small spaced kicker above it

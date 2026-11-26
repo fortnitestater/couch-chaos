@@ -142,7 +142,7 @@ struct Snowball : Game {
     lit.Begin(cam, { 0.86f, 0.92f, 1.0f }, 0.009f);
     BeginMode3D(cam);
     lit.Pattern(PAT_SNOW);
-    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), Hex(0xeef5ff));
+    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), Hex(0xcddcf0));
     lit.Draw(prim.cube, TRS({ 0, 0.03f, 0 }, { 0, 0, 0 }, { BOX.width * SC, 0.06f, BOX.height * SC }), Hex(0xffffff));
     lit.Pattern(PAT_NONE);
     // fence posts

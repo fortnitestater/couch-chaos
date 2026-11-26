@@ -177,10 +177,10 @@ struct Sled : Classic {
     }
   }
   void Draw() override {
-    cam.position = { 0, 11, 17 }; cam.target = { 0, 0, 0.5f };
+    cam.position = { 0, 14, 22 }; cam.target = { 0, 0, 1.0f };
     sc.Begin(cam);
     float zh = fminf(2.4f, 13.f / N()) * N() / 2 + 1;
-    lit.Pattern(PAT_SNOW); lit.Draw(prim.cube, TRS({ 0, 0.02f, 0 }, { 0, 0, 0 }, { 34, 0.04f, zh * 2 }), Hex(0xf8fbff)); lit.Pattern(PAT_NONE);
+    lit.Pattern(PAT_ICE); lit.Draw(prim.cube, TRS({ 0, 0.02f, 0 }, { 0, 0, 0 }, { 34, 0.04f, zh * 2 }), Hex(0x5f9bd6)); lit.Pattern(PAT_NONE);
     for (int i = 0; i <= N(); i++) { float z = (i - N() / 2.f) * fminf(2.4f, 13.f / N()); lit.Draw(prim.cube, TRS({ 0, 0.06f, z }, { 0, 0, 0 }, { 32, 0.02f, 0.06f }), Hex(0xa5d8ff)); }
     for (int r = 0; r < (int)(zh * 4); r++) for (int c = 0; c < 2; c++) lit.Draw(prim.cube, TRS({ PX(100) + c * 0.5f, 0.06f, -zh + r * 0.5f + 0.25f }, { 0, 0, 0 }, { 0.5f, 0.03f, 0.5f }), (r + c) % 2 ? Hex(0x111111) : WHITE);
     for (int s = -1; s <= 1; s += 2) { lit.Draw(prim.cyl, TRS({ PX(100) + 0.5f, 0, s * zh }, { 0, 0, 0 }, { 0.15f, 3.2f, 0.15f }), Hex(0xff4d6d)); }

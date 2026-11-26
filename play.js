@@ -1,5 +1,6 @@
 /* Couch Chaos — controller (phone or PC) */
 (() => {
+  const IS_PC = matchMedia('(hover: hover) and (pointer: fine)').matches;  // keyboard hints only on a computer
   const $ = s => document.querySelector(s);
   const clamp = (v, a = -1, b = 1) => (v < a ? a : v > b ? b : v);
   const stage = $('#stage');
@@ -127,7 +128,7 @@
   const tiltApplies = () => motionSeen && layout && ((layout.name === 'pad' && layout.stick) || layout.name === 'swing');
   function updateTiltUI() {
     const show = tiltApplies() && ctrlMode === 'motion';
-    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode || (layout && /^(song|lobby|intro|choice|touch)$/.test(layout.name))); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
+    const cb = $('#ctrlBtn'); if (cb) { cb.classList.toggle('hidden', !joined || camMode || !layout || !((layout.name === 'pad' && layout.stick) || layout.name === 'swing')); cb.innerHTML = ctrlMode === 'motion' ? '📱 Motion' : '🕹️ Joystick'; cb.classList.toggle('on', ctrlMode === 'motion'); }
     $('#tiltBtn').classList.add('hidden');
     const kb = document.getElementById('calBtn'); if (kb) kb.classList.toggle('hidden', ctrlMode !== 'motion'); $('#centerBtn').classList.toggle('hidden', !show || !tiltOn); $('#flipBtn').classList.toggle('hidden', !show || !tiltOn);
     $('#tiltBtn').textContent = tiltOn ? 'Tilt: ON' : 'Tilt: off'; $('#tiltBtn').classList.toggle('on', tiltOn);
@@ -327,8 +328,10 @@
     if (!shakeRoll) return; const a = e.acceleration || {}; const mag = a.x != null ? Math.hypot(a.x, a.y, a.z) : 0;
     if (mag > 15 && performance.now() - lastRollShake > 900) { lastRollShake = performance.now(); shakeRoll(); }
   });
-  function diceRoller(holder, onRoll, label = 'Flick the dice up — or shake your phone!') {
-    holder.innerHTML = `<div class="roller"><div class="rdice"><span class="rdie">${PIPS[5]}</span><span class="rdie b">${PIPS[3]}</span></div><div class="rhint">🎲 ${esc(label)}</div></div>`;
+  function diceRoller(holder, onRoll, label = 'Flick the dice up — or shake your phone!', key = '') {
+    holder.innerHTML = key  // compact: one re-roll key, used where the real dice are already on screen
+      ? `<div class="roller compact"><div class="rdice rkey">🎲 ${esc(key)}</div><div class="rhint">${esc(label)}</div></div>`
+      : `<div class="roller"><div class="rdice"><span class="rdie">${PIPS[5]}</span><span class="rdie b">${PIPS[3]}</span></div><div class="rhint">🎲 ${esc(label)}</div></div>`;
     const box = holder.querySelector('.roller'), dice = holder.querySelector('.rdice');
     let sy = 0, st = 0, id = null, rolled = false;
     const roll = () => { if (rolled) return; rolled = true; shakeRoll = null; box.classList.add('go'); navigator.vibrate?.([20, 40, 20, 40, 30]); onRoll(); };
@@ -412,14 +415,14 @@
     if (TM.L.mode === 'go' && TM.fing && !TM.down) { const me = n.find(o => o.k === 1); if (me && Math.hypot(me.x - TM.fing.x, (me.y - TM.fing.y) / TM.L.aspect) < 0.012) { TM.touching = false; TM.fing = null; flush(true); } }
   }
   function renderTouch(L) {
-    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = ''; TM.tr = {}; TM.t0 = 0;
-    stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw"><canvas id="tcv"></canvas></div>
+    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = ''; TM.tr = {}; TM.t0 = 0; TM.paint = null;
+    stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw"><canvas id="tcv"></canvas></div>${L.aspect > 1.3 ? '<div class="turnTip">↻ Turn your phone sideways for a bigger map</div>' : ''}
       <div class="touchBottom"><div class="rhint">${esc(L.hint || '')}</div>${L.btn2 ? `<button class="pbtn pb touchBtn" data-b="b">${esc(L.btn2)}</button>` : ''}${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${esc(L.btn)}</button>` : ''}</div></div>`;
     stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
     const tw = $('#tw'), cv = $('#tcv'), g = cv.getContext('2d');
     const fit = () => {
       const W = tw.clientWidth, H = tw.clientHeight; if (!W || !H) return;
-      TM.rot = L.aspect > 1.2 && H > W * 1.1; const asp = TM.rot ? 1 / L.aspect : L.aspect;
+      TM.rot = false; const asp = L.aspect;  // never turn the map: up on the phone is up on the TV
       let cw = W, ch = W / asp; if (ch > H) { ch = H; cw = H * asp; }
       const d = Math.min(2, devicePixelRatio || 1); cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
       TM.cw = cw; TM.ch = ch; TM.d = d;
@@ -427,13 +430,13 @@
     fit(); addEventListener('resize', fit);
     const at = e => { const r = cv.getBoundingClientRect(), fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)); return TM.rot ? { x: 1 - fy, y: fx } : { x: fx, y: fy }; };
     let pid = null;
-    cv.style.touchAction = 'none';
-    cv.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { cv.setPointerCapture(pid); } catch (_) {} TM.fing = at(e); TM.touching = true; TM.down = true; TM.t0 = performance.now(); navigator.vibrate?.(8); flush(true); });
-    cv.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; TM.fing = at(e); flush(); });
+    cv.style.touchAction = 'none'; tw.style.touchAction = 'none';
+    tw.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { tw.setPointerCapture(pid); } catch (_) {} TM.fing = at(e); TM.touching = true; TM.down = true; TM.t0 = performance.now(); navigator.vibrate?.(8); flush(true); });
+    tw.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; TM.fing = at(e); flush(); });
     const up = e => { if (e.pointerId !== pid) return; pid = null; TM.down = false;
       if (L.mode !== 'go') { const rel = () => { if (TM.down) return; TM.touching = false; TM.fing = null; flush(true); }; const held = performance.now() - TM.t0; if (held < 130) { flush(true); setTimeout(rel, 130 - held); } else rel(); return; }
       flush(true); };
-    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    tw.addEventListener('pointerup', up); tw.addEventListener('pointercancel', up);
     cancelAnimationFrame(TM.raf);
     const frame = () => {
       if (!TM.on || !document.body.contains(cv)) return;
@@ -488,6 +491,10 @@
       const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#6cc45f'); gr.addColorStop(1, '#4fa548'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
       g.fillStyle = 'rgba(255,255,255,.06)'; for (let i = 0; i < 12; i += 2) g.fillRect(W * i / 12, 0, W / 12, H);
     }
+    // ---- painted floor (Paint Wars) ----
+    if (TM.paint) { const P = TM.paint, cw = W / P.w, chh = H / P.h; g.globalAlpha = 0.85;
+      for (let r = 0; r < P.h; r++) for (let q = 0; q < P.w; q++) { const v = P.g.charCodeAt(r * P.w + q) - 97; if (v < 0 || !P.c[v]) continue; g.fillStyle = P.c[v]; g.fillRect(q * cw - 0.5, r * chh - 0.5, cw + 1, chh + 1); }
+      g.globalAlpha = 1; }
     // ---- objects (smoothed) ----
     const objs = TM.objs; objs.forEach(o => { o.dx += (o.x - o.dx) * 0.45; o.dy += (o.y - o.dy) * 0.45; });
     if (L.trail) for (const c in TM.tr) { const tr = TM.tr[c]; if (tr.length < 2) continue; g.strokeStyle = c; g.lineWidth = 4 * d; g.lineJoin = g.lineCap = 'round'; g.shadowColor = c; g.shadowBlur = 10 * d; g.beginPath(); tr.forEach((q, i) => i ? g.lineTo(q[0] * W, q[1] * H) : g.moveTo(q[0] * W, q[1] * H)); g.stroke(); g.shadowBlur = 0; }
@@ -517,7 +524,7 @@
       if (k === 1) { g.strokeStyle = '#fff'; g.lineWidth = 4 * d; g.stroke(); g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2 * d; g.beginPath(); g.arc(x, y, rad + 7 * d + 3 * d * Math.sin(t * 6), 0, 7); g.stroke();
         g.fillStyle = '#fff'; g.font = `800 ${12 * d}px Inter, sans-serif`; g.textAlign = 'center'; g.fillText('YOU', x, y - rad - 10 * d); }
       else if (k === 2) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2 * d; g.stroke(); }
-      else if (k === 0) { g.strokeStyle = '#555c6b'; g.lineWidth = 2 * d; g.stroke(); }
+      else if (k === 0) { g.strokeStyle = '#555c6b'; g.lineWidth = 2 * d; g.stroke(); g.fillStyle = '#ffd43b'; g.beginPath(); g.arc(x, y, rad * 0.62, 0, 7); g.fill(); }
       else { g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2 * d; g.stroke(); }
     }
     if (L.mode === 'aim' && TM.fing) { const fx = TM.fing.x * W, fy = TM.fing.y * H, rr2 = 18 * d; g.strokeStyle = '#fff'; g.lineWidth = 3 * d; g.beginPath(); g.arc(fx, fy, rr2, 0, 7); g.stroke();
@@ -643,8 +650,13 @@
   }
   function renderChoice(L) {
     const multi = L.multi || 0; let taps = 0;
-    stage.innerHTML = `<div class="choiceC"><div class="prompt ${L.secret ? 'secret' : ''}">${esc(L.prompt || '')}</div>${multi ? `<div class="multiDots" id="dots">${'○'.repeat(multi)}</div>` : ''}
-      <div class="choiceGrid ${L.big ? 'big' : ''}" style="grid-template-columns:repeat(${L.cols || 2},1fr)">${(L.options || []).map((o, i) => `<button data-i="${i}" class="${light(o.color) ? 'light' : ''}" style="background:${esc(o.color)}" ${o.disabled ? 'disabled' : ''}>${esc(o.label)}</button>`).join('')}</div></div>`;
+    // phone layout: pick columns from how many options there are and how long the labels are, so words never break
+    const opts = L.options || [], n = opts.length, maxLen = Math.max(0, ...opts.map(o => [...String(o.label)].length));
+    const shortL = maxLen <= 3;
+    const cols = n <= 1 ? 1 : shortL ? (n <= 4 ? 2 : n <= 10 ? 5 : n <= 20 ? 5 : 6) : (n <= 3 ? 1 : maxLen > 14 && n <= 4 ? 1 : 2);
+    const rows = Math.ceil(n / cols);
+    stage.innerHTML = `<div class="choiceC"><div class="prompt ${L.secret ? 'secret' : ''}">${L.secret && /\n/.test(L.prompt || '') ? L.prompt.split('\n').map((t, i) => i === 1 ? `<b class="sw">${esc(t)}</b>` : `<small>${esc(t)}</small>`).join('') : esc(L.prompt || '')}</div>${multi ? `<div class="multiDots" id="dots">${'○'.repeat(multi)}</div>` : ''}
+      <div class="choiceGrid ${L.big ? 'cbig' : ''} ${shortL ? 'short' : ''}" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:${rows <= 2 ? 116 : rows <= 3 ? 96 : rows <= 4 ? 80 : 64}px">${opts.map((o, i) => `<button data-i="${i}" class="${light(o.color) ? 'light' : ''}" style="--bc:${esc(o.color)}" ${o.disabled ? 'disabled' : ''}>${L.letters && !shortL ? `<i class="cLet">${'ABCDEFGHIJ'[i] || ''}</i>` : ''}<span>${esc(o.label)}</span></button>`).join('')}</div></div>`;
     stage.querySelectorAll('.choiceGrid button').forEach(b => b.onclick = () => {
       sendMsg({ t: 'act', a: 'choice', i: +b.dataset.i }); navigator.vibrate?.(20);
       if (multi) { taps++; const d = $('#dots'); if (d) d.textContent = '●'.repeat(taps) + '○'.repeat(Math.max(0, multi - taps)); b.style.transform = 'scale(.92)'; setTimeout(() => b.style.transform = '', 100); if (taps >= multi) stage.querySelectorAll('.choiceGrid button').forEach(x => x.disabled = true); }
@@ -682,12 +694,12 @@
   const PIPPOS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
   const PIPS = Array.from({ length: 7 }, (_, v) => `<span class="pips">${Array.from({ length: 9 }, (_, k) => `<i class="${(PIPPOS[v] || []).includes(k) ? (v === 1 ? 'on red' : 'on') : ''}"></i>`).join('')}</span>`);
   function renderDice(L) {
-    stage.innerHTML = `<div class="diceC"><div class="muted">Round ${L.round}/${L.rounds} · tap dice to HOLD</div>
+    stage.innerHTML = `<div class="diceC"><div class="muted">Round ${L.round}/${L.rounds} · tap the dice you want to keep</div>
       <div class="diceRow">${L.dice.map((v, i) => `<button class="die ${L.held[i] ? 'held' : ''}" data-i="${i}" ${L.done ? 'disabled' : ''}>${PIPS[v]}</button>`).join('')}</div>
       <div class="handName">${esc(L.hand)}</div>
       ${L.done || !L.left ? '' : `<div class="rollHold" id="rollH"></div>`}<div class="diceBtns"><button id="doneB" class="done" ${L.done ? 'disabled' : ''}>${L.done ? '✓ Locked' : '✋ Keep these'}</button></div></div>`;
     stage.querySelectorAll('.die').forEach(b => b.onclick = () => { sendMsg({ t: 'act', a: 'hold', i: +b.dataset.i }); b.classList.toggle('held'); });
-    if ($('#rollH')) diceRoller($('#rollH'), () => sendMsg({ t: 'act', a: 'roll' }), `Flick up or shake to re-roll (${L.left} left) — tap dice to hold`);
+    if ($('#rollH')) diceRoller($('#rollH'), () => sendMsg({ t: 'act', a: 'roll' }), 'Tap, flick up or shake', `Re-roll · ${L.left} left`);
     $('#doneB').onclick = () => sendMsg({ t: 'act', a: 'done' });
   }
   function bindHold(el, key) {
@@ -712,7 +724,7 @@
         <div class="yBar"><i id="yMeter"></i></div>
         <div class="szHint">${esc(L.hint || '')}<br><small>${xOnly ? 'No tilt? Touch and hold the left or right side.' : 'No tilt? Drag the yoke.'}</small></div></div>`}
       <div class="btns ${noStick ? 'solo' : ''}">${L.b ? `<button class="pbtn pb" data-b="b">${esc(L.b)}</button>` : ''}${L.a ? `<button class="pbtn pa" data-b="a">${esc(L.a)}</button>` : ''}</div>
-      <div class="keys">PC: ${noStick ? '' : xOnly ? '← → · ' : 'WASD/arrows · '}${L.a ? 'Space = ' + esc(L.a) : ''}${L.b ? ' · Shift = ' + esc(L.b) : ''}</div></div>`;
+      <div class="keys" ${IS_PC ? '' : 'hidden'}>PC: ${noStick ? '' : xOnly ? '← → · ' : 'WASD/arrows · '}${L.a ? 'Space = ' + esc(L.a) : ''}${L.b ? ' · Shift = ' + esc(L.b) : ''}</div></div>`;
     if (noStick && L.hint) stage.querySelector('.btns').insertAdjacentHTML('beforebegin', `<div class="szHint" style="position:static;padding:12px">${esc(L.hint)}</div>`);
     stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
     if (noStick) return;
@@ -798,7 +810,7 @@
         <div class="swLabel">${motion ? 'SWING IT!' : esc(L.label || 'SWING!')}</div>
         <div class="swPowBar"><i id="swPow"></i></div><div class="swPowTxt" id="swPowTxt">${motion ? 'Hold it like ' + noun + ' and SWING!' : 'Motion is off'}</div>
         <div class="swHint">${motion ? (L.sport === 'tennis' ? 'Hold it like a racket. <b>Serve:</b> just swing. <b>Rally:</b> you run to the ball by yourself — swing when the ring around you turns <b>green</b>. Tilt left/right to aim. High ball + big swing = <b>SMASH!</b>' : 'Hold the phone <b>upright, screen facing you</b>, like a handle. It moves 1:1 on the TV — point where you want it and swing!') : esc(L.hint || '')}</div>
-        ${motion ? '<button class="chip on" id="swCenter">⟲ CENTER (hold still, screen to you)</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion? Tap here to swing · PC: Space + ← →</small></div>`}
+        ${motion ? '<button class="chip on" id="swCenter">⟲ CENTER (hold still, screen to you)</button>' : `<button class="chip on" id="swMotion">📱 Turn on motion controls</button><div class="swHint"><small>No motion sensor? Tap here to swing${IS_PC ? ' · PC: Space + ← →' : ''}</small></div>`}
       </div></div>`;
     if (motion) {
       $('#swCenter').onclick = e => { e.stopPropagation(); neutral = grav ? { ...grav } : null; orRecenter = true; toast('Centered! Hold it like this = straight ahead'); };
@@ -903,7 +915,7 @@
       diceRoller($('#rollH'), () => { btn.a = true; flush(); setTimeout(() => { btn.a = false; flush(); }, 150); });
       return;
     }
-    stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p><p class="muted" style="font-size:13px">PC: Space</p></div>`;
+    stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p>${IS_PC ? '<p class="muted" style="font-size:13px">PC: Space</p>' : ''}</div>`;
     bindHold($('#tap'), 'a');
   }
   function renderShake(L) {
@@ -932,7 +944,7 @@
       ${m.pending ? `<div class="pend">🔥 +${m.pending} stack! Play a 2 to pass it on, or take them</div>` : ''}
       <div class="hand">${m.cards.map((c, i) => cardHTML(c, (m.myTurn ? (m.playable[i] ? 'ok' : 'no') : '') + (i === cardSel && m.myTurn ? ' sel' : ''), i)).join('')}</div>
       <div class="cardBtns"><button id="drawB" ${m.canDraw ? '' : 'disabled'}>${m.pending ? `Take +${m.pending}` : '🂠 Draw'}</button><button id="passB" ${m.canPass ? '' : 'disabled'}>Pass ➜</button></div>
-      <div class="legend">Match suit or rank · 8 wild · 2 = +2 · J skip · Q reverse · A = CHAOS<br>PC: ← → select · Enter play · D draw · P pass</div>
+      <div class="legend">Match suit or rank · 8 wild · 2 = +2 · J skip · Q reverse · A = CHAOS${IS_PC ? '<br>PC: ← → select · Enter play · D draw · P pass' : ''}</div>
       ${m.needSuit ? `<div class="suitPick"><h2>Pick the new suit</h2><div class="row">${['♠', '♥', '♦', '♣'].map(s => `<button data-s="${s}" class="${'♥♦'.includes(s) ? 'red' : ''}">${s}</button>`).join('')}</div></div>` : ''}</div>`;
     stage.querySelectorAll('.hand .card').forEach(b => { const i = +b.dataset.i;
       if (m.myTurn && m.playable[i]) { flickable(b, () => sendMsg({ t: 'act', a: 'play', i })); return; }
@@ -972,6 +984,7 @@
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
+    else if (m.t === 'paint') { if (TM.on) TM.paint = m; }
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);
     else if (m.t === 'toast') toast(m.text);
     else if (m.t === 'full') joinErr('That room is full (8 players).');
