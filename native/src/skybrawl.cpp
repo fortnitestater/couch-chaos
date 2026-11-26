@@ -312,7 +312,7 @@ struct SkyBrawl : Game {
     for (auto& p : pl) {
       if (!p.alive) continue;
       Vector2 s = GetWorldToScreen(W3(p.x, p.y, ALT + 2.6f * Scale(p)), cam);
-      Text(s.x, s.y - 16, 19, P(p.pid).color, P(p.pid).name);
+      hud::Tag(s.x, s.y - 30, P(p.pid).color, P(p.pid).name, 26);
       for (int i = 0; i < 3; i++) DrawRectangleRounded({ s.x - 24 + i * 17.f, s.y, 14, 6 }, 1, 4, i < p.hp ? Hex(0x51cf66) : Hex(0x000000, 90));
       DrawRectangleRounded({ s.x - 24, s.y + 9, 48, 4 }, 1, 4, Hex(0x000000, 70));
       DrawRectangleRounded({ s.x - 24, s.y + 9, 48 * p.energy, 4 }, 1, 4, Hex(0xffd43b));
@@ -320,21 +320,11 @@ struct SkyBrawl : Game {
     }
     for (auto& it : items) { Vector2 s = GetWorldToScreen(W3(it.x, it.y, ALT + 2.2f), cam); Text(s.x, s.y, 20, WHITE, ITEMS[it.k].s); }
     int m = (int)ceilf(fmaxf(0, T));
-    DrawRectangleRounded({ 730, 14, 140, 58 }, 0.5f, 8, Hex(0x0b1020, 150));
-    char buf[16]; snprintf(buf, sizeof buf, "%d:%02d", m / 60, m % 60);
-    Text(800, 44, 40, m <= 10 ? Hex(0xff4d6d) : WHITE, buf);
+    hud::Clock(T); (void)m;
     // scoreboard
     std::vector<const Plane*> o; for (auto& p : pl) o.push_back(&p);
     std::sort(o.begin(), o.end(), [](const Plane* a, const Plane* b) { return a->kills > b->kills; });
-    float bh = 46 + o.size() * 34.f;
-    DrawRectangleRounded({ 18, 18, 250, bh }, 0.12f, 8, Hex(0x0b1020, 160));
-    Text(36, 42, 18, Hex(0xadb5bd), "KOs", -1);
-    for (size_t i = 0; i < o.size(); i++) {
-      float y = 76 + i * 34.f; const Player& q = P(o[i]->pid);
-      DrawCircle(44, (int)y, 8, q.color);
-      Text(60, y, 20, WHITE, q.name, -1);
-      Text(250, y, 22, Hex(0xffd43b), std::to_string(o[i]->kills), 1);
-    }
+    { std::vector<hud::Row> rows; for (size_t i = 0; i < o.size(); i++) { const Player& q = P(o[i]->pid); rows.push_back({ q.color, q.name, std::to_string(o[i]->kills), i == 0 && o[i]->kills > 0 }); } hud::Board("KOs", rows); }
     if (ev) { std::string s = std::string(EV_NAME[ev]) + " " + std::to_string((int)ceilf(evLeft)); Text(800, 100, 26, Hex(0xffd43b), s); }
     for (size_t i = 0; i < feed.size(); i++) Text(1580, 36 + i * 34.f, 20, Fade(WHITE, fminf(1, feed[i].t)), feed[i].s, 1);
     int k = 0;

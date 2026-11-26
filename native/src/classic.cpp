@@ -125,7 +125,7 @@ struct Chairs : Classic {
       else if (m.seat) { float a = chA[m.chair] + ringA; pos.y = 0.45f; yaw = PI / 2 - a; cheer = phase == "result" ? 1 : 0.3f; hop = phase == "result" && Alive() == 1 ? fabsf(sinf(time * 8)) * 0.5f : 0; }
       else { float sp = hypotf(m.vx, m.vy); hop = fabsf(sinf(time * 12 + i)) * 0.25f * fminf(1, sp / 200); }
       if (!m.seat) Shadow(pos, 1.3f);
-      DrawToon(pos, yaw, m.out ? Shade(P(i).color, -0.35f) : P(i).color, time + i, hop, cheer, 1.35f);
+      DrawToon(pos, yaw, m.out ? Shade(P(i).color, -0.35f) : P(i).color, time + i, hop, cheer, 1.75f);
     }
     fx.Draw(); conf.Draw();
     EndMode3D();
@@ -339,7 +339,7 @@ struct Simon : Classic {
     EndMode3D();
     for (int i = 0; i < N(); i++) {
       float x = N() == 1 ? 0 : -span / 2 + span * i / (N() - 1); Vector2 s = GetWorldToScreen({ x, 3.9f, 3.5f }, cam);
-      Text(s.x, s.y + 6, 18, P(i).color, P(i).name);
+      hud::Tag(s.x, s.y - 34, P(i).color, P(i).name, 26);
       Text(s.x, s.y + 32, 20, Hex(0xffd43b), std::to_string(k[i].pts) + (k[i].streak >= 3 ? " 🔥" : ""), 0, TS_HEAVY);
       if (phase == "judge") Text(s.x, s.y - 34, 58, k[i].ok ? Hex(0x51cf66) : Hex(0xff6b6b), k[i].ok ? "✔" : "✖", 0, TS_DISPLAY | TS_SHADOW);
     }
@@ -690,7 +690,7 @@ struct TagGame : Classic {
       K& m = k[i]; Vector3 pos = W3(m.x, m.y); float sp = hypotf(m.vx, m.vy);
       if (i == it) { float pr = 1.3f + 0.15f * sinf(time * 8); lit.Draw(prim.cyl, TRS({ pos.x, 0.05f, pos.z }, { 0, 0, 0 }, { pr * 1.6f, 0.02f, pr * 1.6f }), Hex(0xff6b6b, 170)); }
       else Shadow(pos, 1.2f);
-      DrawToon(pos, PI / 2 - m.face, m.immune > 0 && (int)(time * 10) % 2 ? WHITE : P(i).color, time + i, fabsf(sinf(time * 13 + i)) * 0.28f * fminf(1, sp / 200), i == it ? 0.8f : 0, 1.35f);
+      DrawToon(pos, PI / 2 - m.face, m.immune > 0 && (int)(time * 10) % 2 ? WHITE : P(i).color, time + i, fabsf(sinf(time * 13 + i)) * 0.28f * fminf(1, sp / 200), i == it ? 0.8f : 0, 1.8f);
     }
     fx.Draw(); conf.Draw();
     EndMode3D();

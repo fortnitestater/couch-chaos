@@ -35,16 +35,19 @@ inline void Glass(float x, float y, float w, float h, float r = 26, unsigned cha
 // a glossy candy tile like the phone buttons: lip underneath, gradient top, gloss band
 inline void Tile(float x, float y, float w, float h, Color c, float alpha = 1, float press = 0, bool goldRim = false) {
   unsigned char A = (unsigned char)(255 * alpha);
-  float d = 8 * (1 - press);
-  RRect(x, y + 8 + 6, w, h, 22, Hex(0x000000, (unsigned char)(80 * alpha)), Hex(0x000000, 0), BLANK, 0, true);
-  Color lip = Shade(c, -0.45f); lip.a = A;
-  RRect(x, y + 8, w, h, 22, lip, lip, BLANK, 0);
-  Color top = Shade(c, 0.22f), bot = Shade(c, -0.12f); top.a = bot.a = A;
-  // console-key look (matches the phone buttons): solid body, soft top light, dark lip, no outline or gloss blobs
+  float d = 8 * (1 - press), R = fminf(30, h * 0.3f);
+  // a chunky moulded 3D block: floor shadow, deep dark side wall, bevelled face with a lit top edge
+  RRect(x + 4, y + 30, w - 8, h, R, Hex(0x000000, (unsigned char)(95 * alpha)), Hex(0x000000, 0), BLANK, 0, true);
+  Color wall = Shade(c, -0.58f), wall2 = Shade(c, -0.42f); wall.a = wall2.a = A;
+  RRect(x, y + 20, w, h, R, wall2, wall, BLANK, 0, true);
+  Color top = Shade(c, 0.2f), bot = Shade(c, -0.16f); top.a = bot.a = A;
   float ty = y + 8 - d;
-  RRect(x, ty, w, h, 22, top, bot, BLANK, 0, true);
-  RRect(x + 10, ty + 3, w - 20, 3, 1.5f, Hex(0xffffff, (unsigned char)(70 * alpha)), Hex(0xffffff, (unsigned char)(70 * alpha)), BLANK, 0);
-  if (goldRim) RRect(x - 2, ty - 2, w + 4, h + 4, 24, BLANK, BLANK, Hex(0xf2b84b, A), 6, false, true);
+  RRect(x, ty, w, h, R, top, bot, BLANK, 0, true);
+  // bevel: bright rim on top, soft inner face, dark seat at the bottom
+  RRect(x + 3, ty + 3, w - 6, h - 6, R - 3, BLANK, BLANK, Hex(0xffffff, (unsigned char)(95 * alpha)), 3);
+  RRect(x + 9, ty + 9, w - 18, h - 18, R - 8, Hex(0xffffff, (unsigned char)(34 * alpha)), Hex(0xffffff, 0), BLANK, 0, true);
+  RRect(x + 14, ty + h - 16, w - 28, 8, 4, Hex(0x000000, (unsigned char)(38 * alpha)), Hex(0x000000, (unsigned char)(38 * alpha)), BLANK, 0);
+  if (goldRim) RRect(x - 3, ty - 3, w + 6, h + 6, R + 3, BLANK, BLANK, Hex(0xf2b84b, A), 7, false, true);
 }
 inline float TileTop(float y, float press = 0) { return y + 8 - 8 * (1 - press); }
 // a gold title with a small spaced kicker above it
@@ -55,13 +58,18 @@ inline void Heading(const std::string& kicker, const std::string& title, float y
 // circular countdown in the top-right corner
 inline void Timer(float t, float tMax, float x = 1500, float y = 70) {
   float f = Clamp(t / fmaxf(0.01f, tMax), 0, 1);
-  DrawCircle((int)x, (int)y, 46, Hex(0x0a1230, 220));
-  DrawRing({ x, y }, 38, 46, -90, -90 + 360 * f, 48, t < 4 ? Hex(0xff4d6d) : GOLDC);
-  Text(x, y + 2, 34, t < 4 ? Hex(0xff6b81) : WHITE, I((int)ceilf(fmaxf(0, t))), 0, TS_DISPLAY | TS_SHADOW);
+  x -= 46; y -= 9;   // sits in the header band, clear of the question panel
+  DrawCircle((int)x, (int)y + 4, 50, Hex(0x000000, 70));
+  DrawCircle((int)x, (int)y, 50, Hex(0x0a1233, 245));
+  DrawRing({ x, y }, 38, 50, -90, 270, 64, Hex(0x24306b));
+  DrawRing({ x, y }, 38, 50, -90, -90 + 360 * f, 64, t < 4 ? Hex(0xff4d6d) : GOLDC);
+  Text(x, y + 3, 46, t < 4 ? Hex(0xff6b81) : WHITE, I((int)ceilf(fmaxf(0, t))), 0, TS_DISPLAY | TS_SHADOW);
 }
 inline void HintBar(const std::string& s, float y = 860, Color c = WHITE) {
-  float w = Measure(s, 24, TS_HEAVY) + 64;
-  RRect(800 - w / 2, y - 24, w, 48, 24, Hex(0x0a1230, 200), Hex(0x0a1230, 200), Hex(0xffffff, 150), 1.5f, false, true);
-  Text(800, y, 24, c, s, 0, TS_HEAVY | TS_PLAIN);
+  float fs = 32, w = Measure(s, fs, TS_HEAVY) + 84; if (w > 1520) { fs *= 1520 / w; w = 1520; }
+  y -= 14;
+  RRect(800 - w / 2, y - 26, w, 64, 32, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true);
+  RRect(800 - w / 2, y - 32, w, 64, 32, Hex(0x16245a, 235), Hex(0x0a1233, 235), Hex(0xffffff, 190), 2.5f, true, true);
+  Text(800, y + 1, fs, c, s, 0, TS_HEAVY | TS_PLAIN);
 }
 }  // namespace kit

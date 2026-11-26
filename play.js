@@ -416,7 +416,7 @@
   }
   function renderTouch(L) {
     TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = ''; TM.tr = {}; TM.t0 = 0; TM.paint = null;
-    stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw"><canvas id="tcv"></canvas></div>${L.aspect > 1.3 ? '<div class="turnTip">↻ Turn your phone sideways for a bigger map</div>' : ''}
+    stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw" style="--asp:${+L.aspect || 1.9}"><canvas id="tcv"></canvas></div>${L.aspect > 1.3 ? '<div class="turnTip">↻ Turn your phone sideways for a bigger map</div>' : ''}
       <div class="touchBottom"><div class="rhint">${esc(L.hint || '')}</div>${L.btn2 ? `<button class="pbtn pb touchBtn" data-b="b">${esc(L.btn2)}</button>` : ''}${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${esc(L.btn)}</button>` : ''}</div></div>`;
     stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
     const tw = $('#tw'), cv = $('#tcv'), g = cv.getContext('2d');
@@ -653,10 +653,10 @@
     // phone layout: pick columns from how many options there are and how long the labels are, so words never break
     const opts = L.options || [], n = opts.length, maxLen = Math.max(0, ...opts.map(o => [...String(o.label)].length));
     const shortL = maxLen <= 3;
-    const cols = n <= 1 ? 1 : shortL ? (n <= 4 ? 2 : n <= 10 ? 5 : n <= 20 ? 5 : 6) : (n <= 3 ? 1 : maxLen > 14 && n <= 4 ? 1 : 2);
+    const cols = n <= 1 ? 1 : shortL ? (n <= 4 ? 2 : n <= 10 ? 5 : n <= 20 ? 5 : 6) : (n <= 3 ? 1 : 2);
     const rows = Math.ceil(n / cols);
     stage.innerHTML = `<div class="choiceC"><div class="prompt ${L.secret ? 'secret' : ''}">${L.secret && /\n/.test(L.prompt || '') ? L.prompt.split('\n').map((t, i) => i === 1 ? `<b class="sw">${esc(t)}</b>` : `<small>${esc(t)}</small>`).join('') : esc(L.prompt || '')}</div>${multi ? `<div class="multiDots" id="dots">${'○'.repeat(multi)}</div>` : ''}
-      <div class="choiceGrid ${L.big ? 'cbig' : ''} ${shortL ? 'short' : ''}" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:${rows <= 2 ? 116 : rows <= 3 ? 96 : rows <= 4 ? 80 : 64}px">${opts.map((o, i) => `<button data-i="${i}" class="${light(o.color) ? 'light' : ''}" style="--bc:${esc(o.color)}" ${o.disabled ? 'disabled' : ''}>${L.letters && !shortL ? `<i class="cLet">${'ABCDEFGHIJ'[i] || ''}</i>` : ''}<span>${esc(o.label)}</span></button>`).join('')}</div></div>`;
+      <div class="choiceGrid r${Math.min(rows, 5)} ${L.big ? 'cbig' : ''} ${shortL ? 'short' : ''}" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(0,1fr)">${opts.map((o, i) => `<button data-i="${i}" class="${light(o.color) ? 'light' : ''}" style="--bc:${esc(o.color)}" ${o.disabled ? 'disabled' : ''}>${L.letters && !shortL ? `<i class="cLet">${'ABCDEFGHIJ'[i] || ''}</i>` : ''}<span>${esc(o.label)}</span></button>`).join('')}</div></div>`;
     stage.querySelectorAll('.choiceGrid button').forEach(b => b.onclick = () => {
       sendMsg({ t: 'act', a: 'choice', i: +b.dataset.i }); navigator.vibrate?.(20);
       if (multi) { taps++; const d = $('#dots'); if (d) d.textContent = '●'.repeat(taps) + '○'.repeat(Math.max(0, multi - taps)); b.style.transform = 'scale(.92)'; setTimeout(() => b.style.transform = '', 100); if (taps >= multi) stage.querySelectorAll('.choiceGrid button').forEach(x => x.disabled = true); }
@@ -974,7 +974,7 @@
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong', ts: m.ts }); } catch (e) {} return; }
     if (m.t === 'welcome') {
-      joined = true; me = m; tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
+      joined = true; me = m; document.body.style.setProperty('--me', m.color || '#3b7bff'); document.body.classList.add('inGame'); tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);

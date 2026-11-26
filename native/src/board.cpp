@@ -343,7 +343,7 @@ struct Snakes : Table {
     // big dice row along the front edge
     for (int i = 0; i < N(); i++) if (pw[i].roll) Die({ (i - (N() - 1) / 2.f) * 1.15f, 0.05f, 5.45f }, pw[i].roll, pw[i].rollT, 0.6f, WHITE, P(i).color);
     End3D();
-    for (int i = 0; i < N(); i++) { Vector3 v = PawnPos(i); Vector2 sp = GetWorldToScreen({ v.x, v.y + 1.25f, v.z }, cam); Text(sp.x, sp.y, 18, P(i).color, P(i).name, 0, TS_HEAVY); }
+    for (int i = 0; i < N(); i++) { Vector3 v = PawnPos(i); Vector2 sp = GetWorldToScreen({ v.x, v.y + 1.25f, v.z }, cam); hud::Tag(sp.x, sp.y - 8, P(i).color, P(i).name, 22); }
     Board("🐍 RACE TO 100", Sorted([&](int i) { return pw[i].finish ? 1000.f - pw[i].finish : (float)pw[i].sq; }), [&](int i) { return pw[i].finish ? std::string("🏆") : std::to_string(pw[i].sq); });
     if (phase == "roll") { int left = 0; for (auto& p : pw) left += !p.rolled; Title("🎲 EVERYONE ROLL!"); Hint(std::to_string(left) + " still to roll · flick the dice on your phone", Hex(0xffd43b)); }
     else Hint("🪜 Ladders take you up · 🐍 snakes slide you down · land exactly on 100");
@@ -499,7 +499,7 @@ struct Bingo : Table {
     End3D();
     if (last) { Vector2 sp = GetWorldToScreen({ Lerp(c.x, -1.2f, 1 - ballT), 0.9f, Lerp(c.z, 3.3f, 1 - ballT) }, cam); const char* L = "BINGO"; Text(sp.x, sp.y + 8, 30, Hex(0x1a0533), std::string(1, L[(last - 1) / 15]) + std::to_string(last), 0, TS_DISPLAY | TS_PLAIN); }
     // called-number board
-    UI::Box({ 760, 120, 800, 470 }, 24, Hex(0x0b1020, 190));
+    hud::Panel(760, 120, 800, 470, 28);
     const unsigned col[] = { 0x4dabf7, 0xff6b6b, 0xfab005, 0x51cf66, 0xcc5de8 };
     for (int L = 0; L < 5; L++) {
       Text(800, 172 + L * 88, 40, Hex(col[L]), std::string(1, "BINGO"[L]), 0, TS_DISPLAY);

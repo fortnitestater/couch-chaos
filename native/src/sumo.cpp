@@ -161,16 +161,14 @@ struct Sumo : Game {
     // HUD
     for (auto& b : bl) if (b.alive) {
       Vector2 s = GetWorldToScreen(W3(b.x, b.y, 3.4f), cam);
-      Text(s.x, s.y, 20, P(b.pid).color, P(b.pid).name);
+      hud::Tag(s.x, s.y - 14, P(b.pid).color, P(b.pid).name);
       if (b.cd > 0) { UI::Box({ s.x - 20, s.y + 16, 40, 6 }, 3, Hex(0x000000, 90)); UI::Box({ s.x - 20, s.y + 16, 40 * (1 - b.cd / 1.2f), 6 }, 3, Hex(0xffffff, 220)); }
     }
     std::vector<int> o; for (size_t i = 0; i < ps->size(); i++) o.push_back((int)i);
     std::sort(o.begin(), o.end(), [&](int a, int b) { return pts[a] > pts[b]; });
-    UI::Box({ 18, 18, 250, 48 + o.size() * 34.f }, 18, Hex(0x0b1020, 160));
-    Text(36, 42, 18, Hex(0xadb5bd), "ROUND " + std::to_string(round) + " / 3", -1);
-    for (size_t i = 0; i < o.size(); i++) { float y = 76 + i * 34.f; DrawCircle(44, (int)y, 8, P(o[i]).color); Text(60, y, 20, WHITE, P(o[i]).name, -1); Text(250, y, 22, Hex(0xffd43b), std::to_string(pts[o[i]]), 1); }
+    { std::vector<hud::Row> rows; for (size_t i = 0; i < o.size(); i++) rows.push_back({ P(o[i]).color, P(o[i]).name, std::to_string(pts[o[i]]), i == 0 && pts[o[i]] > 0 }); hud::Board("ROUND " + std::to_string(round) + " / 3", rows); }
     if (phase == "count" && t > 0 && t <= 3) { float f = t - floorf(t); Text(800, 420, 160 + 80 * f, Fade(WHITE, fminf(1, f * 2 + 0.3f)), std::to_string((int)ceilf(t)), 0, TS_DISPLAY | TS_SHADOW); }
-    if (el > 30 && phase == "fight") Text(800, 860, 24, Hex(0xff8787), "⚠️ The ice is melting fast!");
+    if (el > 30 && phase == "fight") hud::Hint("⚠️ The ice is melting fast!", Hex(0xff8787));
   }
 };
 }  // namespace

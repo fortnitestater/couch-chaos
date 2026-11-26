@@ -114,7 +114,7 @@ struct Arena : Classic {
       if (ring) { Color c = ring(i); if (c.a) lit.Draw(prim.cyl, TRS({ pos.x, 0.04f, pos.z }, { 0, 0, 0 }, { 1.05f, 0.03f, 1.05f }), c); }
       bool flash = m.inv > 0 && (int)(time * 12) % 2;
       float cheer = over && !o.empty() && o[0] == i ? 1.f : cheerF ? cheerF(i) : 0;
-      float s = 1.3f * (m.alive ? 1 : m.fade);
+      float s = 1.7f * (m.alive ? 1 : m.fade);
       Vector3 hl = { -0.24f, 1.0f, 0.33f }; if (Sticks()) { g_hold.on = true; g_hold.hand = hl; }
       float hop = m.stun > 0 ? 0 : fabsf(sinf(time * 13 + i)) * 0.28f * fminf(1, sp / 200) + (cheer > 0 ? fabsf(sinf(time * 8)) * 0.5f : 0);
       Vector3 tp = { pos.x, groundY + (m.alive ? 0 : (1 - m.fade) * -1.5f), pos.z }; float yaw = PI / 2 - m.face;
@@ -473,7 +473,7 @@ struct IceHockey : Arena {
     ArenaCam(); sc.Begin(cam);
     float cy = (Y0 + Y1) / 2;
     lit.Pattern(PAT_ICE);
-    lit.Draw(prim.cube, TRS(W3(800, cy, 0.01f), { 0, 0, 0 }, { (X1 - X0) * SC, 0.02f, (Y1 - Y0) * SC }), Hex(0xf1f8ff));
+    lit.Draw(prim.cube, TRS(W3(800, cy, 0.01f), { 0, 0, 0 }, { (X1 - X0) * SC, 0.02f, (Y1 - Y0) * SC }), Hex(0xcfe4f6));
     lit.Pattern(PAT_NONE);
     lit.Draw(prim.cube, TRS(W3(800, cy, 0.03f), { 0, 0, 0 }, { 0.15f, 0.01f, (Y1 - Y0) * SC }), Hex(0xff6b6b));
     for (float fx2 : { 0.33f, 0.67f }) lit.Draw(prim.cube, TRS(W3(X0 + (X1 - X0) * fx2, cy, 0.03f), { 0, 0, 0 }, { 0.12f, 0.01f, (Y1 - Y0) * SC }), Hex(0x4dabff));

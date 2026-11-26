@@ -256,3 +256,85 @@ body.landing { overflow: auto; touch-action: auto; user-select: auto; -webkit-us
 .padBody .tcard small { color: #3a3f55; font-size: 9.5px; }
 .padBody .tcard.ok { box-shadow: inset 0 1px 0 #fff, 0 4px 0 #b5b0a2, 0 0 0 3px #f2b84b, 0 0 20px rgba(242,184,75,.6) !important; animation: none; }
 .padBody .tcard:disabled { filter: saturate(.55) brightness(.8); opacity: .8; }
+
+/* ===== v4: arcade controller — edge-to-edge 3D pads, no dead space, player-colour frame ===== */
+/* the phone wears the player's colour, so you always know which character on the TV is you */
+.padBody.inGame::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 60;
+  border: 5px solid var(--me, #3b7bff); border-radius: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 0 46px color-mix(in oklab, var(--me, #3b7bff) 55%, transparent); }
+.padBody.inGame { background:
+  radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, var(--me, #3b7bff) 34%, #0b1030) 0%, #0b1030 62%),
+  #0b1030 !important; }
+.padBody.inGame #stage { background:
+  radial-gradient(90% 60% at 50% 100%, color-mix(in oklab, var(--me, #3b7bff) 22%, transparent), transparent 70%); }
+
+/* chunky moulded 3D keys: deep side wall, bevel, lit top edge */
+.padBody .rb { --depth: 9px;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.07) 38%, rgba(255,255,255,0) 52%, rgba(0,0,0,.16) 100%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bc) 80%, #fff) 0%, var(--bc) 50%, color-mix(in oklab, var(--bc) 80%, #000) 100%) !important;
+  box-shadow:
+    inset 0 3px 0 rgba(255,255,255,.42),
+    inset 0 -5px 0 rgba(0,0,0,.20),
+    inset 0 0 0 3px rgba(255,255,255,.12),
+    0 var(--depth) 0 var(--lip),
+    0 calc(var(--depth) + 3px) 0 rgba(0,0,0,.45),
+    0 calc(var(--depth) + 12px) 22px rgba(0,0,0,.5) !important;
+  text-shadow: 0 2px 0 rgba(0,0,0,.28); }
+.padBody .rb.d-sm { --depth: 4px; }
+
+/* answer screens: the pads fill the whole phone so you can tap by colour and position without looking down */
+.padBody .choiceC { padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); gap: 12px; }
+.padBody .choiceC .prompt:not(.secret) { font-size: 20px; flex: none; max-height: 22%; overflow: hidden; padding: 4px 6px; }
+.padBody .choiceGrid { flex: 1 1 0; margin: 0; gap: 14px 12px; align-content: stretch; padding: 2px 2px 14px; overflow: visible; }
+.padBody .choiceGrid button { --depth: 12px; border-radius: 26px !important; font-family: var(--font-display) !important; font-size: 30px; padding: 10px 14px; }
+.padBody .choiceGrid.r3 button, .padBody .choiceGrid.r4 button { font-size: 26px; --depth: 10px; border-radius: 22px !important; }
+.padBody .choiceGrid.r5 button { font-size: 21px; --depth: 8px; border-radius: 18px !important; }
+.padBody .choiceGrid.cbig button { font-size: 36px; }
+.padBody .choiceGrid.short button { font-size: 40px; }
+.padBody .choiceGrid.short.r4 button, .padBody .choiceGrid.short.r5 button { font-size: 28px; }
+.padBody .choiceGrid .cLet { width: 46px; height: 46px; font-size: 24px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18), 0 2px 0 rgba(0,0,0,.25); }
+.padBody .choiceGrid button:has(.cLet) { flex-direction: column; justify-content: center; gap: 10px; }
+.padBody .choiceGrid button:has(.cLet) span { flex: none; text-align: center; }
+.padBody .choiceGrid.r3 button:has(.cLet), .padBody .choiceGrid.r4 button:has(.cLet), .padBody .choiceGrid.r5 button:has(.cLet) { flex-direction: row; justify-content: flex-start; }
+.padBody .choiceGrid.r3 button:has(.cLet) span, .padBody .choiceGrid.r4 button:has(.cLet) span, .padBody .choiceGrid.r5 button:has(.cLet) span { flex: 1; }
+
+/* one-button games: a giant arcade dome that fills the screen */
+.padBody .center:has(.tapBig) { padding: 14px 14px calc(18px + env(safe-area-inset-bottom)); gap: 12px; justify-content: stretch; }
+.padBody .tapBig { flex: 1 1 0; width: 100% !important; height: auto !important; min-height: 0; border-radius: 44px !important; font-size: 64px !important; --depth: 18px;
+  --bc: var(--me, #ff4f68); letter-spacing: .02em; }
+.padBody .center:has(.tapBig) p { flex: none; font-size: 15px; margin: 0; }
+
+/* touch-map games: the map sits on top, the action pads take all the space underneath */
+@media (orientation: portrait) {
+  .padBody .touchC { gap: 10px; }
+  .padBody .touchC .touchWrap { flex: 0 0 auto; height: calc((100vw - 42px) / var(--asp, 1.9)); max-height: 56%; }
+  .padBody .touchC .touchBottom { flex: 1 1 0; min-height: 0; align-items: stretch; align-content: stretch; }
+  .padBody .touchBottom .rhint { flex: 0 0 100%; font-size: 15px; align-self: flex-start; }
+  .padBody .touchBottom .pbtn.touchBtn.rb, .padBody .touchBottom .pbtn.pb.touchBtn.rb { flex: 1 1 0; height: auto !important; min-height: 84px; max-height: none; border-radius: 30px !important; font-size: 34px !important; --depth: 14px; }
+  .padBody .touchBottom:not(:has(.pbtn)) { flex: 0 0 auto; }
+  .padBody .touchC:not(:has(.pbtn)) { justify-content: center; }
+  .padBody .touchC:not(:has(.pbtn)) .touchWrap { max-height: 70%; }
+}
+.padBody .touchWrap canvas { border-radius: 22px; box-shadow: 0 0 0 4px var(--me, #3b7bff), 0 0 0 7px rgba(255,255,255,.16), 0 16px 30px rgba(0,0,0,.5); }
+
+/* message / waiting screens: a big lit card instead of small text in a void */
+.padBody .center .bigEm { width: 168px; height: 168px; font-size: 84px;
+  background: radial-gradient(circle at 35% 28%, color-mix(in oklab, var(--me, #3b7bff) 70%, #fff), var(--me, #3b7bff) 55%, color-mix(in oklab, var(--me, #3b7bff) 60%, #000));
+  box-shadow: inset 0 4px 0 rgba(255,255,255,.4), inset 0 -8px 0 rgba(0,0,0,.2), 0 12px 0 color-mix(in oklab, var(--me, #3b7bff) 45%, #04060f), 0 26px 36px rgba(0,0,0,.5); margin-bottom: 18px; }
+.padBody .center h2 { font-size: 34px; max-width: 92%; }
+.padBody .center p { font-size: 18px; max-width: 92%; }
+/* touch games: hint on its own line, then pads that take every pixel that is left */
+@media (orientation: portrait) {
+  .padBody .touchC .touchBottom { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 10px 12px; width: 100%; }
+  .padBody .touchBottom .rhint { grid-row: 1; grid-column: 1 / -1; }
+  .padBody .touchBottom .pbtn.touchBtn.rb, .padBody .touchBottom .pbtn.pb.touchBtn.rb { grid-row: 2; width: auto !important; max-width: none !important; margin-bottom: 18px; }
+}
+/* card / dice panels: bigger cards, and the action keys fill the bottom of the phone */
+.padBody .gpanel { padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); gap: 10px; }
+.padBody .gpHand { flex: 0 1 auto; max-height: 58%; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.padBody .gpBtns { flex: 1 1 110px; min-height: 96px; gap: 14px 12px; align-items: stretch; align-content: stretch; padding-bottom: 14px; }
+.padBody .gpBtns:empty { display: none; }
+.padBody .gpanel:has(.gpBtns:empty) .gpHand { flex: 1; max-height: none; }
+.padBody .pbtn2.rb, .padBody .pbtn2.big.rb { min-height: 76px; border-radius: 24px !important; font-family: var(--font-display) !important; font-size: 30px !important; --depth: 12px; color: #fff !important; }
+.padBody .gpBtns .rollHold { flex: 1 1 100%; }

@@ -116,8 +116,8 @@ struct QuizShow : Show {
       PodiumLabels(); return;
     }
     if (phase == "end") { Heading("FINAL SCORES", title, 70, 52); PodiumLabels(); return; }
-    Text(110, 42, 17, Hex(0xc9d3f2), kick, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
-    Text(110, 70, 26, WHITE, title, -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
+    Text(112, 38, 21, Hex(0xc9d3f2), kick, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
+    Text(110, 76, 38, WHITE, title, -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (phase == "ask") Timer(t, tMax, 1490, 66);
     bool tiles = ShowTiles();
     float qb = PanelBottom();
@@ -128,7 +128,7 @@ struct QuizShow : Show {
       Text(800, (108 + qb) / 2 - (q.text.size() > (tiles ? 48 : 64) ? fs * 0.6f : 0), fs, WHITE, q.text, 0, TS_HEAVY | TS_SHADOW | TS_PLAIN, 1260);
     }
     Board(110, 108, 1380, qb - 108);
-    if (tiles) Tiles(290, 578);
+    if (tiles) Tiles(280, 528);
     if (phase == "reveal" && !q.reveal.empty()) {
       float k = EaseBack(fminf(1, phaseT * 3));
       float w = Measure(q.reveal, 32, TS_HEAVY) + 70;
@@ -136,7 +136,7 @@ struct QuizShow : Show {
       if (k > 0.6f) Text(800, qb, 30, Hex(0x2b1a00), q.reveal, 0, TS_HEAVY | TS_PLAIN);
     } else if (phase == "ask") {
       int n = 0; for (int v : ans) n += v >= 0;
-      Text(1420, 66, 20, Hex(0xc9d3f2), I(n) + " / " + I(N()) + " answered", 1, TS_HEAVY | TS_PLAIN);
+      Text(1370, 60, 28, Hex(0xdfe6ff), I(n) + " / " + I(N()) + " answered", 1, TS_HEAVY | TS_PLAIN | TS_SHADOW);
     }
     PodiumLabels([&](int i) { return phase == "ask" && ans[i] >= 0 ? std::string("🔒") : std::string(); });
   }

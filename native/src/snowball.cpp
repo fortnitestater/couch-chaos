@@ -162,7 +162,7 @@ struct Snowball : Game {
       Vector3 pos = W3(b.x, b.y); Player& p = P(b.pid);
       lit.Draw(prim.cyl, TRS({ pos.x + 0.1f, 0.08f, pos.z + 0.1f }, { 0, 0, 0 }, { 1.4f, 0.01f, 1.4f }), Hex(0x4a6fa5, 60));
       float wob = b.stun > 0 ? sinf(time * 30) * 0.3f : 0;
-      DrawToon(pos, PI / 2 - b.aim + wob, (b.inv > 0 && (int)(b.inv * 12) % 2) ? WHITE : p.color, time + b.pid, over ? fabsf(sinf(time * 7 + b.pid)) * 0.5f : 0, b.wind, 1.45f);
+      DrawToon(pos, PI / 2 - b.aim + wob, (b.inv > 0 && (int)(b.inv * 12) % 2) ? WHITE : p.color, time + b.pid, over ? fabsf(sinf(time * 7 + b.pid)) * 0.5f : 0, b.wind, 1.85f);
       // aim arrow on the snow
       Vector3 a0 = W3(b.x + cosf(b.aim) * 46, b.y + sinf(b.aim) * 46, 0.04f), a1 = W3(b.x + cosf(b.aim) * 80, b.y + sinf(b.aim) * 80, 0.04f);
       DrawCylinderEx(a0, a1, 0.12f, 0.02f, 6, Fade(p.color, 0.85f));
@@ -175,14 +175,11 @@ struct Snowball : Game {
     fx.Draw(); conf.Draw();
     for (auto& f : bg.snow) DrawCube({ f.p.x, f.p.y * 0.6f, f.p.z * 0.9f + 4 }, 0.08f, 0.08f, 0.08f, WHITE);
     EndMode3D();
-    for (auto& b : k) { Vector2 s = GetWorldToScreen(W3(b.x, b.y, 3.6f), cam); Text(s.x, s.y, 19, P(b.pid).color, P(b.pid).name); }
+    for (auto& b : k) { Vector2 s = GetWorldToScreen(W3(b.x, b.y, 3.6f), cam); hud::Tag(s.x, s.y - 14, P(b.pid).color, P(b.pid).name); }
     std::vector<int> o; for (auto& b : k) o.push_back(b.pid);
     std::sort(o.begin(), o.end(), [&](int a, int b) { return k[a].hits > k[b].hits; });
-    UI::Box({ 18, 18, 250, 48 + o.size() * 34.f }, 18, Hex(0x0b1020, 160));
-    Text(36, 42, 18, Hex(0xadb5bd), "HITS", -1);
-    for (size_t i = 0; i < o.size(); i++) { float y = 76 + i * 34.f; DrawCircle(44, (int)y, 8, P(o[i]).color); Text(60, y, 20, WHITE, P(o[i]).name, -1); Text(250, y, 22, Hex(0xffd43b), std::to_string(k[o[i]].hits), 1); }
-    int m = (int)ceilf(fmaxf(0, T)); char buf[16]; snprintf(buf, sizeof buf, "%d:%02d", m / 60, m % 60);
-    UI::Box({ 730, 14, 140, 58 }, 29, Hex(0x0b1020, 150)); Text(800, 44, 40, m <= 10 ? Hex(0xff4d6d) : WHITE, buf);
+    { std::vector<hud::Row> rows; for (size_t i = 0; i < o.size(); i++) rows.push_back({ P(o[i]).color, P(o[i]).name, std::to_string(k[o[i]].hits), i == 0 && k[o[i]].hits > 0 }); hud::Board("HITS", rows); }
+    hud::Clock(T);
     if (cdT > 0 && cdT <= 3) { float f = cdT - floorf(cdT); Text(800, 420, 160 + 80 * f, Fade(WHITE, fminf(1, f * 2 + 0.3f)), std::to_string((int)ceilf(cdT)), 0, TS_DISPLAY | TS_SHADOW); }
   }
 };

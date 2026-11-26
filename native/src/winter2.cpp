@@ -86,7 +86,7 @@ struct Ski : Classic {
     UI::Sky(Hex(0x8ec5ff), Hex(0xe7f5ff));
     lit.Begin(cam, { 0.88f, 0.94f, 1.0f }, 0.012f);
     BeginMode3D(cam);
-    lit.Pattern(PAT_SNOW); lit.Draw(prim.plane, TRS({ 0, 0, dist + 30 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(0xf3f8ff)); lit.Pattern(PAT_NONE);
+    lit.Pattern(PAT_SNOW); lit.Draw(prim.plane, TRS({ 0, 0, dist + 30 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(0xe4eefb)); lit.Pattern(PAT_NONE);
     for (int sd = -1; sd <= 1; sd += 2) for (float z = floorf((dist - 8) / 3) * 3; z < dist + 60; z += 3) lit.Draw(prim.cube, TRS({ sd * 9.6f, 0.15f, z }, { 0, 0, 0 }, { 0.12f, 0.3f, 1.6f }), Hex(0xff922b));
     for (auto& t : side) {
       float s = t.z;
@@ -117,7 +117,7 @@ struct Ski : Classic {
     }
     fx.Draw(); conf.Draw();
     EndMode3D();
-    for (int i = 0; i < N(); i++) { Vector2 s = GetWorldToScreen({ sk[i].x, 2.6f, dist }, cam); Text(s.x, s.y, 18, P(i).color, P(i).name, 0, TS_HEAVY); if (sk[i].crash > 0) Text(s.x, s.y - 30, 26, Hex(0xff6b6b), "OUCH!", 0, TS_DISPLAY | TS_SHADOW); }
+    for (int i = 0; i < N(); i++) { Vector2 s = GetWorldToScreen({ sk[i].x, 2.6f, dist }, cam); hud::Tag(s.x, s.y - 30, P(i).color, P(i).name, 26); if (sk[i].crash > 0) Text(s.x, s.y - 30, 26, Hex(0xff6b6b), "OUCH!", 0, TS_DISPLAY | TS_SHADOW); }
     Board("GATES", Sorted([&](int i) { return (float)Score(i); }), [&](int i) { return I(sk[i].gates); });
     Clock(T);
     Hint("⛷️ Hold your finger where to ski · flags +10 · trees knock you over · TUCK for speed", Hex(0xd0ebff));
@@ -195,7 +195,7 @@ struct Sled : Classic {
     }
     fx.Draw(); conf.Draw(); EndMode3D();
     for (int i = 0; i < N(); i++) {
-      Vector2 p = GetWorldToScreen({ PX(st[i].prog), 2.4f, LZ(i) }, cam); Text(p.x, p.y, 18, P(i).color, P(i).name, 0, TS_HEAVY);
+      Vector2 p = GetWorldToScreen({ PX(st[i].prog), 2.4f, LZ(i) }, cam); hud::Tag(p.x, p.y - 26, P(i).color, P(i).name, 24);
       Vector2 e = GetWorldToScreen({ PX(100) + 2.2f, 0.3f, LZ(i) }, cam); Text(e.x, e.y, 24, st[i].place ? Hex(0xffd43b) : WHITE, st[i].place ? "#" + I(st[i].place) : I((int)st[i].prog) + "%", 0, TS_DISPLAY | TS_SHADOW);
     }
     Text(800, 52, 44, WHITE, cd > 0 ? "GET READY TO SHAKE!" : "🛷 SLED DASH", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
@@ -283,7 +283,7 @@ struct Curling : Classic {
   void Draw() override {
     cam.position = { -19, 10, 0 }; cam.target = { 4, 0, 0 }; cam.fovy = 38;
     sc.Begin(cam);
-    lit.Pattern(PAT_ICE); lit.Draw(prim.cube, TRS({ 1, 0.01f, 0 }, { 0, 0, 0 }, { 28, 0.02f, Z1 - Z0 }), Hex(0xf1f8ff)); lit.Pattern(PAT_NONE);
+    lit.Pattern(PAT_ICE); lit.Draw(prim.cube, TRS({ 1, 0.01f, 0 }, { 0, 0, 0 }, { 28, 0.02f, Z1 - Z0 }), Hex(0xcfe4f6)); lit.Pattern(PAT_NONE);
     for (float z : { Z0, Z1 }) lit.Draw(prim.cube, TRS({ 1, 0.2f, z }, { 0, 0, 0 }, { 28, 0.4f, 0.2f }), Hex(0x4dabff));
     const unsigned RC[] = { 0x4dabff, 0xffffff, 0xff6b6b, 0xffffff }; const float RR[] = { 3.2f, 2.3f, 1.4f, 0.5f };
     for (int k = 0; k < 4; k++) lit.Draw(prim.cyl, TRS({ HX, 0.025f + k * 0.004f, HZ }, { 0, 0, 0 }, { RR[k], 0.01f, RR[k] }), Hex(RC[k]));

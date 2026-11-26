@@ -95,6 +95,46 @@ namespace UI {
   void Shadow(Rectangle r, float rad, float blur, Color c, float dy = 0);
   void Sky(Color top, Color bottom);
 }
+// ---------- couch-readable HUD pieces shared by every game (navy glass + gold rim, big type) ----------
+namespace hud {
+struct Row { Color c; std::string name, val; bool hot; };
+inline void Panel(float x, float y, float w, float h, float r, bool gold = true) {
+  RRect(x, y + 6, w, h, r, Color{ 0, 0, 0, 70 }, Color{ 0, 0, 0, 0 }, BLANK, 0, true);
+  RRect(x, y, w, h, r, Color{ 0x16, 0x24, 0x5a, 235 }, Color{ 0x0a, 0x12, 0x33, 235 }, Color{ 255, 255, 255, 200 }, gold ? 3 : 2, true, gold);
+}
+inline void Board(const std::string& title, const std::vector<Row>& rows, float x = 24, float bw = 400, bool bottom = false) {
+  float rh = rows.size() > 5 ? 48.f : 58.f, bh = 70 + rows.size() * rh, y0 = bottom ? 786 - bh : 24;
+  Panel(x, y0, bw, bh, 26);
+  Text(x + 28, y0 + 34, 22, Color{ 0xf2, 0xc6, 0x6d, 255 }, title, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
+  for (size_t i = 0; i < rows.size(); i++) {
+    float y = y0 + 88 + i * rh; const Row& r = rows[i];
+    if (r.hot) RRect(x + 12, y - rh / 2 + 3, bw - 24, rh - 6, 16, Color{ 255, 255, 255, 30 }, Color{ 255, 255, 255, 30 }, BLANK, 0);
+    Color d = { (unsigned char)(r.c.r * 0.72f), (unsigned char)(r.c.g * 0.72f), (unsigned char)(r.c.b * 0.72f), 255 };
+    RRect(x + 24, y - 16, 32, 32, 16, r.c, d, Color{ 255, 255, 255, 230 }, 3, true);
+    Text(x + 70, y + 1, rh > 50 ? 33 : 28, r.hot ? Color{ 0xff, 0xe0, 0x66, 255 } : WHITE, r.name, -1, TS_HEAVY | TS_SHADOW);
+    Text(x + bw - 26, y + 1, r.val.size() > 6 ? 22 : rh > 50 ? 36 : 30, Color{ 0xff, 0xd4, 0x3b, 255 }, r.val, 1, TS_DISPLAY | TS_SHADOW);
+  }
+}
+inline void Clock(float T, float x = 800) {
+  int m = (int)ceilf(fmaxf(0, T)); char b[16]; snprintf(b, sizeof b, "%d:%02d", m / 60, m % 60); bool low = m <= 10;
+  RRect(x - 100, 24, 200, 84, 42, Color{ 0, 0, 0, 70 }, Color{ 0, 0, 0, 0 }, BLANK, 0, true);
+  RRect(x - 100, 18, 200, 84, 42, Color{ 0x16, 0x24, 0x5a, 240 }, Color{ 0x0a, 0x12, 0x33, 240 }, low ? Color{ 0xff, 0x4d, 0x6d, 255 } : Color{ 255, 255, 255, 200 }, 3, true, !low);
+  Text(x, 62, 58, low ? Color{ 0xff, 0x6b, 0x81, 255 } : WHITE, b, 0, TS_DISPLAY | TS_SHADOW);
+}
+inline void Hint(const std::string& s, Color c = WHITE, float y = 841) {
+  float fs = 34, w = Measure(s, fs, TS_HEAVY) + 84; if (w > 1520) { fs *= 1520 / w; w = 1520; }
+  Panel(800 - w / 2, y - 35, w, 68, 34);
+  Text(800, y, fs, c, s, 0, TS_HEAVY | TS_PLAIN);
+}
+// a name plate in the player's colour
+inline void Tag(float x, float y, Color col, const std::string& name, float size = 28) {
+  float w = Measure(name, size, TS_HEAVY) + 30, h = size + 14;
+  Color d = { (unsigned char)(col.r * 0.7f), (unsigned char)(col.g * 0.7f), (unsigned char)(col.b * 0.7f), 255 };
+  RRect(x - w / 2, y - h / 2 + 3, w, h, h / 2, Color{ 0, 0, 0, 80 }, Color{ 0, 0, 0, 80 }, BLANK, 0);
+  RRect(x - w / 2, y - h / 2, w, h, h / 2, col, d, Color{ 255, 255, 255, 235 }, 3, true);
+  Text(x, y + 1, size, WHITE, name, 0, TS_HEAVY | TS_SHADOW);
+}
+}  // namespace hud
 struct Spring { float x = 0, v = 0; void To(float t, float dt, float k = 190, float d = 21) { int n = 4; float h = dt / n; for (int i = 0; i < n; i++) { v += (k * (t - x) - d * v) * h; x += v * h; } } };
 inline float EaseOut(float t) { t = Clamp(t, 0, 1); return 1 - (1 - t) * (1 - t) * (1 - t); }
 inline float EaseBack(float t) { t = Clamp(t, 0, 1); float c = 1.7f; return 1 + (c + 1) * powf(t - 1, 3) + c * powf(t - 1, 2); }

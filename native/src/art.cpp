@@ -59,9 +59,11 @@ void Sky(Color top, Color bottom) { DrawRectangleGradientV(0, 0, W, H, top, bott
 }
 
 ToonHold g_hold; float g_toonK = 1.4f;
+static inline bool Chunky() { return g_toonK > 1.01f; }
+static inline Vector3 ChunkS() { return Chunky() ? Vector3{ 1.34f, 0.9f, 1.3f } : Vector3{ 1, 1, 1 }; }
 Vector3 ToonPoint(Vector3 pos, float yaw, float sc, float hop, Vector3 local) {
-  sc *= g_toonK;
-  Matrix base = MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
+  sc *= g_toonK; Vector3 cs = ChunkS();
+  Matrix base = MatrixMultiply(MatrixMultiply(MatrixScale(sc * cs.x, sc * cs.y, sc * cs.z), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop, pos.z));
   return Vector3Transform(local, base);
 }
 // ---------- a person: natural body, friendly face, jointed limbs, walk/run cycle, hair, clothes ----------
@@ -86,9 +88,11 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
   int style = (int)((hsh / 11) % 4);  // hair style
   float ph = t * 9.5f, s1 = moving ? sinf(ph) : 0.f, run = moving ? fminf(1, hop * 4) : 0;
   float bob = moving ? fabsf(cosf(ph)) * 0.04f : sinf(t * 2.2f) * 0.006f;
-  lit.Caster(pos, 0.38f * sc);
+  Vector3 cs = ChunkS(); float thick = Chunky() ? 1.42f : 1.0f;
+  lit.Caster(pos, (Chunky() ? 0.56f : 0.38f) * sc);
   float lean = moving ? 0.1f * run : 0.f;
-  Matrix base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixScale(sc, sc, sc), MatrixRotateX(lean)), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop * 0.35f + bob * sc, pos.z));
+  Matrix place = MatrixMultiply(MatrixMultiply(MatrixRotateX(lean), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop * 0.35f + bob * sc, pos.z));
+  Matrix base = MatrixMultiply(MatrixScale(sc * cs.x, sc * cs.y, sc * cs.z), place);
   auto X = [&](Vector3 p) { return Vector3Transform(p, base); };
   auto E = [&](Vector3 p, Vector3 r, Vector3 s, Color col) { lit.Draw(prim.sphere, MatrixMultiply(TRS(p, r, s), base), col); };
   // smooth tapered limb: radius ra at a, rb at b, rounded ends
@@ -97,10 +101,10 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
     Vector3 u = Vector3Scale(d, 1 / len), ax = Vector3CrossProduct({ 0, 1, 0 }, u); float s = Vector3Length(ax), ang = acosf(Clamp(u.y, -1, 1));
     Matrix R = s < 1e-4f ? (u.y > 0 ? MatrixIdentity() : MatrixRotateX(PI)) : MatrixRotate(Vector3Scale(ax, 1 / s), ang);
     // the limb mesh tapers 1 -> 0.75; pick the scale so the far end matches rb
-    float k = ra * sc; lit.Draw(props.limb, MatrixMultiply(MatrixMultiply(MatrixScale(k, len, k), R), MatrixTranslate(A.x, A.y, A.z)), col);
-    lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(ra * 2 * sc, ra * 2 * sc, ra * 2 * sc), MatrixTranslate(A.x, A.y, A.z)), col);
-    float re = ra * 0.75f; (void)rb;
-    lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(re * 2 * sc, re * 2 * sc, re * 2 * sc), MatrixTranslate(B.x, B.y, B.z)), col);
+    float k = ra * sc * thick; lit.Draw(props.limb, MatrixMultiply(MatrixMultiply(MatrixScale(k, len, k), R), MatrixTranslate(A.x, A.y, A.z)), col);
+    float r2 = ra * 2 * sc * thick; lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(r2, r2, r2), MatrixTranslate(A.x, A.y, A.z)), col);
+    float re = ra * 0.75f * 2 * sc * thick; (void)rb;
+    lit.Draw(prim.sphere, MatrixMultiply(MatrixScale(re, re, re), MatrixTranslate(B.x, B.y, B.z)), col);
   };
   // ---- legs: hip -> knee -> ankle -> sneaker ----
   for (int s = -1; s <= 1; s += 2) {
@@ -142,6 +146,11 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
     E(Vector3Add(hc, { s * -0.034f, 0.025f, 0.028f }), { 0, 0, 0 }, { 0.032f, 0.055f, 0.032f }, skin);  // thumb
   }
   // ---- neck + head (head ~1.3x natural: friendlier and readable from the couch) ----
+  if (Chunky()) {  // big readable head: scaled up around the neck, sitting on the wide body
+    const float HK = 1.62f, piv = 1.5f;
+    base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -piv, 0), MatrixScale(sc * HK, sc * HK, sc * HK)), MatrixTranslate(0, (piv - 0.05f) * cs.y * sc, 0)), place);
+    thick = HK;
+  }
   Tl({ 0, 1.43f, 0 }, { 0, 1.56f, 0.01f }, 0.058f, 0, skin);
   const float K = 1.32f, hy = 1.69f;
   DrawProp(props.head, MatrixMultiply(MatrixMultiply(MatrixScale(K, K, K), MatrixTranslate(0, hy, 0.01f)), base), skin);

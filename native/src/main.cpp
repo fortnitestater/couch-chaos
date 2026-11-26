@@ -100,12 +100,22 @@ void main() {
       base *= 0.9 + 0.12 * vn(q * 30.0) + 0.06 * fbm(q * 2.0);
       spec = 0.02;
     } else if (pattern < 4.5) { // snow: soft drifts + glitter
-      base *= 0.93 + 0.09 * fbm(q * 0.35);
-      float gl = step(0.985, h21(floor(q * 18.0))) * pow(max(dot(reflect(-L, n), V), 0.0), 6.0);
-      base += gl * 0.9; spec = 0.1;
+      float dr = fbm(q * 0.22), fine = fbm(q * 1.7 + 3.1), grain = vn(q * 9.0);
+      float hollow = smoothstep(0.62, 0.3, dr);
+      base *= 0.8 + 0.2 * dr + 0.07 * (fine - 0.5) + 0.03 * (grain - 0.5);
+      base = mix(base, base * vec3(0.72, 0.84, 1.02), hollow * 0.6);
+      // wind ridges catch the sun
+      float ridge = smoothstep(0.52, 0.6, fbm(vec2(q.x * 0.5 + q.y * 0.2, q.y * 1.6)));
+      base += vec3(0.05, 0.05, 0.04) * ridge;
+      float gl = step(0.975, h21(floor(q * 22.0))) * pow(max(dot(reflect(-L, n), V), 0.0), 5.0);
+      base += gl * 1.4; spec = 0.12; gloss = 24.0;
     } else if (pattern < 5.5) { // ice: cracks + sheen
-      float c = abs(vn(q * 1.3) - 0.5); base = mix(base, vec3(1.0), (1.0 - smoothstep(0.0, 0.03, c)) * 0.45);
-      base *= 0.95 + 0.08 * fbm(q * 0.5); spec = 0.9; gloss = 90.0;
+      float c = abs(vn(q * 1.3) - 0.5); base = mix(base, vec3(0.95, 0.98, 1.0), (1.0 - smoothstep(0.0, 0.03, c)) * 0.4);
+      float deep = fbm(q * 0.3 + 4.0); base *= 0.78 + 0.26 * deep;
+      base = mix(base, base * vec3(0.7, 0.86, 1.05), smoothstep(0.55, 0.25, deep) * 0.5);
+      // skate scratches
+      float sc1 = smoothstep(0.97, 1.0, vn(vec2(q.x * 14.0 + q.y * 3.0, q.y * 0.6))) + smoothstep(0.975, 1.0, vn(vec2(q.y * 12.0 - q.x * 4.0, q.x * 0.5)));
+      base += vec3(0.1) * sc1; spec = 0.9; gloss = 110.0;
     } else if (pattern < 6.5) { // tiles
       vec2 t = fract(q * 0.5); float gr = smoothstep(0.0, 0.04, min(min(t.x, t.y), min(1.0 - t.x, 1.0 - t.y)));
       base *= (0.75 + 0.25 * gr) * (0.95 + 0.08 * h21(floor(q * 0.5))); spec = 0.5;
@@ -132,11 +142,12 @@ void main() {
     if (n.y > 0.4 && hgt < 0.3 && hgt > -0.6) {
       vec2 off = vW.xz - (c.xz - L.xz * 0.12);
       float d = length(off) / c.w;
-      sh *= 1.0 - 0.6 * (1.0 - smoothstep(0.25, 1.0, d));
+      sh *= 1.0 - 0.5 * (1.0 - smoothstep(0.2, 1.25, d));
+      sh *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.55, d));
     }
   }
   float ssh = sunShadow(vW, n, nd);
-  sh *= mix(0.22, 1.0, ssh);
+  sh *= mix(0.16, 1.0, ssh);
   // cheap ambient occlusion: creases at the ground and under things get darker
   float ao = mix(0.72, 1.0, smoothstep(-0.6, 0.5, n.y)) * mix(0.85, 1.0, ssh);
   vec3 hemi = mix(vec3(0.5, 0.44, 0.4) * ambient, skyCol * (ambient + 0.12), n.y * 0.5 + 0.5) * ao;
@@ -145,7 +156,11 @@ void main() {
   float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
   // key (sun) + sky fill + a soft fill light from the camera so faces and fronts are never in the dark
   float camFill = max(dot(n, V), 0.0) * 0.16;
-  vec3 col = base * (hemi * mix(0.8, 1.0, sh) + sunCol * 1.02 * diff * sh + vec3(camFill)) + sunCol * s * sh * ssh + skyCol * fres * 0.25;
+  vec3 shadeTint = mix(vec3(0.62, 0.74, 1.08), vec3(1.0), sh);   // shadows go cool, never grey
+  vec3 col = base * (hemi * mix(0.7, 1.0, sh) * shadeTint + sunCol * 1.35 * diff * sh + vec3(camFill)) + sunCol * s * sh * ssh + skyCol * fres * 0.3;
+  // ACES filmic curve: bright surfaces roll off instead of clipping to pure white
+  col *= 0.6;
+  col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
   float dist = length(camPos - vW); float f = 1.0 - exp(-pow(dist * fogDensity, 2.0));
   gl_FragColor = vec4(mix(col, fogColor, clamp(f, 0.0, 1.0)), colDiffuse.a);
 })";
@@ -206,7 +221,7 @@ void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
   float lum = fogColor.x * 0.3f + fogColor.y * 0.55f + fogColor.z * 0.15f;
   Vector3 sky = Vector3Lerp({ 0.75f, 0.82f, 1.0f }, fogColor, 0.35f);
   if (lum < 0.3f) sky = Vector3Lerp({ 0.78f, 0.8f, 0.95f }, fogColor, 0.15f);  // indoor / night scenes still get a bright fill
-  Vector3 sun = { 1.0f, 0.95f, 0.86f };
+  Vector3 sun = { 1.0f, 0.92f, 0.78f };
   SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCam, &cam.position, SHADER_UNIFORM_VEC3);
   SetShaderValue(shader, locFog, &fogColor, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locFogD, &fogDensity, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locAmb, &amb, SHADER_UNIFORM_FLOAT);
   SetShaderValue(shader, locSun, &sun, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locSky, &sky, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locTime, &time, SHADER_UNIFORM_FLOAT);
@@ -253,7 +268,8 @@ void main() {
   c += texture2D(texture0, uv + px * vec2(-1.0, -1.0)).rgb; c += texture2D(texture0, uv + px * vec2(1.0, -1.0)).rgb;
   c += texture2D(texture0, uv + px * vec2(-1.0, 1.0)).rgb; c += texture2D(texture0, uv + px * vec2(1.0, 1.0)).rgb;
   c *= 0.25; float l = dot(c, vec3(0.3, 0.59, 0.11));
-  gl_FragColor = vec4(c * smoothstep(0.78, 1.0, l), 1.0);
+  float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+  gl_FragColor = vec4(c * smoothstep(0.86, 1.0, l + sat * 0.2), 1.0);
 })";
 static const char* BLUR_FS = R"(#version 100
 precision mediump float; varying vec2 uv; uniform sampler2D texture0; uniform vec2 dir;
@@ -280,11 +296,11 @@ void main() {
     vec3 nb = (cN + cS + cE + cW) * 0.25; float amt = 0.35 * (1.0 - smoothstep(0.02, 0.25, mx - mn));
     c = clamp(cM + (cM - nb) * amt, min(min(cN, cS), min(cE, cW)), max(max(cN, cS), max(cE, cW)));
   }
-  c += texture2D(bloom, uv).rgb * 0.38;
-  c = mix(c, c * c * (3.0 - 2.0 * c), 0.15);
-  float l = dot(c, lw); c = mix(vec3(l), c, 1.12);
-  c += vec3(0.012, 0.0, -0.01) * smoothstep(0.4, 1.0, l) + vec3(-0.008, 0.0, 0.014) * (1.0 - smoothstep(0.0, 0.4, l));
-  vec2 v = uv - 0.5; c *= 1.0 - dot(v, v) * 0.22;
+  c += texture2D(bloom, uv).rgb * 0.45;
+  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4);
+  float l = dot(c, lw); c = mix(vec3(l), c, 1.2);
+  c += vec3(0.022, 0.006, -0.018) * smoothstep(0.4, 1.0, l) + vec3(-0.014, 0.0, 0.026) * (1.0 - smoothstep(0.0, 0.4, l));
+  vec2 v = uv - 0.5; c *= 1.0 - dot(v, v) * 0.42;
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 })";
 static RenderTexture2D rtMain, rtA, rtB; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom; static bool postOk = false;

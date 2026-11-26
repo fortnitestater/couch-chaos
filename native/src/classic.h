@@ -32,15 +32,25 @@ struct Scenery {
     // rocks, bushes, snowmen / flowers scattered between the play area and the trees
     for (int i = 0; i < 46; i++) { float a = frand(0, 2 * PI); float k = frand(0.0f, 1.0f); props.push_back({ cosf(a) * (rx - 1 + k * 7), sinf(a) * (rz - 1 + k * 6), frand(0.5f, 1.2f), (float)(rand() % 4) }); }
     // a ring of far-off mountains for the horizon
-    for (int i = 0; i < 22; i++) { float a = PI + 0.1f + i * (PI - 0.2f) / 21; float d = frand(85, 110); peaks.push_back({ cosf(a) * d, sinf(a) * d * 0.8f, frand(18, 30), frand(14, 26) }); }
+    for (int i = 0; i < 30; i++) { float a = PI + 0.05f + i * (PI - 0.1f) / 29; float d = frand(78, 105); peaks.push_back({ cosf(a) * d, sinf(a) * d * 0.8f, frand(20, 36), frand(18, 34) }); }
+    hills.clear(); far.clear();
+    for (int i = 0; i < 26; i++) { float a = PI + 0.06f + i * (PI - 0.12f) / 25; float d = frand(rz + 26, rz + 44); hills.push_back({ cosf(a) * d * 1.25f, sinf(a) * d, frand(14, 26), frand(3.5f, 8) }); }
+    for (int i = 0; i < 150; i++) { float a = PI + 0.05f + frand(0, PI - 0.1f); float d = frand(rz + 13, rz + 40); far.push_back({ cosf(a) * d * 1.3f, sinf(a) * d, frand(2.2f, 4.6f), frand(0, 6) }); }
   }
+  std::vector<Vector4> hills, far;
   void Begin(Camera3D& cam) {
-    if (snow) UI::Sky(Hex(0x9cc8f5), Hex(0xe3f1ff)); else UI::Sky(Hex(0x4dabf7), Hex(0xd0ebff));
-    lit.Begin(cam, snow ? Vector3{ 0.86f, 0.92f, 1.0f } : Vector3{ 0.75f, 0.88f, 1.0f }, 0.008f);
+    if (snow) UI::Sky(Hex(0x5fa0e6), Hex(0xcfe4fa)); else UI::Sky(Hex(0x2f8fe8), Hex(0xbfe3ff));
+    lit.Begin(cam, snow ? Vector3{ 0.74f, 0.84f, 0.97f } : Vector3{ 0.66f, 0.83f, 0.98f }, 0.0085f);
     BeginMode3D(cam);
     lit.Pattern(snow ? PAT_SNOW : PAT_GRASS);
-    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), snow ? Hex(0xeef5ff) : Hex(0x69b35a));
+    lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 300, 1, 300 }), snow ? Hex(0xe4eefb) : Hex(0x5fb04f));
+    for (auto& h : hills) lit.Draw(prim.sphere, TRS({ h.x, -h.w * 0.35f, h.y }, { 0, h.x, 0 }, { h.z * 2.4f, h.w * 2, h.z * 1.7f }), snow ? Hex(0xdce8f8) : Hex(0x55a548));
     lit.Pattern(PAT_NONE);
+    for (auto& tr : far) {   // dense, dark tree line that frames the arena
+      float s = tr.z;
+      for (int i = 0; i < 2; i++) lit.Draw(prim.cone, TRS({ tr.x, 0.3f * s + i * 0.6f * s, tr.y }, { 0, tr.w, 0 }, { (1.3f - i * 0.45f) * s, 1.1f * s, (1.3f - i * 0.45f) * s }), snow ? Hex(i ? 0x3f8f63 : 0x2a6b4a) : Hex(i ? 0x2f9e44 : 0x237a36));
+      if (snow) lit.Draw(prim.cone, TRS({ tr.x, 1.3f * s, tr.y }, { 0, tr.w, 0 }, { 0.5f * s, 0.5f * s, 0.5f * s }), Hex(0xeaf2fc));
+    }
     for (auto& p : peaks) {
       lit.Draw(prim.cone, TRS({ p.x, -2, p.y }, { 0, p.x, 0 }, { p.z * 2, p.w, p.z * 2 }), snow ? Hex(0x9fb4dc) : Hex(0x6c8fb8));
       lit.Draw(prim.cone, TRS({ p.x, -2 + p.w * 0.58f, p.y }, { 0, p.x, 0 }, { p.z * 0.84f, p.w * 0.42f, p.z * 0.84f }), Hex(0xf8fbff));
@@ -108,14 +118,26 @@ struct Classic : Game {
   }
   void Recount() { cd = 3.5f; lastTick = 4; }
   void DrawCount() { if (cd > 0 && cd <= 3) { float f = cd - floorf(cd); Text(800, 420, 160 + 80 * f, Fade(WHITE, fminf(1, f * 2 + 0.3f)), std::to_string((int)ceilf(cd)), 0, TS_DISPLAY | TS_SHADOW); } }
-  void NameTag(Vector3 at, int pid, float size = 24) { Vector2 s = GetWorldToScreen(at, cam); Text(s.x, s.y, size, P(pid).color, P(pid).name, 0, TS_HEAVY | TS_SHADOW); }
-  void Board(const std::string& title, const std::vector<int>& order, std::function<std::string(int)> val) {  // sized to read from the couch
-    UI::Box({ 18, 18, 350, 60 + order.size() * 44.f }, 20, Hex(0x0b1020, 175));
-    Text(40, 46, 20, Hex(0xc9d3f2), title, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
-    for (size_t i = 0; i < order.size(); i++) { float y = 92 + i * 44.f; int p = order[i]; DrawCircle(50, (int)y, 11, P(p).color); Text(72, y, 26, WHITE, P(p).name, -1, TS_HEAVY); Text(348, y, 28, Hex(0xffd43b), val(p), 1, TS_DISPLAY); }
+  void NameTag(Vector3 at, int pid, float size = 24) {   // a name plate in the player's colour, readable from the couch
+    size = fmaxf(size, 28); Vector2 s = GetWorldToScreen(at, cam); float w = Measure(P(pid).name, size, TS_HEAVY) + 30, h = size + 14; s.y -= 16;
+    RRect(s.x - w / 2, s.y - h / 2 + 3, w, h, h / 2, Hex(0x000000, 80), Hex(0x000000, 80), BLANK, 0);
+    RRect(s.x - w / 2, s.y - h / 2, w, h, h / 2, Shade(P(pid).color, 0.08f), Shade(P(pid).color, -0.28f), Hex(0xffffff, 235), 3, true);
+    Text(s.x, s.y + 1, size, WHITE, P(pid).name, 0, TS_HEAVY | TS_SHADOW);
   }
-  void Clock(float T, float x = 800) { int m = (int)ceilf(fmaxf(0, T)); char b[16]; snprintf(b, sizeof b, "%d:%02d", m / 60, m % 60); UI::Box({ x - 70, 14, 140, 58 }, 29, Hex(0x0b1020, 150)); Text(x, 44, 40, m <= 10 ? Hex(0xff4d6d) : WHITE, b); }
-  void Hint(const std::string& s, Color c = WHITE) { float w = Measure(s, 26, TS_HEAVY) + 60; UI::Box({ 800 - w / 2, 832, w, 50 }, 25, Hex(0x0b1020, 170)); Text(800, 857, 26, c, s, 0, TS_HEAVY | TS_PLAIN); }
+  void Board(const std::string& title, const std::vector<int>& order, std::function<std::string(int)> val) {  // sized to read from the couch
+    float rh = order.size() > 5 ? 48.f : 58.f, bw = 400;
+    RRect(24, 30, bw, 70 + order.size() * rh, 26, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true);
+    RRect(24, 24, bw, 70 + order.size() * rh, 26, Hex(0x16245a, 235), Hex(0x0a1233, 235), Hex(0xffffff, 200), 3, true, true);
+    Text(52, 58, 22, Hex(0xf2c66d), title, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
+    for (size_t i = 0; i < order.size(); i++) {
+      float y = 112 + i * rh; int p = order[i];
+      if (i == 0) RRect(36, y - rh / 2 + 3, bw - 24, rh - 6, 16, Hex(0xffffff, 26), Hex(0xffffff, 26), BLANK, 0);
+      RRect(48, y - 16, 32, 32, 16, P(p).color, Shade(P(p).color, -0.25f), Hex(0xffffff, 230), 3, true);
+      Text(94, y + 1, rh > 50 ? 33 : 28, WHITE, P(p).name, -1, TS_HEAVY | TS_SHADOW); { std::string v = val(p); Text(24 + bw - 26, y + 1, v.size() > 6 ? 22 : rh > 50 ? 36 : 30, Hex(0xffd43b), v, 1, TS_DISPLAY | TS_SHADOW); }
+    }
+  }
+  void Clock(float T, float x = 800) { int m = (int)ceilf(fmaxf(0, T)); char b[16]; snprintf(b, sizeof b, "%d:%02d", m / 60, m % 60); RRect(x - 100, 24, 200, 84, 42, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true); RRect(x - 100, 18, 200, 84, 42, Hex(0x16245a, 240), Hex(0x0a1233, 240), m <= 10 ? Hex(0xff4d6d) : Hex(0xffffff, 200), 3, true, m > 10); Text(x, 62, 58, m <= 10 ? Hex(0xff6b81) : WHITE, b, 0, TS_DISPLAY | TS_SHADOW); }
+  void Hint(const std::string& s, Color c = WHITE) { float fs = 34, w = Measure(s, fs, TS_HEAVY) + 84; if (w > 1520) { fs *= 1520 / w; w = 1520; } RRect(800 - w / 2, 812, w, 68, 34, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true); RRect(800 - w / 2, 806, w, 68, 34, Hex(0x16245a, 235), Hex(0x0a1233, 235), Hex(0xffffff, 190), 2.5f, true, true); Text(800, 841, fs, c, s, 0, TS_HEAVY | TS_PLAIN); }
   std::vector<int> Sorted(std::function<float(int)> key) { std::vector<int> o; for (int i = 0; i < N(); i++) o.push_back(i); std::stable_sort(o.begin(), o.end(), [&](int a, int b) { return key(a) > key(b); }); return o; }
   void FinishOrder(const std::vector<int>& o, std::function<std::string(int)> stat) { std::string r; for (int i : o) r += std::to_string(i) + ":" + stat(i) + ";"; Finish(r); }
   void Shadow(Vector3, float) {}  // characters cast soft contact shadows by themselves now
