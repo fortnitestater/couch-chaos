@@ -91,7 +91,10 @@ struct Tennis : Classic {
   // slow motion, close on the ball: the camera circles it on a tilted ellipse as it flies, then it craters the court
   void SmashShot(const Pl& p) { cine::Shot s; s.kind = cine::SMASH; s.at = bp; s.size = 1.0f; s.c = Hex(0xff922b); s.caption = "SMASH!"; s.sub = radar; s.floorY = 0; s.face = { 0, 0, -Side(p.team) }; cine::Play(s); }
   void WinShot(int team) { for (auto& q : on) if (q.team == team) { cine::Shot s; s.kind = cine::WIN; s.at = Vector3Add(q.pos, { 0, 1.0f, 0 }); s.size = 1.0f; s.c = q.pid >= 0 ? P(q.pid).color : WHITE; s.face = { 0, 0, -Side(team) }; s.floorY = 0; s.hero = q.pid >= 0; cine::Play(s); break; } }
-  void DebugShot(int k) override { if (on.empty()) return; if (k == cine::SMASH) { phase = "rally"; tossT = 0; bp = Vector3Add(RacketPt(on[0]), { 0.1f, 1.05f, 0 }); Hit(0, 1.0f, 0.3f, true); } else if (k == cine::WIN) WinShot(on[0].team); }
+  void DebugShot(int k) override { if (on.empty()) return; if (k == cine::SMASH) {   // debug: smash the ball the server just tossed (or one at the first player's racket)
+      bool toss = phase == "serve" && tossT >= 0 && server >= 0; int hi = toss ? server : 0;
+      if (!toss) bp = Vector3Add(RacketPt(on[hi]), { 0.1f, 1.05f, 0 });
+      phase = "rally"; tossT = 0; Hit(hi, 1.0f, 0.3f, true); } else if (k == cine::WIN) WinShot(on[0].team); }
   void Hit(int i, float power, float aim, bool good) {
     Pl& p = on[i]; lastHitTeam = p.team; rally++; if (p.pid >= 0) hits[p.pid]++;
     float tz = -Side(p.team) * (HL - 2.2f - frand(0, 2.5f) * (good ? 0.6f : 1)), tx = Clamp(aim, -1, 1) * (Doubles() ? DW : HW) * 0.78f + frand(-0.4f, 0.4f);

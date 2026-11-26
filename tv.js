@@ -455,8 +455,10 @@
 
   let lastT = performance.now();
   function frame(t) {
-    const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
-    perfTick(Math.min(0.25, (t - (frame.pt || t)) / 1000)); frame.pt = t;
+    let dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+    const film = window.CCFILM;   // debug recording only: the frame advances when asked, by a fixed step
+    if (film) { if (!film.pending) { requestAnimationFrame(frame); return; } film.pending--; dt = film.dt; film.done++; }
+    else { perfTick(Math.min(0.25, (t - (frame.pt || t)) / 1000)); frame.pt = t; }
     g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
     if (S.state === 'home' || S.state === 'intro' || S.state === 'boot') {
       sg.clearRect(0, 0, snowCv.width, snowCv.height); sg.fillStyle = 'rgba(255,255,255,.75)';
