@@ -154,6 +154,7 @@ void Play(const Shot& s) {
   if (s.dur > 0) S.p.dur = s.dur;
   emitAcc = 0;
   Spawn(S.s, k);
+  if (S.p.hitStop > 0) { Sfx("cinehit"); Sfx("slowmo"); } else if (k == WIN) Sfx("whoosh");
 }
 
 // a tracking shot: the camera stays on this moving subject, which leaves a trail of fire
@@ -172,7 +173,7 @@ void Follow(Vector3 p) {
 // the ball slams into the ground: freeze, flash, crater, dust and chips, then the shot wraps up
 void Impact(Vector3 at) {
   if (!S.on || S.s.kind != SMASH || S.impT >= 0) return;
-  S.impT = S.t; S.impAt = at; S.s.at = at; S.p.dur = S.t + 2.3f;
+  S.impT = S.t; S.impAt = at; S.s.at = at; S.p.dur = S.t + 2.3f; Sfx("cinehit");
   float fy = S.s.floorY > -1e8f ? S.s.floorY : at.y; Vector3 g = { at.x, fy + 0.02f, at.z };
   Color hot = Hex(0xfff3c4), org = Hex(0xff8a2a);
   Glow({ g.x, g.y + 0.2f, g.z }, {}, 0.3f, 2.6f, 0.22f, hot, 0);

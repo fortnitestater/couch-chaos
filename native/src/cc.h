@@ -235,6 +235,17 @@ inline float EaseBack(float t) { t = Clamp(t, 0, 1); float c = 1.7f; return 1 + 
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop = 0, float cheer = 0, float scale = 1);
 // rigged character models (people.cpp)
 bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc, float k, unsigned hsh);
+// a posed real person (sports, officials): clip by name, upper body blended to clip2, head turn, right wrist out
+struct PersonPose {
+  Vector3 pos{}; float yaw = 0; Color c = WHITE; unsigned hsh = 0; float height = 1.78f;
+  const char* clip = "Idle"; float t = 0; bool scrub = false;                          // scrub: t runs 0..1 through the clip
+  const char* clip2 = nullptr; float t2 = 0; bool scrub2 = false; float mix = 0;       // the upper body, blended toward clip2
+  float headYaw = 0, headPitch = 0;
+  Matrix* wrist = nullptr;                                                             // out: the right wrist (world)
+};
+bool DrawPersonPose(const PersonPose& q);
+inline unsigned PersonHash(Color c) { return (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29; }
+extern int g_racketAxis;
 void InstallFileLoader();
 bool DrawModel(const char* file, Vector3 pos, float yaw, float height, Color tint = WHITE, Color force = BLANK);
 bool HaveFile(const std::string& n);

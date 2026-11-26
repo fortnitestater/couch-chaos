@@ -38,6 +38,7 @@ struct Person {
   int shirt = -1, skin = -1, skin2 = -1, hair = -1;
   float unit = 1, footY = 0;
   std::vector<Vector3> T; std::vector<Quaternion> R; std::vector<Vector3> S; std::vector<Matrix> W, J;
+  std::vector<std::string> names; std::vector<char> upper; int head = -1, neck = -1, wristR = -1; std::map<std::string, int> clipCache;
 };
 Person P[4];
 const int CFG[4][4] = { { 2, 3, 4, 7 }, { 1, 2, -1, 6 }, { 0, 1, -1, 3 }, { 3, 0, -1, -1 } };   // shirt / skin / skin2 / hair glTF material
@@ -47,19 +48,34 @@ int ClipIdx(const Person& p, const char* tail) {
   for (size_t i = 0; i < p.clips.size(); i++) { const std::string& n = p.clips[i].name; size_t t = strlen(tail); if (n.size() >= t && n.compare(n.size() - t, t, tail) == 0 && (n.size() == t || n[n.size() - t - 1] == '|')) return (int)i; }
   return -1;
 }
-void Pose(Person& p, int clip, float t) {
-  p.T = p.T0; p.R = p.R0; p.S = p.S0;
-  if (clip >= 0) {
-    Clip& c = p.clips[clip]; t = c.len > 0 ? fmodf(t, c.len) : 0;
-    for (auto& ch : c.c) {
-      Sampler& s = c.s[ch.sampler]; int n = (int)s.in.size(); if (!n) continue;
-      int k = 0; while (k + 1 < n && s.in[k + 1] <= t) k++;
-      int k2 = std::min(k + 1, n - 1); float f = (k2 == k || s.step) ? 0 : Clamp((t - s.in[k]) / fmaxf(1e-6f, s.in[k2] - s.in[k]), 0, 1);
-      const float* a = &s.out[k * s.comps]; const float* b = &s.out[k2 * s.comps];
-      if (ch.path == 1) p.R[ch.node] = QuaternionSlerp({ a[0], a[1], a[2], a[3] }, { b[0], b[1], b[2], b[3] }, f);
-      else { Vector3 v = Vector3Lerp({ a[0], a[1], a[2] }, { b[0], b[1], b[2] }, f); if (ch.path == 0) p.T[ch.node] = v; else p.S[ch.node] = v; }
-    }
+void SampleInto(Person& p, int clip, float t, std::vector<Vector3>& T, std::vector<Quaternion>& R, std::vector<Vector3>& S) {
+  if (clip < 0) return;
+  Clip& c = p.clips[clip]; t = c.len > 0 ? fmodf(fmaxf(t, 0), c.len) : 0;
+  for (auto& ch : c.c) {
+    Sampler& s = c.s[ch.sampler]; int n = (int)s.in.size(); if (!n) continue;
+    int k = 0; while (k + 1 < n && s.in[k + 1] <= t) k++;
+    int k2 = std::min(k + 1, n - 1); float f = (k2 == k || s.step) ? 0 : Clamp((t - s.in[k]) / fmaxf(1e-6f, s.in[k2] - s.in[k]), 0, 1);
+    const float* a = &s.out[k * s.comps]; const float* b = &s.out[k2 * s.comps];
+    if (ch.path == 1) R[ch.node] = QuaternionSlerp({ a[0], a[1], a[2], a[3] }, { b[0], b[1], b[2], b[3] }, f);
+    else { Vector3 v = Vector3Lerp({ a[0], a[1], a[2] }, { b[0], b[1], b[2] }, f); if (ch.path == 0) T[ch.node] = v; else S[ch.node] = v; }
   }
+}
+void Finish(Person& p);
+void Pose(Person& p, int clip, float t) { p.T = p.T0; p.R = p.R0; p.S = p.S0; SampleInto(p, clip, t, p.T, p.R, p.S); Finish(p); }
+// legs from one clip, upper body blended toward another (a swing while running), and an extra head turn
+void PoseEx(Person& p, int a, float ta, int b, float tb, float mix, float hy, float hp) {
+  p.T = p.T0; p.R = p.R0; p.S = p.S0; SampleInto(p, a, ta, p.T, p.R, p.S);
+  if (b >= 0 && mix > 0.001f) {
+    static std::vector<Vector3> T2, S2; static std::vector<Quaternion> R2; T2 = p.T0; R2 = p.R0; S2 = p.S0; SampleInto(p, b, tb, T2, R2, S2);
+    for (size_t i = 0; i < p.R.size() && i < p.upper.size(); i++) if (p.upper[i]) p.R[i] = QuaternionSlerp(p.R[i], R2[i], Clamp(mix, 0, 1));
+  }
+  if (p.head >= 0 && (hy != 0 || hp != 0)) {
+    p.R[p.head] = QuaternionMultiply(p.R[p.head], QuaternionMultiply(QuaternionFromAxisAngle({ 0, 1, 0 }, hy * 0.6f), QuaternionFromAxisAngle({ 1, 0, 0 }, hp * 0.6f)));
+    if (p.neck >= 0) p.R[p.neck] = QuaternionMultiply(p.R[p.neck], QuaternionMultiply(QuaternionFromAxisAngle({ 0, 1, 0 }, hy * 0.4f), QuaternionFromAxisAngle({ 1, 0, 0 }, hp * 0.4f)));
+  }
+  Finish(p);
+}
+void Finish(Person& p) {
   size_t n = p.parent.size(); p.W.resize(n);
   // nodes are processed parents-first (the load step ordered them so)
   for (size_t i = 0; i < n; i++) {
@@ -104,6 +120,15 @@ bool Load(int v) {
     p.R0[i] = n->has_rotation ? Quaternion{ n->rotation[0], n->rotation[1], n->rotation[2], n->rotation[3] } : Quaternion{ 0, 0, 0, 1 };
     p.S0[i] = n->has_scale ? Vector3{ n->scale[0], n->scale[1], n->scale[2] } : Vector3{ 1, 1, 1 };
     if (n->has_matrix) { p.hasMat[i] = true; p.M0[i] = FromGL(n->matrix); }
+  }
+  p.names.resize(N); for (size_t i = 0; i < N; i++) p.names[i] = order[i]->name ? order[i]->name : "";
+  {  // which nodes are the upper body (a second clip can drive them), and the head / neck / right wrist
+    static const char* UP[] = { "Abdomen", "Torso", "Chest", "Neck", "Head", "Shoulder", "UpperArm", "LowerArm", "Wrist", "Index", "Middle", "Ring", "Pinky", "Thumb" };
+    p.upper.assign(N, 0);
+    for (size_t i = 0; i < N; i++) {
+      for (auto u : UP) if (p.names[i].rfind(u, 0) == 0) p.upper[i] = 1;
+      if (p.names[i] == "Head") p.head = (int)i; else if (p.names[i] == "Neck") p.neck = (int)i; else if (p.names[i] == "Wrist.R") p.wristR = (int)i;
+    }
   }
   cgltf_skin* sk = &d->skins[0];
   for (size_t j = 0; j < sk->joints_count; j++) { p.joints.push_back(idx[sk->joints[j]]); float m[16]; cgltf_accessor_read_float(sk->inverse_bind_matrices, j, m, 16); p.invBind.push_back(FromGL(m)); }
@@ -193,6 +218,34 @@ bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer
   return true;
 }
 
+// a posed person for sports and officials: any clip by name (looping or scrubbed), the upper body blended toward a
+// second clip, a head turn, and the right wrist's world matrix out (so a racket sits in the hand)
+static int ClipByName(Person& p, const char* name) {
+  if (!name) return -1; auto it = p.clipCache.find(name); if (it != p.clipCache.end()) return it->second;
+  int i = ClipIdx(p, name); p.clipCache[name] = i; return i;
+}
+bool DrawPersonPose(const PersonPose& q) {
+  int v = (int)(q.hsh % 4);
+  if (!Load(v)) { bool any = false; for (int k = 0; k < 4 && !any; k++) if (Load(k)) { v = k; any = true; } if (!any) return false; }
+  Person& p = P[v];
+  int a = ClipByName(p, q.clip); if (a < 0) a = p.idle;
+  float ta = a >= 0 && q.scrub ? Clamp(q.t, 0, 1) * p.clips[a].len * 0.999f : q.t;
+  int b = ClipByName(p, q.clip2); float tb = b >= 0 && q.scrub2 ? Clamp(q.t2, 0, 1) * p.clips[b].len * 0.999f : q.t2;
+  PoseEx(p, a, ta, b, tb, q.mix, q.headYaw, q.headPitch); Skin(p, true);
+  float s = q.height * p.unit;
+  Matrix xf = MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -p.footY, 0), MatrixScale(s, s, s)), MatrixMultiply(MatrixRotateY(q.yaw), MatrixTranslate(q.pos.x, q.pos.y, q.pos.z)));
+  static const Color SK[5] = { Hex(0xf1c7a3), Hex(0xd9a47a), Hex(0xb57a52), Hex(0x7d4e33), Hex(0xf5d5bd) };
+  static const Color HR[6] = { Hex(0x3a2516), Hex(0x6b4423), Hex(0xd9a441), Hex(0x221a16), Hex(0x9c4a22), Hex(0x2e2e34) };
+  Color skin = SK[(q.hsh / 5) % 5], hair = HR[(q.hsh / 11) % 6];
+  lit.Caster(q.pos, 0.45f * q.height / 1.95f);
+  for (auto& pr : p.prims) {
+    int mi = pr.mat; Color col = mi >= 0 && mi < (int)p.mats.size() ? p.mats[mi] : WHITE;
+    if (mi == p.shirt) col = q.c; else if (mi == p.skin) col = skin; else if (mi == p.skin2) col = Shade(skin, -0.15f); else if (mi == p.hair) col = hair;
+    lit.Draw(pr.mesh, xf, col);
+  }
+  if (q.wrist && p.wristR >= 0) *q.wrist = MatrixMultiply(p.W[p.wristR], xf);
+  return true;
+}
 // ---------- static props from .glb files (furniture, plants, lamps) ----------
 namespace {
 struct PropPart { Mesh m{}; Matrix node; Color c; };

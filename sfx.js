@@ -143,6 +143,13 @@ const SFX = (() => {
     musicMuted() { return musicMuted; },
     toggleMusic() { musicMuted = !musicMuted; if (musicMuted) { const w = musicWanted; SFX.musicOff(); musicWanted = w; } else if (musicWanted) SFX.musicOn(); return !musicMuted; },
     cheer(k = 1) { if (play('cheer', 1.4 * Math.min(1.3, k + 0.3))) return; bandNoise(2.2 * k + 0.6, 0.55 * k, 1100, 0.7, 0.35); bandNoise(1.6 * k, 0.3 * k, 2600, 1.2, 0.2); },
+    // shoe squeak on a hard court, Hawk-Eye stings, and the cinematic slow-motion / impact hits
+    squeak() { if (!ac || !ok('sq', 160)) return; const f = 2300 + Math.random() * 900; tone(f, 0.06, 'sine', 0.05, 1.25); tone(f * 1.5, 0.05, 'triangle', 0.025, 0.8, 0.04); },
+    varSting() { if (!ac) return; [988, 1319, 1760].forEach((f, i) => tone(f, 0.14, 'sine', 0.16, 1, i * 0.09)); bandNoise(0.5, 0.16, 3000, 2, 0.05); },
+    varIn() { if (!ac) return; [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.5, 'triangle', 0.15, 1, i * 0.05)); },
+    varOut() { if (!ac) return; tone(196, 0.35, 'sawtooth', 0.13, 0.9); tone(147, 0.5, 'sawtooth', 0.13, 0.9, 0.13); },
+    slowmo() { if (!ac || !ok('slo', 600)) return; tone(240, 1.1, 'sine', 0.3, 0.25); bandNoise(1.0, 0.22, 500, 1.2, 0.05); },
+    cinehit() { if (!ac || !ok('ch', 150)) return; tone(70, 0.7, 'sine', 0.55, 0.5); noise(0.3, 0.45, 700); },
     ooh() { if (!ac) return; if (play('ooh', 1.6)) return; for (let i = 0; i < 6; i++) tone(180 + Math.random() * 120, 0.9, 'sine', 0.05, 0.75, i * 0.02); bandNoise(0.9, 0.18, 500, 1.5, 0.2); },
     applause(k = 1) { if (!ac) return; if (play('applause', 1.3 * Math.min(1.4, k))) return; for (let i = 0; i < 40 * k; i++) noiseClap(Math.random() * 2.2 * k); },
     // announcer: the device's built-in voice (free). Replaceable by recorded clips later.

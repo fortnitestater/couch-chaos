@@ -353,7 +353,7 @@ void main() {
 })";
 static int lFxA = -1, lFxB = -1, lFxC = -1;
 static RenderTexture2D rtMain, rtA, rtB, rtC, rtD, rtE; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom, lFinalDof, lFinalDepth, lFinalTime, lFinalFocus, lFinalDofOn; static bool postOk = false, dofOk = false;
-float g_frameDt = 1 / 60.f;
+float g_frameDt = 1 / 60.f; int g_racketAxis = 5;   // the racket handle runs along the thumb side of the fist (picked from a debug comparison)
 float g_cineT = 0, g_focus = 15, g_dofAmt = 0.9f; bool g_cineOn = false; static int lFinalDofAmt;
 // the main scene target keeps its depth in a texture, so the final pass can focus by distance
 static RenderTexture2D LoadSceneTarget(int w, int h) {
@@ -480,6 +480,7 @@ EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) {
     s.c = Hex(0xffd43b); s.caption = "TEST"; s.sub = "debug"; s.floorY = c.target.y - s.size; s.hero = false; cine::Play(s); return;
   }
   if (m >= 50 && m < 60) { if (game) game->DebugShot(m - 50); return; }
+  if (m >= 60 && m < 90) { g_racketAxis = m - 60; return; }
   if (m >= 100) g_post = m - 100; else g_dbg = m; }
 static float ClampRS(float rs) { return rs < 1 ? 1 : rs > 2 ? 2 : rs; }
 // change the render resolution on the fly (the website lowers it on slow TVs)
