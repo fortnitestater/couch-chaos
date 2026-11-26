@@ -19,7 +19,7 @@ struct Preset {
 const Preset PRE[] = {
   /* BOOM   */ { 3.0f, 0.16f, 1.5f, 0.16f, 1.5f, 30, 46, 0.10f, 0.42f, -0.55f, 0.11f, 1.0f, 0.0f, 0.4f, true, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f },
   /* STRIKE */ { 2.9f, 0.10f, 1.5f, 0.2f, 1.6f, 30, 38, 0.12f, 1.25f, -0.85f, -0.09f, 0.55f, 0.0f, 0.4f, true, 0.7f, 0.8f, 1.0f, 1.0f, 0.6f, 1.0f, 0.0f, 0.8f },
-  /* SMASH  */ { 2.0f, 0.12f, 0.8f, 0.2f, 1.5f, 32, 40, 0.06f, 0.95f, 0.6f, 0.12f, 0.6f, 0.0f, 0.35f, true, 0.5f, 0.8f, 1.0f, 1.0f, 0.4f, 1.0f, 0.0f, 0.6f },
+  /* SMASH  */ { 5.0f, 0.12f, 0.8f, 0.2f, 1.5f, 34, 34, 0.06f, 0.5f, 0.0f, 0.14f, 0.6f, 0.0f, 0.5f, true, 0.5f, 0.8f, 1.0f, 1.0f, 0.4f, 1.0f, 0.0f, 0.6f },
   /* GOAL   */ { 2.5f, 0.10f, 1.1f, 0.28f, 1.7f, 32, 42, 0.30f, 0.55f, 0.5f, 0.08f, 0.7f, 0.0f, 0.4f, true, 0.8f, 0.8f, 1.0f, 1.0f, 0.7f, 1.0f, 0.0f, 0.9f },
   /* WIN    */ { 3.6f, 0.0f, 0.0f, 1.0f, 1.5f, 38, 30, 0.05f, -0.5f, 0.85f, 0.04f, 0.0f, 0.75f, 0.9f, false, 0.0f, 0.25f, 0.0f, 0.0f, 0.25f, 1.0f, 0.0f, 0.6f },
   /* REVEAL */ { 2.1f, 0.0f, 0.0f, 1.0f, 1.8f, 36, 32, 0.08f, 0.25f, 0.18f, 0.0f, 0.0f, 0.45f, 0.7f, false, 0.0f, 0.3f, 0.0f, 0.0f, 0.15f, 0.5f, 1.0f, 0.5f },
@@ -27,10 +27,10 @@ const Preset PRE[] = {
 };
 const int PRIO[] = { 4, 3, 2, 3, 5, 1, 4 };
 
-struct State { bool on = false; float t = 0, side = 1; Shot s; Preset p{}; } S;
+struct State { bool on = false; float t = 0, side = 1; Shot s; Preset p{}; bool follow = false; float impT = -1; Vector3 impAt{}, lastF{}; } S;
 
 // ---- world effects ----
-enum { F_GLOW, F_SPARK, F_DEBRIS, F_SMOKE, F_RING, F_RINGV };
+enum { F_GLOW, F_SPARK, F_DEBRIS, F_SMOKE, F_RING, F_RINGV, F_DECAL };
 struct Fx { int type; Vector3 p, v; float life, max, s0, s1; Color c; float drag, grav; Vector3 rot, spin; };
 std::vector<Fx> fx;
 Mesh disc{}, ring{}, streak{}; Material um{}; bool built = false;
@@ -108,10 +108,9 @@ void Spawn(const Shot& s, int kind) {
     Ring(gp, 5.0f * z, 0.6f, c, false); Ring(gp, 2.6f * z, 0.4f, hot, false); Ring(at, 2.4f * z, 0.4f, hot, true);
     for (int i = 0; i < 8; i++) Smoke(Vector3Add(gp, { frand(-1, 1) * z, 0.1f * z, frand(-1, 1) * z }), { frand(-1, 1) * z, z * 0.4f, frand(-1, 1) * z }, z * 0.4f, z * 1.3f, frand(1.4f, 2.2f), Color{ 255, 240, 220, 70 });
   } else if (kind == SMASH) {
-    Glow(at, {}, 0.25f * z, 2.2f * z, 0.22f, hot, 0);
-    for (int i = 0; i < 60; i++) Spark(at, Vector3Scale(RandDir(), z * frand(4, 12)), z * frand(0.3f, 0.7f), frand(0.35f, 0.9f), i % 3 ? Hex(0xffc46b) : WHITE, z * 3);
-    for (int i = 0; i < 8; i++) Glow(at, Vector3Scale(RandDir(), z * 2), z * 0.25f, z * 0.8f, frand(0.3f, 0.6f), c, 4);
-    Ring(at, 2.6f * z, 0.35f, hot, true); Ring(at, 3.8f * z, 0.55f, c, true);
+    Glow(at, {}, 0.1f, 0.9f, 0.12f, hot, 0);
+    for (int i = 0; i < 40; i++) Spark(at, Vector3Scale(RandDir(), frand(2, 6)), frand(0.1f, 0.25f), frand(0.12f, 0.3f), i % 3 ? Hex(0xffc46b) : WHITE, 3);
+    Ring(at, 1.0f, 0.12f, hot, true);
   } else if (kind == GOAL) {
     Glow(at, {}, 0.3f * z, 2.0f * z, 0.22f, Mix(c, WHITE, 0.5f), 0);
     for (int i = 0; i < 100; i++) { Vector3 d = RandDir(); d.y = fabsf(d.y) * 1.5f + 0.3f; Spark(at, Vector3Scale(Vector3Normalize(d), z * frand(3, 10)), z * frand(0.3f, 0.6f), frand(0.6f, 1.5f), i % 3 ? Mix(c, WHITE, 0.35f) : WHITE, z * 4); }
@@ -142,6 +141,7 @@ void DrawU(const Mesh& m, Matrix t, Color c) { um.maps[MATERIAL_MAP_DIFFUSE].col
 bool Busy() { return S.on; }
 bool Hero(Color c) { return S.on && S.s.hero && S.s.c.r == c.r && S.s.c.g == c.g && S.s.c.b == c.b; }
 void Reset() { S = State{}; fx.clear(); g_hudA = 1; }
+void End() { if (S.on && S.t < S.p.dur - S.p.tOut) S.p.dur = S.t + S.p.tOut; }
 
 void Play(const Shot& s) {
   int k = Clamp(s.kind, 0, (int)(sizeof(PRE) / sizeof(PRE[0])) - 1);
@@ -156,9 +156,42 @@ void Play(const Shot& s) {
   Spawn(S.s, k);
 }
 
+// a tracking shot: the camera stays on this moving subject, which leaves a trail of fire
+void Follow(Vector3 p) {
+  if (!S.on || S.s.kind != SMASH || S.impT >= 0) return;
+  if (!S.follow) { S.follow = true; S.lastF = p; }
+  float d = Vector3Distance(p, S.lastF); int n = (int)(d / 0.07f);
+  for (int i = 1; i <= n && fx.size() < 860; i++) {
+    Vector3 q = Vector3Lerp(S.lastF, p, (float)i / n);
+    Glow(q, Vector3Scale(RandDir(), 0.35f), 0.09f, frand(0.22f, 0.36f), frand(0.16f, 0.26f), i % 3 ? Hex(0xff7a1a) : Hex(0xffc94d), 2.5f, -0.8f);
+    if (i % 4 == 0) Spark(q, Vector3Scale(RandDir(), frand(1, 3.5f)), frand(0.06f, 0.14f), frand(0.15f, 0.35f), Hex(0xffd27a), 3);
+  }
+  if (n > 0) S.lastF = p;
+  S.s.at = p;
+}
+// the ball slams into the ground: freeze, flash, crater, dust and chips, then the shot wraps up
+void Impact(Vector3 at) {
+  if (!S.on || S.s.kind != SMASH || S.impT >= 0) return;
+  S.impT = S.t; S.impAt = at; S.s.at = at; S.p.dur = S.t + 2.3f;
+  float fy = S.s.floorY > -1e8f ? S.s.floorY : at.y; Vector3 g = { at.x, fy + 0.02f, at.z };
+  Color hot = Hex(0xfff3c4), org = Hex(0xff8a2a);
+  Glow({ g.x, g.y + 0.2f, g.z }, {}, 0.3f, 2.6f, 0.22f, hot, 0);
+  for (int i = 0; i < 12; i++) Glow({ g.x, g.y + 0.15f, g.z }, { frand(-3, 3), frand(0.5f, 2.5f), frand(-3, 3) }, 0.25f, frand(0.6f, 1.0f), frand(0.25f, 0.5f), i % 2 ? org : Hex(0xffc94d), 3.5f);
+  for (int i = 0; i < 80; i++) { Vector3 d = RandDir(); d.y = fabsf(d.y) * 1.6f + 0.35f; Spark(g, Vector3Scale(Vector3Normalize(d), frand(4, 12)), frand(0.25f, 0.6f), frand(0.4f, 1.1f), i % 3 ? Hex(0xffd27a) : WHITE, 6); }
+  for (int i = 0; i < 28; i++) { float a = frand(0, 2 * PI), r = frand(0, 0.35f); Smoke({ g.x + cosf(a) * r, g.y + 0.15f, g.z + sinf(a) * r }, { cosf(a) * frand(1.5f, 4.5f), frand(0.4f, 1.6f), sinf(a) * frand(1.5f, 4.5f) }, 0.3f, frand(1.0f, 1.8f), frand(1.6f, 2.6f), Color{ 228, 220, 204, 150 }); }
+  for (int i = 0; i < 20; i++) { Vector3 d = RandDir(); d.y = fabsf(d.y) * 2 + 0.5f; Debris(g, Vector3Scale(Vector3Normalize(d), frand(2.5f, 7)), frand(0.04f, 0.11f), frand(1.8f, 2.8f), i % 3 ? Hex(0x2a6fb0) : Hex(0xe9f1f7), 9.8f); }
+  Ring(g, 5.0f, 0.7f, hot, false); Ring(g, 3.0f, 0.45f, org, false); Ring({ g.x, g.y + 0.35f, g.z }, 2.6f, 0.4f, WHITE, true);
+  if (fx.size() < 900) fx.push_back({ F_DECAL, g, {}, 3.5f, 3.5f, 1.5f, 1.5f, Color{ 18, 14, 12, 215 }, 0, 0, {}, {} });   // scorch mark
+}
+
 float TimeScale() {
   if (!S.on) return 1;
   const Preset& p = S.p; float t = S.t;
+  if (S.s.kind == SMASH) {   // deep slow motion while the ball flies, a freeze on the impact, then ramp back up
+    if (S.impT < 0) return t < p.hitStop ? 0.03f : 0.23f;
+    float ti = t - S.impT; if (ti < 0.14f) return 0.03f;
+    return 0.3f + 0.7f * Sm((ti - 0.14f) / 0.9f);
+  }
   if (t < p.hitStop) return 0.03f;
   if (p.slowDur <= 0) return 1;
   float k = (t - p.hitStop) / p.slowDur; if (k >= 1) return 1;
@@ -197,22 +230,37 @@ Camera3D Apply(Camera3D c) {
   Vector3 d0 = Vector3Subtract(c.position, c.target); float L0 = fmaxf(Vector3Length(d0), 0.01f);
   float yaw0 = atan2f(d0.x, d0.z), pitch0 = asinf(Clamp(d0.y / L0, -1, 1));
   float yawB = Vector3LengthSqr(S.s.face) > 1e-6f ? atan2f(S.s.face.x, S.s.face.z) : yaw0;
-  float yaw1 = yawB + (p.yawOff + S.s.yaw) * S.side + p.orbit * S.side * (1 - powf(1 - u, 1.7f));
-  float pitch1 = S.s.elev > -9 ? S.s.elev : p.elev;
-  float fov = Lerp(p.fov0, p.fov1, EaseOut(u));
-  float dist = S.s.size * p.frame / tanf(fov * DEG2RAD / 2);
+  float yaw1, pitch1, dist, fov, shakeA, roll;
+  if (S.s.kind == SMASH) {
+    const float T = 3.4f;   // one full lap around the ball
+    float tf = S.impT >= 0 ? S.impT : t, ti = S.impT >= 0 ? t - S.impT : -1;
+    float ph = 2 * PI * tf / T + (ti > 0 ? ti * 0.3f : 0);
+    yaw1 = yawB + S.side * (p.yawOff + ph);
+    pitch1 = 0.2f - 0.42f * cosf(ph);                      // starts under the ball looking up, rises over the top, comes back down
+    dist = 2.0f * S.s.size * (1 + 0.3f * cosf(2 * ph));    // an ellipse: wide at the sides, close at the front and back
+    fov = 34 - 7 * expf(-t * 6);
+    shakeA = 0.5f * expf(-t * 5);
+    roll = 0.16f * sinf(ph) * S.side;
+    if (ti >= 0) { float k = EaseOut(ti / 1.2f); dist *= 1 + 2.6f * k; pitch1 = Lerp(pitch1, 0.45f, k); fov = 36 + 4 * k - 9 * expf(-ti * 7); shakeA = 1.3f * expf(-ti * 3.5f); roll *= 1 - k; }
+  } else {
+    yaw1 = yawB + (p.yawOff + S.s.yaw) * S.side + p.orbit * S.side * (1 - powf(1 - u, 1.7f));
+    pitch1 = S.s.elev > -9 ? S.s.elev : p.elev;
+    fov = Lerp(p.fov0, p.fov1, EaseOut(u));
+    dist = S.s.size * p.frame / tanf(fov * DEG2RAD / 2);
+    shakeA = p.shake * expf(-t * 3.2f); roll = p.roll * S.side;
+  }
   float yaw = yaw0 + angDiff(yaw0, yaw1) * w, pitch = Lerp(pitch0, pitch1, w), L = expf(Lerp(logf(L0), logf(dist), w));
   Vector3 tgt = Vector3Lerp(c.target, S.s.at, w);
   c.fovy = Lerp(c.fovy, fov, w);
   c.position = Vector3Add(tgt, { sinf(yaw) * cosf(pitch) * L, sinf(pitch) * L, cosf(yaw) * cosf(pitch) * L });
+  if (S.s.floorY > -1e8f) c.position.y = fmaxf(c.position.y, S.s.floorY + 0.22f);   // never under the floor
   c.target = tgt;
   // handheld impact shake that settles, and a dutch tilt
-  float sh = p.shake * expf(-t * 3.2f) * w * L * 0.02f;
+  float sh = shakeA * w * L * 0.02f;
   Vector3 n = { sinf(t * 53) + 0.5f * sinf(t * 97 + 1), sinf(t * 61 + 2) + 0.5f * sinf(t * 89), sinf(t * 47 + 3) + 0.5f * sinf(t * 71) };
   c.position = Vector3Add(c.position, Vector3Scale(n, sh)); c.target = Vector3Add(c.target, Vector3Scale(n, sh * 0.35f));
-  float roll = p.roll * S.side * w;
   Vector3 f = Vector3Normalize(Vector3Subtract(c.target, c.position));
-  c.up = Vector3RotateByAxisAngle({ 0, 1, 0 }, f, roll);
+  c.up = Vector3RotateByAxisAngle({ 0, 1, 0 }, f, roll * w);
   return c;
 }
 
@@ -224,13 +272,14 @@ void Light(Vector4& pos, Vector3& col) {
     case BOOM: e = 4.2f * expf(-t * 2.0f) * (1 + 0.25f * sinf(t * 43)); base = { 1, 0.55f, 0.2f }; break;
     case SNOW: e = 3.0f * expf(-t * 2.2f); base = { 0.75f, 0.88f, 1 }; break;
     case STRIKE: e = 2.6f * expf(-t * 2.6f); base = { 1, 0.8f, 0.4f }; break;
-    case SMASH: e = 2.0f * expf(-t * 4.5f); base = { 1, 0.65f, 0.3f }; break;
+    case SMASH: e = 1.6f * expf(-t * 5) + (S.impT >= 0 ? 4.0f * expf(-(t - S.impT) * 2.2f) : 0.6f); base = { 1, 0.62f, 0.28f }; break;
     case GOAL: e = 3.0f * expf(-t * 2.0f); base = { S.s.c.r / 255.f, S.s.c.g / 255.f, S.s.c.b / 255.f }; break;
     case WIN: e = 1.1f * Sm(t / 0.6f) * (1 - Sm((t - S.p.dur + 0.9f) / 0.9f)); base = { 1, 0.82f, 0.45f }; break;
     case REVEAL: e = 0.9f * expf(-t * 2.2f); base = { S.s.c.r / 255.f, S.s.c.g / 255.f, S.s.c.b / 255.f }; break;
   }
   e *= S.p.light;
   pos = { S.s.at.x, S.s.at.y + 0.3f * z, S.s.at.z, z * 5.5f }; col = Vector3Scale(base, e);
+  if (S.s.kind == SMASH) pos = { S.s.at.x, S.s.at.y + 0.25f, S.s.at.z, 4.5f };
 }
 
 PostFx Post() {
@@ -245,6 +294,14 @@ PostFx Post() {
   o.speed = p.speed * (t < slowEnd ? 1 : expf(-(t - slowEnd) * 5)) * out;
   o.bars = p.bars * fminf(p.cut ? Sm(t / 0.18f) : Sm(t / p.tIn), out);
   { float ok = Clamp((t - (p.dur - p.tOut)) / p.tOut, 0, 1); if (p.cut && ok > 0) o.zoom = fmaxf(o.zoom, 0.5f * sinf(ok * PI)); }   // whip back: blur the swing
+  if (S.s.kind == SMASH) {
+    float ti = S.impT >= 0 ? t - S.impT : 1e9f;
+    o.impact = (t < 0.06f || ti < 0.07f) ? 1.f : ti < 0.11f ? 0.45f : 0.f;
+    o.flash = (t > 0.06f ? 0.45f * expf(-(t - 0.06f) * 6) : 0) + (ti > 0.07f && ti < 1e8f ? 0.95f * expf(-(ti - 0.07f) * 5) : 0);
+    o.zoom = (0.45f * expf(-t * 3) + (ti < 1e8f ? 0.95f * expf(-ti * 2.6f) : 0)) * out;
+    o.aber = (0.35f + 0.65f * expf(-t * 3) + (ti < 1e8f ? 0.8f * expf(-ti * 3) : 0)) * out;
+    o.speed = (S.impT < 0 ? 0.4f : expf(-ti * 2.2f)) * out;
+  }
   o.fc = S.s.kind == BOOM ? Hex(0xffb056) : S.s.kind == SNOW ? Hex(0xdff1ff) : Mix(S.s.c, WHITE, 0.45f);
   Vector2 sp = GetWorldToScreenEx(S.s.at, g_finalCam, W, H);
   o.ctr = { Clamp(sp.x / W, 0.05f, 0.95f), Clamp(1 - sp.y / H, 0.05f, 0.95f) };
@@ -252,7 +309,8 @@ PostFx Post() {
 }
 
 void Draw3D() {
-  if (fx.empty()) return;
+  bool ball = S.on && S.s.kind == SMASH && S.follow && S.impT < 0;
+  if (fx.empty() && !ball) return;
   Build();
   rlDrawRenderBatchActive();
   // debris: real lit chunks
@@ -261,6 +319,10 @@ void Draw3D() {
     lit.Draw(prim.cube, TRS(f.p, f.rot, { f.s0, f.s0 * 0.7f, f.s0 * 0.85f }), c);
   }
   rlDrawRenderBatchActive(); rlDisableDepthMask();
+  for (auto& f : fx) if (f.type == F_DECAL) {
+    Color c = f.c; c.a = (unsigned char)(c.a * Clamp(f.life / 1.2f, 0, 1));
+    DrawU(disc, MatrixMultiply(MatrixMultiply(MatrixScale(f.s0, f.s0, 1), MatrixRotateX(PI / 2)), MatrixTranslate(f.p.x, f.p.y, f.p.z)), c);
+  }
   // smoke: soft dark (or snow-white) billows, blended normally
   for (auto& f : fx) if (f.type == F_SMOKE) {
     float k = 1 - f.life / f.max, s = Lerp(f.s0, f.s1, EaseOut(k)); Color c = f.c; c.a = (unsigned char)(c.a * Sm(k / 0.08f) * (1 - Sm((k - 0.45f) / 0.55f)));
@@ -268,6 +330,7 @@ void Draw3D() {
   }
   rlDrawRenderBatchActive();
   BeginBlendMode(BLEND_ADDITIVE);
+  if (ball) { float fl = 1 + 0.15f * sinf(S.t * 40); DrawU(disc, Billboard(S.s.at, 0.55f * fl, 0.55f * fl), Color{ 255, 120, 30, 210 }); DrawU(disc, Billboard(S.s.at, 0.22f, 0.22f), Color{ 255, 240, 200, 230 }); }
   for (auto& f : fx) {
     float k = 1 - f.life / f.max;
     if (f.type == F_GLOW) {
@@ -294,7 +357,8 @@ void Draw3D() {
 
 void Draw2D() {
   if (!S.on || S.s.caption.empty()) return;
-  float t = S.t - S.p.hitStop * 0.5f; if (t < 0) return;
+  float t0 = S.s.kind == SMASH ? S.impT : S.p.hitStop * 0.5f; if (t0 < 0) return;
+  float t = S.t - t0; if (t < 0) return;
   float save = g_hudA; g_hudA = 1;
   float k = Clamp(t / 0.26f, 0, 1), out = Sm((S.t - (S.p.dur - S.p.tOut - 0.15f)) / 0.4f);
   float sc = 1 + 1.9f * powf(1 - k, 3), a = fminf(1, k * 3) * (1 - out);

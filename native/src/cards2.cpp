@@ -314,7 +314,7 @@ struct Tycoon : GameNight {
   struct St { int pos = 0, cash = 1500, skip = 0; bool out = false; float shown = 1500; };
   std::vector<St> st; int own[NB], cab[NB], pot = 0, round = 1, ROUNDS = 8, dice[2] = { 1, 1 }, steps = 0; std::string state = "roll"; float timer = 25, botT = 1.3f, rollAnim = 0, stepT = 0, skipT = 0; std::vector<int> outOrder; bool fin = false;
   void Start() override {
-    InitCam({ 0, 15.5f, 10.5f }, { 0, -0.6f, 0.4f }, 46); felt = Hex(0x1c3d7a);
+    InitCam({ 1.8f, 10.6f, 14.2f }, { 0.1f, -0.8f, 0.2f }, 44); felt = Hex(0x1c3d7a);
     st.assign(N(), St{}); for (int i = 0; i < NB; i++) { own[i] = -1; cab[i] = 0; }
     turn = 0; Layout(-1, "{\"name\":\"panel\"}"); Banner("🏔️ SNOW TYCOON!", 1600, "#ffd43b"); log = "Roll the dice, buy spots, collect rent!"; Sync();
   }

@@ -110,6 +110,9 @@ inline void Moment(int kind, Vector3 at, float size, Color c, const std::string&
 }
 bool Busy();
 bool Hero(Color c);
+void Follow(Vector3 at);   // tracking shot (SMASH): keep the camera on this moving subject; call every frame
+void Impact(Vector3 at);   // ...it hits the ground: freeze, flash, crater, then the shot wraps up
+void End();                // wrap the current shot up now
 // engine side (main.cpp)
 struct PostFx { float flash, aber, zoom, speed, bars, impact; Vector2 ctr; Color fc; };
 void Reset(); void Update(float realDt); float TimeScale(); Camera3D Apply(Camera3D c);

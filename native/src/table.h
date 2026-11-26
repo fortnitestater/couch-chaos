@@ -38,7 +38,7 @@ struct Table : Game {
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; }
-  void TableCam() { InitCam({ 0, 12.2f, 10.8f }, { 0, -0.1f, -1.9f }, 41.5f); }
+  void TableCam() { InitCam({ 2.4f, 7.4f, 13.4f }, { 0.3f, 0.1f, -2.6f }, 40); }   // low, a little off-centre: a film angle on the table
   // seats run around the far half of the table so nobody blocks the view
   float SeatA(int i) { int n = N(); float span = n <= 2 ? 1.2f : n == 3 ? 1.9f : n == 4 ? 2.3f : 3.5f; return -PI / 2 + (n == 1 ? 0 : -span / 2 + span * i / (n - 1)); }
   Vector3 Seat(int i, float r = 7.4f) { float a = SeatA(i); return { cosf(a) * r, 0, sinf(a) * r * 0.78f }; }

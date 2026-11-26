@@ -12,7 +12,7 @@ constexpr float HL = 11.885f, HW = 4.115f, DW = 5.485f, NETH = 0.914f, SVC = 6.4
 struct Tennis : Classic {
   struct Pl { int pid; int team; Vector3 pos, goal, vel{}; float sw = 0, swDir = 1, cool = 0; };
   std::vector<int> teamQ[2]; std::vector<Pl> on;  // players on court
-  Vector3 bp{}, bv{}; bool live = false, bounced = false; int lastHitTeam = -1, bounces = 0; float spin = 0;
+  Vector3 bp{}, bv{}; bool live = false, bounced = false, smashLive = false; int lastHitTeam = -1, bounces = 0; float spin = 0;
   int pts[2] = { 0, 0 }, games[2] = { 0, 0 }, server = 0, serveTeam = 0, GAMES = 2;
   std::string phase = "intro", call, radar; float t = 2.5f, callT = 0, radarT = 0, hitAt = -1, tossT = -1; int recv = -1; Vector3 hitPt{};
   std::vector<Vector4> crowd; bool fin = false; int rally = 0; std::vector<int> hits;
@@ -46,7 +46,7 @@ struct Tennis : Classic {
     server = sidx; float sx = ((pts[0] + pts[1]) % 2 ? -1.f : 1.f) * 1.4f * -Side(serveTeam);
     on[server].pos = on[server].goal = { sx, 0, Side(serveTeam) * (HL + 0.5f) };
     for (auto& p : on) if (p.team != serveTeam && p.pos.z * Side(p.team) > 8) { p.pos.x = p.goal.x = -sx * 0.8f; }
-    live = false; bounced = false; bounces = 0; trail.clear(); phase = "serve"; t = 7; tossT = -1; recv = -1; hitAt = -1; rally = 0;
+    live = false; bounced = false; bounces = 0; trail.clear(); phase = "serve"; smashLive = false; t = 7; tossT = -1; recv = -1; hitAt = -1; rally = 0;
     for (int i = 0; i < N(); i++) if (!P(i).bot) {
       bool srv = on[server].pid == i; bool playing = false; for (auto& p : on) playing |= p.pid == i;
       Layout(i, playing ? std::string("{\"name\":\"swing\",\"sport\":\"tennis\",\"label\":\"SWING!\",\"aim\":true,\"hint\":") + kit::Q(srv ? "Your serve! Swing to toss + hit · tilt to aim" : "Swing when the ring around you is smallest · tilt to aim left/right") + "}"
@@ -88,17 +88,21 @@ struct Tennis : Classic {
     return best;
   }
   // bullet time on the smash: low, close, from the net side of the hitter
-  void SmashShot(const Pl& p) { cine::Shot s; s.kind = cine::SMASH; s.at = Vector3Lerp(bp, { p.pos.x, 1.15f, p.pos.z }, 0.55f); s.size = 1.05f; s.c = Hex(0xff922b); s.caption = "SMASH!"; s.sub = radar; s.floorY = 0; s.face = { 0, 0, -Side(p.team) }; s.yaw = -0.35f; cine::Play(s); }
+  // slow motion, close on the ball: the camera circles it on a tilted ellipse as it flies, then it craters the court
+  void SmashShot(const Pl& p) { cine::Shot s; s.kind = cine::SMASH; s.at = bp; s.size = 1.0f; s.c = Hex(0xff922b); s.caption = "SMASH!"; s.sub = radar; s.floorY = 0; s.face = { 0, 0, -Side(p.team) }; cine::Play(s); }
   void WinShot(int team) { for (auto& q : on) if (q.team == team) { cine::Shot s; s.kind = cine::WIN; s.at = Vector3Add(q.pos, { 0, 1.0f, 0 }); s.size = 1.0f; s.c = q.pid >= 0 ? P(q.pid).color : WHITE; s.face = { 0, 0, -Side(team) }; s.floorY = 0; s.hero = q.pid >= 0; cine::Play(s); break; } }
-  void DebugShot(int k) override { if (on.empty()) return; if (k == cine::SMASH) { Vector3 sv = bp; bp = Vector3Add(RacketPt(on[0]), { 0, 1.3f, 0 }); radar = "131 km/h"; SmashShot(on[0]); bp = sv; } else if (k == cine::WIN) WinShot(on[0].team); }
+  void DebugShot(int k) override { if (on.empty()) return; if (k == cine::SMASH) { phase = "rally"; tossT = 0; bp = Vector3Add(RacketPt(on[0]), { 0.1f, 1.05f, 0 }); Hit(0, 1.0f, 0.3f, true); } else if (k == cine::WIN) WinShot(on[0].team); }
   void Hit(int i, float power, float aim, bool good) {
     Pl& p = on[i]; lastHitTeam = p.team; rally++; if (p.pid >= 0) hits[p.pid]++;
     float tz = -Side(p.team) * (HL - 2.2f - frand(0, 2.5f) * (good ? 0.6f : 1)), tx = Clamp(aim, -1, 1) * (Doubles() ? DW : HW) * 0.78f + frand(-0.4f, 0.4f);
-    bool smash = bp.y > 1.9f && power > 0.5f;
+    // a SMASH is rare: a high ball, a hard swing and good timing (the AI only sometimes goes for it) — and nobody can return it
+    bool ai = p.pid < 0 || P(p.pid).bot;
+    bool smash = bp.y > 1.75f && power >= 0.75f && good && (!ai || frand(0, 1) < 0.3f);
+    if (smash) { float w = Doubles() ? DW : HW; tz = -Side(p.team) * frand(HL * 0.45f, HL * 0.72f); tx = Clamp(aim, -1, 1) * w * 0.55f; }
     float spd = (smash ? 34 : 20 + power * 13) * (good ? 1 : 0.82f);
-    Launch(bp, { tx, 0, tz }, spd);
+    Launch(bp, { tx, 0, tz }, spd); smashLive = smash;
     int kmh = (int)(spd * 3.6f * 1.1f); radar = I(kmh) + " km/h"; radarT = 1.6f;
-    Sfx(smash ? "smash" : "pok"); Shake(smash ? 10 : 2); fx.Burst(bp, smash ? 40 : 12, smash ? Hex(0xff922b) : WHITE, smash ? 6 : 3, 0.5f, 0.05f, 2);
+    Sfx(smash ? "smash" : "pok"); Shake(smash ? 10 : 2); if (!smash) fx.Burst(bp, 12, WHITE, 3, 0.5f, 0.05f, 2);
     if (smash) SmashShot(p); else if (good && power > 0.8f) { call = "💥 POWER SHOT!"; callT = 1; }
     p.sw = 1; p.swDir = bp.x > p.pos.x ? 1.f : -1.f;
     if (rally == 8) Sfx("cheer");
@@ -110,6 +114,7 @@ struct Tennis : Classic {
       p.cool = 0.3f; p.sw = 1; Sfx("swish");
       if (phase == "serve" && (int)i == server && tossT < 0) { tossT = 0; servePow = power; serveAim = P(pid).stick.x; return; }
       if (phase != "rally" || !live || (int)i != recv) return;
+      if (smashLive) { call = "TOO FAST!"; callT = 0.8f; return; }   // a smash can't be returned
       // generous: anywhere near the ball counts; closer to the ideal moment = better shot
       Vector3 rk = RacketPt(p); float d = Vector3Distance(rk, bp);
       if (d < 3.2f && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, P(pid).stick.x, d < 1.6f); if (d < 1.1f) { call = "PERFECT!"; callT = 0.8f; } return; }
@@ -175,16 +180,17 @@ struct Tennis : Classic {
         if ((zb < 0) != (bp.z < 0) && bp.y < NETH) { live = false; Sfx("netHit"); Point(1 - lastHitTeam, "NET!"); return; }
         if (bp.y < 0.033f && bv.y < 0) {
           bp.y = 0.033f; bv.y = -bv.y * 0.72f; bv.x *= 0.88f; bv.z *= 0.88f; bounces++; Sfx("bounce");
+          if (smashLive && bounces == 1) { cine::Impact(bp); Sfx("boom"); Shake(12); }
           float w = Doubles() ? DW : HW; bool onRecvSide = bp.z * Side(lastHitTeam) < 0;
           if (bounces == 1 && (!onRecvSide || fabsf(bp.x) > w + 0.05f || fabsf(bp.z) > HL + 0.05f)) { live = false; Point(1 - lastHitTeam, "OUT!"); return; }
-          if (bounces >= 2) { live = false; Point(lastHitTeam, rally <= 1 ? "ACE! 🎾" : "WINNER!"); return; }
+          if (bounces >= 2) { live = false; Point(lastHitTeam, smashLive ? "SMASH WINNER!" : rally <= 1 ? "ACE! 🎾" : "WINNER!"); return; }
         }
       }
       trail.push_back(bp); if (trail.size() > 16) trail.erase(trail.begin());
       // the AI (bots + the practice machine) hits on time, most of the time
       if (recv >= 0) { Pl& r = on[recv]; bool ai = r.pid < 0 || P(r.pid).bot; Vector3 rk = RacketPt(r);
-        if (ai && Vector3Distance(rk, bp) < 1.9f && bounces == 1) { if (frand(0, 1) < (r.pid < 0 ? 0.9f : 0.8f)) Hit(recv, frand(0.45f, 0.9f), frand(-0.8f, 0.8f), true); else { recv = -1; } } }
-      if (fabsf(bp.z) > HL + 9 || fabsf(bp.x) > 14) { live = false; Point(bounces >= 1 ? lastHitTeam : 1 - lastHitTeam, bounces >= 1 ? "WINNER!" : "OUT!"); }
+        if (ai && !smashLive && Vector3Distance(rk, bp) < 1.9f && bounces == 1) { if (frand(0, 1) < (r.pid < 0 ? 0.9f : 0.8f)) Hit(recv, frand(0.45f, 0.9f), frand(-0.8f, 0.8f), true); else { recv = -1; } } }
+      if (fabsf(bp.z) > HL + 9 || fabsf(bp.x) > 14) { live = false; Point(bounces >= 1 ? lastHitTeam : 1 - lastHitTeam, bounces >= 1 ? (smashLive ? "SMASH WINNER!" : "WINNER!") : "OUT!"); }
     }
   }
   // the swing arc in the character's own space: the right arm sweeps from behind, across the front
@@ -208,8 +214,9 @@ struct Tennis : Classic {
   void DrawCourt() {
     // broadcast camera: high behind the near baseline, drifting gently with the ball
     float bx = live ? Clamp(bp.x, -4, 4) * 0.25f : 0;
-    cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 10.5f, -26 } : cam.position, { bx, 10.5f, -26.5f }, 0.05f);
-    cam.target = Vector3Lerp(cam.target, { bx * 0.6f, 0, 0.5f }, 0.05f); cam.fovy = 43;
+    cam.position = Vector3Lerp(cam.position.y == 0 ? Vector3{ 0, 7.4f, -25 } : cam.position, { bx, 7.4f, -25.5f }, 0.05f);
+    cam.target = Vector3Lerp(cam.target, { bx * 0.6f, 0.9f, 1.8f }, 0.05f); cam.fovy = 42;
+    if (smashLive && live) cine::Follow(bp);
     if (g_dbg == 7 && !on.empty()) { Pl& q = on[0]; cam.position = { q.pos.x + 2.2f, 1.6f, q.pos.z + (q.team ? -2.6f : 2.6f) }; cam.target = { q.pos.x + 0.3f, 1.0f, q.pos.z }; cam.fovy = 40; }
     UI::Sky(Hex(0x4a90e2), Hex(0xcfe8ff));
     lit.Begin(cam, { 0.75f, 0.85f, 0.95f }, 0.004f);
@@ -326,8 +333,9 @@ struct Tennis : Classic {
     // ball + trail + shadow
     if (live || phase == "serve") {
       if (phase != "serve" || tossT >= 0) {
-        DrawProp(props.tennisBall, MatrixMultiply(MatrixMultiply(MatrixScale(0.05f, 0.05f, 0.05f), MatrixRotateXYZ({ time * 20, time * 13, 0 })), MatrixTranslate(bp.x, bp.y, bp.z))); lit.Caster({ bp.x, 0, bp.z }, 0.08f);
-        for (size_t k = 1; k < trail.size(); k++) Limb(trail[k - 1], trail[k], 0.03f * k / trail.size(), Fade(Hex(0xf4ffb0), 0.6f));
+        float bs = smashLive && cine::Busy() ? 0.085f : 0.05f;   // the smash ball reads big in the close-up
+        DrawProp(props.tennisBall, MatrixMultiply(MatrixMultiply(MatrixScale(bs, bs, bs), MatrixRotateXYZ({ time * 20, time * 13, 0 })), MatrixTranslate(bp.x, bp.y, bp.z))); lit.Caster({ bp.x, 0, bp.z }, 0.08f);
+        if (!smashLive) for (size_t k = 1; k < trail.size(); k++) Limb(trail[k - 1], trail[k], 0.03f * k / trail.size(), Fade(Hex(0xf4ffb0), 0.6f));
       }
     }
     fx.Draw(); conf.Draw();
