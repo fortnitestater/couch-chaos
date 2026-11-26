@@ -191,7 +191,7 @@ struct Tennis : Classic {
       // generous: anywhere near the ball counts; closer to the ideal moment = better shot
       Vector3 rk = RacketPt(p); float d = Vector3Distance(rk, bp);
       if (d < 4.6f && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, aimW, d < 2.4f, shot); if (d < 1.3f) { call = "PERFECT!"; callT = 0.8f; } return; }
-      if (d < 20 && !smashLive) { qPid = pid; qT = 1.5f; qPow = power; qAim = aimW; qShot = shot; call = ""; return; }   // flick as soon as you see the ball coming: the swing is held and goes the moment it's in reach
+      if (!smashLive) { qPid = pid; qT = 2.0f; qPow = power; qAim = aimW; qShot = shot; if (callT > 0 && call == "WAIT FOR IT…") callT = 0; return; }   // flick as soon as you see the ball coming: the swing is held and goes the moment it's in reach
       call = "WAIT FOR IT…"; callT = 0.6f;
     }
   }
