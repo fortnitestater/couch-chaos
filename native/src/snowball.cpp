@@ -1,5 +1,6 @@
 // SNOWBALL FIGHT — arcing snowballs, snow forts to hide behind, most hits in 75 s wins.
 #include "cc.h"
+#include "mesh.h"
 #include "touch.h"
 
 namespace {
@@ -150,13 +151,25 @@ struct Snowball : Game {
     for (int i = 0; i <= 20; i++) { float y = BOX.y + BOX.height * i / 20; for (float x : { BOX.x, BOX.x + BOX.width }) lit.Draw(prim.cyl, TRS(W3(x, y, 0), { 0, 0, 0 }, { 0.12f, 0.6f, 0.12f }), Hex(0x8d6e63)); }
     for (auto& tr : trees) {
       float s = tr.z;
-      lit.Draw(prim.cyl, TRS({ tr.x, 0, tr.y }, { 0, 0, 0 }, { 0.2f * s, 0.5f * s, 0.2f * s }), Hex(0x5c3d2e));
-      for (int i = 0; i < 3; i++) { float y = 0.4f * s + i * 0.45f * s, r = (1.1f - i * 0.28f) * s; lit.Draw(prim.cone, TRS({ tr.x, y, tr.y }, { 0, 0, 0 }, { r, 0.75f * s, r }), Hex(0x2b8a3e)); lit.Draw(prim.cone, TRS({ tr.x, y + 0.42f * s, tr.y }, { 0, 0, 0 }, { r * 0.5f, 0.34f * s, r * 0.5f }), WHITE); }
+      DrawProp(props.pineSnow, TRS({ tr.x, 0, tr.y }, { 0, tr.x * 1.7f, 0 }, { 1.55f * s, 2.3f * s, 1.55f * s }));
     }
     for (auto& f : forts) {
       Vector3 c = W3(f.x, f.y); float r = f.r * SC;
-      lit.Draw(prim.sphere, TRS(c, { 0, 0, 0 }, { r * 2, r * 1.3f, r * 2 }), Hex(0xf8fbff));
-      for (int i = 0; i < 8; i++) { float a = i * PI / 4; lit.Draw(prim.sphere, TRS({ c.x + cosf(a) * r * 0.95f, 0.15f, c.z + sinf(a) * r * 0.95f }, { 0, 0, 0 }, { 0.6f, 0.45f, 0.6f }), Hex(0xe7f5ff)); }
+      // a real snow fort: a round wall of packed snow bricks (three staggered courses, battlements on top), snow piled inside,
+      // and a stack of ready-made snowballs by the wall
+      int nb = std::max(8, (int)(r * 6.5f)); float bh = 0.36f, bl = 2 * PI * r / nb;
+      lit.Pattern(PAT_SNOW);
+      lit.Draw(prim.cyl, TRS({ c.x, 0, c.z }, { 0, 0, 0 }, { r * 1.75f, bh * 2.1f, r * 1.75f }), Hex(0xe8f0fb));
+      lit.Draw(prim.sphere, TRS({ c.x, bh * 2.0f, c.z }, { 0, 0, 0 }, { r * 1.55f, bh * 1.3f, r * 1.55f }), Hex(0xf0f5fd));
+      lit.Pattern(PAT_NONE);
+      for (int row = 0; row < 4; row++) for (int i = 0; i < nb; i++) {
+        if (row == 3 && i % 2) continue;   // battlements
+        float a = (i + (row % 2) * 0.5f) * 2 * PI / nb, rr = r * (0.97f - row * 0.015f);
+        unsigned hh = (unsigned)(i * 7 + row * 13 + (int)(f.x)); Color bc = hh % 3 == 0 ? Hex(0xf4f8ff) : hh % 3 == 1 ? Hex(0xe2ecf9) : Hex(0xd3e1f3);
+        lit.Draw(prim.cube, TRS({ c.x + cosf(a) * rr, bh * (row + 0.5f), c.z + sinf(a) * rr }, { 0, -a + PI / 2, 0 }, { bl * 0.93f, bh * 0.92f, 0.42f }), bc);
+      }
+      for (int q = 0; q < 6; q++) { const float ox[6] = { 0, 0.3f, 0.15f, -0.15f, 0.45f, 0.15f }, oz[6] = { 0, 0, 0.26f, 0.26f, 0.26f, 0.13f }, oy[6] = { 0, 0, 0, 0, 0, 0.24f };
+        lit.Draw(prim.sphere, TRS({ c.x + r * 1.05f + ox[q], 0.15f + oy[q], c.z + r * 0.55f + oz[q] }, { 0, 0, 0 }, { 0.3f, 0.3f, 0.3f }), Hex(0xf6f9ff)); }
     }
     for (auto& b : k) {
       Vector3 pos = W3(b.x, b.y); Player& p = P(b.pid);

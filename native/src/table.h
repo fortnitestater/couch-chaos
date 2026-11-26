@@ -38,7 +38,7 @@ struct Table : Game {
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; }
-  void TableCam() { InitCam({ 0, 11.6f, 10.2f }, { 0, -0.4f, -1.1f }, 44); }
+  void TableCam() { InitCam({ 0, 11.6f, 10.2f }, { 0, -0.5f, -1.15f }, 40.5f); }
   // seats run around the far half of the table so nobody blocks the view
   float SeatA(int i) { int n = N(); float span = n <= 2 ? 1.2f : n == 3 ? 1.9f : n == 4 ? 2.3f : 3.5f; return -PI / 2 + (n == 1 ? 0 : -span / 2 + span * i / (n - 1)); }
   Vector3 Seat(int i, float r = 7.4f) { float a = SeatA(i); return { cosf(a) * r, 0, sinf(a) * r * 0.78f }; }
@@ -56,12 +56,16 @@ struct Table : Game {
       { 0x5a3a28, 0xe9d5ff, 0x4a2a7a, 0x3b2a5c, 0x46346b, 0xd9a441, 0xc08f35, 0x7b3fa0, 0x8d4ab5 },  // plum game room
       { 0x7d5a3c, 0xdff3ff, 0x1c5d8a, 0x9fc3d6, 0xabd0e2, 0xe8eef3, 0xd3dce4, 0x2f6f9f, 0x3a7fb2 },  // winter cabin
     };
-    const Mood& M = MOODS[((unsigned)felt.r * 3 + (unsigned)felt.g * 7 + (unsigned)felt.b * 11) % 5];
-    lit.Pattern(PAT_WOOD);
-    lit.Draw(prim.plane, TRS({ 0, F, 0 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(M.floor));
+    const int mi = (int)(((unsigned)felt.r * 3 + (unsigned)felt.g * 7 + (unsigned)felt.b * 11) % 5);
+    const Mood& M = MOODS[mi];
+    // the rooms differ in more than colour: fireplace or window, bookcase or painting, wood / tile / carpet, round or square rug
+    const bool fire = mi == 1 || mi == 3, shelf = mi != 1 && mi != 2, rectRug = mi == 1 || mi == 4;
+    lit.Pattern(mi == 2 ? PAT_TILE : mi == 3 ? PAT_FELT : PAT_WOOD);
+    lit.Draw(prim.plane, TRS({ 0, F, 0 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(mi == 2 ? 0xd8c7a8 : mi == 3 ? 0x3a2a55 : M.floor));
     lit.Pattern(PAT_RUG);
-    lit.Draw(prim.cyl, TRS({ 0, F, 0.5f }, { 0, 0, 0 }, { 23, 0.04f, 15.5f }), Hex(M.rugEdge));   // rug border
-    lit.Draw(prim.cyl, TRS({ 0, F + 0.01f, 0.5f }, { 0, 0, 0 }, { 21.6f, 0.04f, 14.2f }), Hex(M.rug));
+    const Mesh& rugM = rectRug ? prim.cube : prim.cyl;
+    lit.Draw(rugM, TRS({ 0, F, 0.5f }, { 0, 0, 0 }, { 23, 0.04f, 15.5f }), Hex(M.rugEdge));   // rug border
+    lit.Draw(rugM, TRS({ 0, F + 0.012f, 0.5f }, { 0, 0, 0 }, { 21.6f, 0.04f, 14.2f }), Hex(M.rug));
     lit.Pattern(PAT_NONE);
     // back wall: sage wallpaper with fine stripes, white painted wainscoting with raised panels, dado rail, skirting, crown moulding
     lit.Draw(prim.cube, TRS({ 0, 6, wz }, { 0, 0, 0 }, { 80, 19, 0.4f }), Hex(M.wall));
@@ -74,8 +78,9 @@ struct Table : Game {
     lit.Draw(prim.cube, TRS({ 0, 0.85f, wz + 0.45f }, { 0, 0, 0 }, { 80, 0.18f, 0.25f }), Hex(0xf4f1ea));     // dado rail
     lit.Draw(prim.cube, TRS({ 0, F + 0.25f, wz + 0.45f }, { 0, 0, 0 }, { 80, 0.5f, 0.25f }), Hex(0xf4f1ea));  // skirting
     lit.Draw(prim.cube, TRS({ 0, 15.4f, wz + 0.5f }, { 0, 0, 0 }, { 80, 0.5f, 0.5f }), Hex(0xf4f1ea));        // crown
-    // window: frame, glass with the night sky + moon, sill, mullions, curtains on a rail
     float wx = -9;
+    if (!fire) {
+    // window: frame, glass with the night sky + moon, sill, mullions, curtains on a rail
     lit.Draw(prim.cube, TRS({ wx, 6.2f, wz + 0.3f }, { 0, 0, 0 }, { 6.0f, 5.6f, 0.3f }), Hex(0xf4f1ea));
     lit.Draw(prim.cube, TRS({ wx, 6.2f, wz + 0.42f }, { 0, 0, 0 }, { 5.4f, 5.0f, 0.1f }), Hex(0x1c2b5a));
     lit.Draw(prim.sphere, TRS({ wx + 1.3f, 7.5f, wz + 0.5f }, { 0, 0, 0 }, { 1.1f, 1.1f, 0.1f }), Hex(0xfff3bf));
@@ -96,6 +101,24 @@ struct Table : Game {
     lit.Draw(prim.cube, TRS({ wx - 1.8f, F + 2.25f, wz + 1.5f }, { -0.25f, 0, 0.15f }, { 1.0f, 1.0f, 0.3f }), Hex(0xf2c14e));
     lit.Draw(prim.cube, TRS({ wx + 1.9f, F + 2.25f, wz + 1.5f }, { -0.25f, 0, -0.12f }, { 1.0f, 1.0f, 0.3f }), Hex(0xe76f51));
     for (int s = -1; s <= 1; s += 2) for (int q = -1; q <= 1; q += 2) lit.Draw(prim.cyl, TRS({ wx + s * 3.0f, F, wz + 1.9f + q * 0.9f }, { 0, 0, 0 }, { 0.14f, 0.18f, 0.14f }), Hex(0x3a2a1a));
+    } else {
+      // brick fireplace with a timber mantel, logs, a gilt mirror, candles and two wing chairs
+      lit.Pattern(PAT_STONE);
+      lit.Draw(prim.cube, TRS({ wx, F + 2.7f, wz + 0.9f }, { 0, 0, 0 }, { 6.6f, 5.4f, 1.4f }), Hex(0x9a5a44));
+      lit.Draw(prim.cube, TRS({ wx, 8.6f, wz + 0.6f }, { 0, 0, 0 }, { 4.6f, 13.6f, 0.8f }), Hex(0x8a4f3c));
+      lit.Pattern(PAT_NONE);
+      lit.Draw(prim.cube, TRS({ wx, F + 1.7f, wz + 1.58f }, { 0, 0, 0 }, { 3.6f, 3.2f, 0.1f }), Hex(0x140d0b));
+      lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ wx, F + 5.55f, wz + 1.0f }, { 0, 0, 0 }, { 7.4f, 0.32f, 1.9f }), Hex(0x5a3a22)); lit.Pattern(PAT_NONE);
+      for (int q = -1; q <= 1; q++) lit.Draw(prim.cyl, TRS({ wx + q * 0.75f + 0.9f, F + 0.35f + (q == 0 ? 0.3f : 0), wz + 1.75f }, { 0, 0, PI / 2 }, { 0.32f, 1.8f, 0.32f }), Hex(0x4a2f1c));
+      lit.Draw(prim.cube, TRS({ wx, F + 8.2f, wz + 1.05f }, { 0, 0, 0 }, { 3.4f, 3.0f, 0.14f }), Hex(0xc9a227));
+      lit.Draw(prim.cube, TRS({ wx, F + 8.2f, wz + 1.14f }, { 0, 0, 0 }, { 2.9f, 2.5f, 0.04f }), Hex(0xbfd4e6));
+      for (int q = 0; q < 3; q++) lit.Draw(prim.cyl, TRS({ wx - 2.6f + q * 2.6f, F + 5.7f, wz + 1.2f }, { 0, 0, 0 }, { 0.22f, 0.7f + (q % 2) * 0.4f, 0.22f }), Hex(0xf4f1ea));
+      for (int sd = -1; sd <= 1; sd += 2) {
+        lit.Draw(prim.cube, TRS({ wx + sd * 5.6f, F + 0.9f, wz + 2.4f }, { 0, -sd * 0.35f, 0 }, { 2.4f, 1.3f, 2.2f }), Hex(M.sofa));
+        lit.Draw(prim.cube, TRS({ wx + sd * 5.9f, F + 2.6f, wz + 1.6f }, { 0, -sd * 0.35f, 0 }, { 2.4f, 3.4f, 0.6f }), Hex(M.sofaD));
+      }
+    }
+    if (shelf) {
     // bookshelf with books, a plant and ornaments
     lit.Pattern(PAT_WOOD);
     lit.Draw(prim.cube, TRS({ 9.5f, 3.4f, wz + 1.1f }, { 0, 0, 0 }, { 6.4f, 13.2f, 1.6f }), Hex(0x6b4426));
@@ -113,6 +136,22 @@ struct Table : Game {
         lit.Draw(prim.cube, TRS({ x + bw / 2, y + 0.3f + bh / 2, wz + 1.75f }, { 0, 0, tilt }, { bw, bh, 0.95f }), Hex(bc[(b * 3 + shelf * 7) % 10]));
         x += bw + 0.04f + (tilt > 0 ? 0.35f : 0);
       }
+    }
+    } else {
+      // a big gilt-framed landscape over a console table with a vase and a globe
+      lit.Draw(prim.cube, TRS({ 9.5f, 7.2f, wz + 0.32f }, { 0, 0, 0 }, { 6.0f, 4.2f, 0.24f }), Hex(0xc9a227));
+      lit.Draw(prim.cube, TRS({ 9.5f, 7.2f, wz + 0.46f }, { 0, 0, 0 }, { 5.4f, 3.6f, 0.04f }), Hex(0x8ecae6));
+      lit.Draw(prim.sphere, TRS({ 10.8f, 8.0f, wz + 0.49f }, { 0, 0, 0 }, { 0.9f, 0.9f, 0.03f }), Hex(0xffe08a));
+      lit.Draw(prim.sphere, TRS({ 8.4f, 5.95f, wz + 0.5f }, { 0, 0, 0 }, { 3.0f, 1.1f, 0.03f }), Hex(0x4f9d69));
+      lit.Draw(prim.sphere, TRS({ 10.6f, 5.9f, wz + 0.51f }, { 0, 0, 0 }, { 3.2f, 0.9f, 0.03f }), Hex(0x3b7f57));
+      lit.Pattern(PAT_WOOD);
+      lit.Draw(prim.cube, TRS({ 9.5f, F + 2.3f, wz + 1.1f }, { 0, 0, 0 }, { 6.0f, 0.3f, 1.5f }), Hex(0x6b4426));
+      for (int sd = -1; sd <= 1; sd += 2) lit.Draw(prim.cube, TRS({ 9.5f + sd * 2.7f, F + 1.1f, wz + 1.1f }, { 0, 0, 0 }, { 0.3f, 2.2f, 1.3f }), Hex(0x5a3a22));
+      lit.Pattern(PAT_NONE);
+      lit.Draw(prim.sphere, TRS({ 8.0f, F + 3.2f, wz + 1.1f }, { 0, 0, 0 }, { 1.1f, 1.5f, 1.1f }), Hex(0x2a9d8f));
+      lit.Draw(prim.cyl, TRS({ 8.0f, F + 3.8f, wz + 1.1f }, { 0, 0, 0 }, { 0.4f, 0.5f, 0.4f }), Hex(0x2a9d8f));
+      lit.Draw(prim.cyl, TRS({ 10.9f, F + 2.45f, wz + 1.1f }, { 0, 0, 0 }, { 0.9f, 0.25f, 0.9f }), Hex(0xd9a441));
+      lit.Draw(prim.sphere, TRS({ 10.9f, F + 3.1f, wz + 1.1f }, { 0, 0, 0 }, { 1.0f, 1.0f, 1.0f }), Hex(0xe9e4d8));
     }
     // gallery wall: framed pictures with mats and simple art
     const unsigned pc[] = { 0xf4a261, 0x8ecae6, 0xe76f51, 0x90be6d };
@@ -136,7 +175,8 @@ struct Table : Game {
     rlDrawRenderBatchActive(); rlDisableDepthMask(); BeginBlendMode(BLEND_ADDITIVE);
     DrawSphere({ 4.6f, F + 3.4f, wz + 1.1f }, 0.5f, Fade(Hex(0xffd59a), 0.55f));
     for (int k = 0; k < 12; k++) { float r = 0.6f + k * 0.35f; DrawCylinderEx({ 4.6f, F + 3.9f, wz + 0.45f }, { 4.6f, F + 3.9f, wz + 0.46f }, r, r, 40, Fade(Hex(0xffb86b), 0.022f)); }
-    for (int k = 0; k < 10; k++) { float r = 0.8f + k * 0.4f; DrawCylinderEx({ wx + 1.3f, 7.5f, wz + 0.55f }, { wx + 1.3f, 7.5f, wz + 0.56f }, r, r, 40, Fade(Hex(0x8fb3ff), 0.014f)); }
+    if (fire) for (int k = 0; k < 9; k++) { float fl = 0.7f + 0.3f * sinf(time * 9 + k * 1.7f); DrawSphere({ wx + sinf(k * 2.1f) * 0.9f, F + 0.9f + (k % 4) * 0.4f, wz + 1.55f }, 0.6f - (k % 4) * 0.1f, Fade(Hex(k % 2 ? 0xff7a1a : 0xffc04d), 0.32f * fl)); }
+    if (!fire) for (int k = 0; k < 10; k++) { float r = 0.8f + k * 0.4f; DrawCylinderEx({ wx + 1.3f, 7.5f, wz + 0.55f }, { wx + 1.3f, 7.5f, wz + 0.56f }, r, r, 40, Fade(Hex(0x8fb3ff), 0.014f)); }
     BeginBlendMode(BLEND_ALPHA); rlDrawRenderBatchActive(); rlEnableDepthMask();
     if (!table) return;
     lit.Draw(prim.cyl, TRS({ 0, F, 0 }, { 0, 0, 0 }, { 1.6f, 2.9f, 1.6f }), Shade(wood, -0.3f));
@@ -173,6 +213,7 @@ struct Table : Game {
   struct TextJob { Vector3 at; float len; std::string s; Color c; float k; };
   std::vector<TextJob> jobs;
   void CardAt(Vector3 c, float yaw, bool faceUp, Card cd, float s = 1, float flip = 1, Color back = Hex(0xc92a2a)) {
+    const float KT = 1.3f; c.x *= KT; c.z *= KT; s *= KT;   // everything on the felt is 30% bigger so it reads from the couch
     float sq = fabsf(flip * 2 - 1), lift = (1 - sq) * 0.6f * s;
     Vector3 p = { c.x, c.y + lift, c.z };
     lit.Draw(prim.cube, TRS({ p.x + 0.05f, 0.01f, p.z + 0.07f }, { 0, yaw, 0 }, { 0.92f * s * sq, 0.01f, 1.3f * s }), Hex(0x000000, 50));
@@ -194,6 +235,7 @@ struct Table : Game {
   }
   // a die: value on top, tumbling while roll > 0
   void Die(Vector3 c, int v, float roll, float s = 0.62f, Color body = WHITE, Color ring = BLANK) {
+    const float KT = 1.3f; c.x *= KT; c.z *= KT; s *= KT;
     Vector3 r = { 0, 0, 0 }; float hop = 0;
     if (roll > 0) { r = { time * 13 + c.x, time * 9, time * 11 + c.z }; hop = fabsf(sinf(roll * 9)) * 0.7f * roll; }
     Vector3 p = { c.x, c.y + s / 2 + hop, c.z };
@@ -209,7 +251,7 @@ struct Table : Game {
     hud::Board(title, rows, x < 100 ? 24 : x, 340, true);   // bottom-left, clear of the players' heads
   }
   void Hint(const std::string& s, Color c = WHITE, float y = 857) { hud::Hint(s, c, y - 16); }
-  void Title(const std::string& s, Color c = WHITE) { float w = Measure(s, 40, TS_DISPLAY) + 70; hud::Panel(800 - w / 2, 12, w, 64, 32); Text(800, 46, 40, c, s, 0, TS_DISPLAY | TS_SHADOW); }
+  void Title(const std::string& s, Color c = WHITE) { float w = Measure(s, 40, TS_DISPLAY) + 70; hud::Panel(20, 14, w, 68, 34); Text(20 + w / 2, 50, 40, c, s, 0, TS_DISPLAY | TS_SHADOW); }
   std::vector<int> Sorted(std::function<float(int)> key) { std::vector<int> o; for (int i = 0; i < N(); i++) o.push_back(i); std::stable_sort(o.begin(), o.end(), [&](int a, int b) { return key(a) > key(b); }); return o; }
   void FinishOrder(const std::vector<int>& o, std::function<std::string(int)> stat) { std::string r; for (int i : o) r += std::to_string(i) + ":" + stat(i) + ";"; Finish(r); }
   void Celebrate(int pid) { conf.Spawn({ 0, 4, 0 }, 140, 6, 6); Sfx("win"); if (pid >= 0) Banner(P(pid).name + " WINS!", 2600, Hx(P(pid).color).c_str()); }

@@ -22,7 +22,45 @@
   function toast(t, ms = 2000) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
   function setStatus(t) { const el = $('#status'); el.classList.toggle('warn', /🟠|🔴/.test(t)); el.textContent = t.replace(/^[🟢🟠🔴]\s*/u, ''); }
   function joinErr(t) { $('#joinErr').textContent = t; $('#joinBtn').disabled = false; $('#joinBtn').textContent = 'Join the party'; }
-  const light = c => /^#(ffd43b|fcc419|f1f3f5|fff|ffffff|94d82d|ffe066|e9ecef)$/i.test(c);
+  const light = c => { const m = /^#([0-9a-f]{6})$/i.exec(c || ''); if (!m) return /^#fff$/i.test(c || ''); const v = parseInt(m[1], 16); return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 160; };
+  // ---------- one icon set for every phone (OS emoji look different on every device) ----------
+  const SV = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const ICONS = {
+    left: SV('<path d="M20 12H5M11 5l-7 7 7 7"/>'), right: SV('<path d="M4 12h15M13 5l7 7-7 7"/>'),
+    down: SV('<path d="M12 4v15M5 13l7 7 7-7"/>'), up: SV('<path d="M12 20V5M5 11l7-7 7 7"/>'),
+    check: SV('<path d="M4 12.5l5.2 5.5L20 6.5"/>'), cross: SV('<path d="M6 6l12 12M18 6L6 18"/>'),
+    rock: SV('<path d="M3.8 15.8l1.9-6.6 4.9-3.9 6.4.9 3.2 4.9-1.3 6.4-5.9 2.3-6.3-1z" fill="currentColor" fill-opacity=".4"/><path d="M8.5 11.5l2.2 1.200M14.8 9.300l-1.3 2.2"/>'),
+    paper: SV('<path d="M6.5 3.5h8l3.5 3.5v13.5h-11.5z" fill="currentColor" fill-opacity=".28"/><path d="M14.5 3.5V7H18M9.3 11.5h5.6M9.3 15h5.6"/>'),
+    scissors: SV('<circle cx="6.5" cy="17.5" r="2.7"/><circle cx="17.5" cy="17.5" r="2.7"/><path d="M8.2 15.4L17 3.5M15.8 15.4L7 3.5"/>'),
+    handsup: SV('<circle cx="12" cy="8" r="2.6" fill="currentColor" fill-opacity=".28"/><path d="M12 11v6M12 12.5L6.5 4.5M12 12.5l5.5-8M12 17l-3 4.500M12 17l3 4.5"/>'),
+    clap: SV('<path d="M7.5 12.500l4.5-4.5 3 3-4.5 4.500a2.1 2.1 0 0 1-3-3z" fill="currentColor" fill-opacity=".28"/><path d="M11 17l4.5-4.5 3 3-3.7 3.700a3 3 0 0 1-4.2 0zM12 2.500v2.500M6.5 4.500l1.5 2M17.5 4.500l-1.5 2"/>'),
+    jump: SV('<path d="M5.5 12l6.5-6.5 6.5 6.500M5.5 19l6.5-6.5 6.5 6.5"/>'),
+    squat: SV('<path d="M5.5 5l6.5 6.5 6.5-6.500M5.5 12l6.5 6.5 6.5-6.5"/>'),
+    tap: SV('<circle cx="12" cy="12" r="3.2" fill="currentColor"/><circle cx="12" cy="12" r="8.5"/>'),
+    run: SV('<path d="M4 6l6.5 6-6.5 6M12.5 6l6.5 6-6.5 6"/>'),
+    dice: SV('<rect x="4" y="4" width="16" height="16" rx="3.5" fill="currentColor" fill-opacity=".28"/><circle cx="8.7" cy="8.7" r=".9" fill="currentColor"/><circle cx="15.3" cy="15.3" r=".9" fill="currentColor"/><circle cx="12" cy="12" r=".9" fill="currentColor"/>'),
+    hand: SV('<path d="M7 12V6.500a1.5 1.5 0 0 1 3 0V11M10 11V4.500a1.5 1.5 0 0 1 3 0V11M13 11V5.500a1.5 1.5 0 0 1 3 0V12M16 12V8.500a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.500a5.5 5.5 0 0 1-4.6-2.500L4 14a1.5 1.5 0 0 1 2.5-1.600L7 13.2" fill="currentColor" fill-opacity=".22"/>'),
+    eye: SV('<path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.500S2.5 12 2.5 12z" fill="currentColor" fill-opacity=".22"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/>'),
+    clock: SV('<circle cx="12" cy="12" r="8.5" fill="currentColor" fill-opacity=".22"/><path d="M12 7v5.200l3.5 2"/>'),
+    star: SV('<path d="M12 3l2.7 5.6 6.1.800-4.5 4.3 1.1 6.100L12 16.9 6.6 19.800l1.1-6.100L3.2 9.400l6.1-.800z" fill="currentColor" fill-opacity=".3"/>'),
+  };
+  const EMO = { '\u2B05': 'left', '\u27A1': 'right', '\u2B07': 'down', '\u2B06': 'up', '\u2705': 'check', '\u2611': 'check', '\u2714': 'check', '\u274C': 'cross', '\u270A': 'rock', '\u270B': 'hand', '\u270C': 'scissors',
+    '\uD83D\uDE4C': 'handsup', '\uD83D\uDC4F': 'clap', '\uD83E\uDD98': 'jump', '\uD83D\uDC06': 'jump', '\uD83D\uDC07': 'jump', '\uD83D\uDC46': 'tap', '\uD83C\uDFC3': 'run', '\uD83C\uDFB2': 'dice', '\uD83E\uDD1A': 'hand', '\uD83D\uDD90': 'hand',
+    '\uD83D\uDC40': 'eye', '\u23F0': 'clock', '\u2B50': 'star', '\uD83E\uDDE0': 'eye', '\uD83D\uDC47': 'down', '\uD83D\uDC48': 'left', '\uD83D\uDC49': 'right' };
+  const WORD_ICON = { LEFT: 'left', RIGHT: 'right', JUMP: 'jump', SQUAT: 'squat', CLAP: 'clap', 'HANDS UP': 'handsup', ROCK: 'rock', PAPER: 'paper', SCISSORS: 'scissors' };
+  // split "emoji label" into a house icon + clean text (unknown emoji stay as they are)
+  function icoSplit(label) {
+    let s = String(label == null ? '' : label).replace(/\uFE0F/g, ''), key = null;
+    const m = /^(\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDC00-\uDFFF]|[\u2190-\u2BFF])\s*/.exec(s);
+    if (m && EMO[m[1]]) { key = EMO[m[1]]; s = s.slice(m[0].length); }
+    const w = WORD_ICON[s.trim().toUpperCase()]; if (w) { key = w; if (m && !EMO[m[1]]) s = s.slice(m[0].length); }
+    return { icon: key ? ICONS[key] : '', text: s };
+  }
+  // strip a leading emoji from short status lines (the phone uses its own icons)
+  const noEmo = s => String(s == null ? '' : s).replace(/\uFE0F/g, '').replace(/^((\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDC00-\uDFFF]|[\u2190-\u2BFF])\s*)+/, '');
+  const icoBtn = label => { const q = icoSplit(label); return (q.icon ? `<i class="kIco">${q.icon}</i>` : '') + `<span>${esc(q.text)}</span>`; };
+  // phone prompts stay short: the TV explains the game
+  const shortHint = h => { let s = String(h || '').replace(/\uFE0F/g, '').split(/\s[\u00B7\u2014\u2013]\s|[.!]\s|\s\(/)[0].trim().replace(/[.!]$/, ''); return s.length > 44 ? s.slice(0, 42).replace(/\s+\S*$/, '') + '\u2026' : s; };
 
   // ---------- motion ----------
   let lastSwing = 0, swingWin = null, curRot = 0, curAcc = 0, motionSeen = false, grav = null, neutral = null, recenterSoon = false, ctrlMode = store.get('cc_ctrl') === 'motion' ? 'motion' : 'stick', tiltOn = store.get('cc_ctrl') === 'motion', flip = store.get('cc_flip') === '1' ? -1 : 1, lastShake = 0, motionOn = false;
@@ -254,6 +292,13 @@
   const keys = { left: false, right: false, up: false, down: false, a: false, b: false }, btn = { a: false, b: false }, stick = { active: false, x: 0, y: 0 };
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', Space: 'a', KeyJ: 'a', Enter: 'a', ShiftLeft: 'b', ShiftRight: 'b', KeyK: 'b', KeyE: 'b' };
   function readInput() {
+    if (layout && layout.name === 'touch' && layout.mode === 'go') {
+      const s = TM.stk, me = (TM.objs || []).find(o => o.k === 1), asp = +layout.aspect || 1;
+      if (!s) return { x: 0, y: 0, a: keys.a || btn.a, b: keys.b || btn.b, touch: false };
+      const cx = me ? me.x : 0.5, cy = me ? me.y : 0.5, reach = 0.22;
+      const tx = clamp(cx + s.x * reach, 0, 1), ty = clamp(cy + s.y * reach * asp, 0, 1);
+      return { x: tx * 2 - 1, y: ty * 2 - 1, a: keys.a || btn.a, b: keys.b || btn.b, touch: true };
+    }
     if (layout && layout.name === 'touch') { const f = TM.touching && TM.fing; return { x: f ? TM.fing.x * 2 - 1 : 0, y: f ? TM.fing.y * 2 - 1 : 0, a: keys.a || btn.a, b: keys.b || btn.b, touch: !!f }; }
     let x = 0, y = 0;
     if (keys.left) x -= 1; if (keys.right) x += 1; if (keys.up) y -= 1; if (keys.down) y += 1;
@@ -409,20 +454,22 @@
     if (n.length === TM.objs.length && n.every((o, i) => o.k === TM.objs[i].k)) n.forEach((o, i) => { o.dx = TM.objs[i].dx; o.dy = TM.objs[i].dy; });
     n.forEach(o => { if (o.dx === undefined) { o.dx = o.x; o.dy = o.y; } });
     TM.objs = n;
-    if (m.i !== undefined && m.i !== TM.info) { if (TM.L.trail && TM.info.split('·')[0] !== m.i.split('·')[0]) TM.tr = {}; TM.info = m.i; const e = document.getElementById('tInfo'); if (e) e.textContent = m.i; }
+    if (m.i !== undefined && m.i !== TM.info) { if (TM.L.trail && TM.info.split('·')[0] !== m.i.split('·')[0]) TM.tr = {}; TM.info = m.i; const e = document.getElementById('tInfo'); if (e) e.textContent = noEmo(m.i); }
     if (TM.L.trail) n.forEach(o => { if (o.k < 1 || o.k > 3) return; const tr = TM.tr[o.c] || (TM.tr[o.c] = []), l = tr[tr.length - 1]; if (l && Math.hypot(l[0] - o.x, l[1] - o.y) > 0.08) tr.length = 0; if (!l || Math.hypot(l[0] - o.x, l[1] - o.y) > 0.002) tr.push([o.x, o.y]); });
     // "go" mode: arrived at the spot you tapped → stop
     if (TM.L.mode === 'go' && TM.fing && !TM.down) { const me = n.find(o => o.k === 1); if (me && Math.hypot(me.x - TM.fing.x, (me.y - TM.fing.y) / TM.L.aspect) < 0.012) { TM.touching = false; TM.fing = null; flush(true); } }
   }
   function renderTouch(L) {
-    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = ''; TM.tr = {}; TM.t0 = 0; TM.paint = null;
-    stage.innerHTML = `<div class="touchC"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw" style="--asp:${+L.aspect || 1.9}"><canvas id="tcv"></canvas></div>${L.aspect > 1.3 ? '<div class="turnTip">↻ Turn your phone sideways for a bigger map</div>' : ''}
-      <div class="touchBottom"><div class="rhint">${esc(L.hint || '')}</div>${L.btn2 ? `<button class="pbtn pb touchBtn" data-b="b">${esc(L.btn2)}</button>` : ''}${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${esc(L.btn)}</button>` : ''}</div></div>`;
+    TM.on = true; TM.L = L; TM.objs = []; TM.fing = null; TM.touching = false; TM.down = false; TM.info = ''; TM.tr = {}; TM.t0 = 0; TM.paint = null; TM.stk = null;
+    if (L.mode === 'go') return renderStick(L);
+    TM.fill = L.mode === 'aim' && !L.btn && !L.btn2; TM.rk = TM.fill ? 1.9 : 1;
+    stage.innerHTML = `<div class="touchC ${L.btn || L.btn2 ? '' : 'full'}"><div class="touchInfo" id="tInfo"></div><div class="touchWrap" id="tw" style="--asp:${+L.aspect || 1.9}"><canvas id="tcv"></canvas></div>
+      <div class="touchBottom"><div class="rhint">${esc(shortHint(L.hint))}</div>${L.btn2 ? `<button class="pbtn pb touchBtn" data-b="b">${icoBtn(L.btn2)}</button>` : ''}${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${icoBtn(L.btn)}</button>` : ''}</div></div>`;
     stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
     const tw = $('#tw'), cv = $('#tcv'), g = cv.getContext('2d');
     const fit = () => {
       const W = tw.clientWidth, H = tw.clientHeight; if (!W || !H) return;
-      TM.rot = false; const asp = L.aspect;  // never turn the map: up on the phone is up on the TV
+      TM.rot = false; const asp = TM.fill ? W / H : L.aspect;  // never turn the map: up on the phone is up on the TV
       let cw = W, ch = W / asp; if (ch > H) { ch = H; cw = H * asp; }
       const d = Math.min(2, devicePixelRatio || 1); cv.width = Math.round(cw * d); cv.height = Math.round(ch * d); cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
       TM.cw = cw; TM.ch = ch; TM.d = d;
@@ -431,8 +478,15 @@
     const at = e => { const r = cv.getBoundingClientRect(), fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)); return TM.rot ? { x: 1 - fy, y: fx } : { x: fx, y: fy }; };
     let pid = null;
     cv.style.touchAction = 'none'; tw.style.touchAction = 'none';
-    tw.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { tw.setPointerCapture(pid); } catch (_) {} TM.fing = at(e); TM.touching = true; TM.down = true; TM.t0 = performance.now(); navigator.vibrate?.(8); flush(true); });
-    tw.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; TM.fing = at(e); flush(); });
+    tw.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { tw.setPointerCapture(pid); } catch (_) {} let f = at(e);
+      if (TM.fill) {  // only a tap that lands on a target counts, and it counts dead centre
+        const r = cv.getBoundingClientRect(); let best = null, bd = 1e9;
+        for (const o of TM.objs) { if (o.k === 1 || o.k === 2 || o.k === 3 || !(o.r > 0)) continue; const dd = Math.hypot((o.x - f.x) * r.width, (o.y - f.y) * r.height) - o.r * r.width * TM.rk; if (dd < 16 && dd < bd) { bd = dd; best = o; } }
+        if (!best) { pid = null; return; }
+        f = { x: best.x, y: best.y };
+      }
+      TM.fing = f; TM.touching = true; TM.down = true; TM.t0 = performance.now(); navigator.vibrate?.(8); flush(true); });
+    tw.addEventListener('pointermove', e => { if (e.pointerId !== pid || TM.fill) return; TM.fing = at(e); flush(); });
     const up = e => { if (e.pointerId !== pid) return; pid = null; TM.down = false;
       if (L.mode !== 'go') { const rel = () => { if (TM.down) return; TM.touching = false; TM.fing = null; flush(true); }; const held = performance.now() - TM.t0; if (held < 130) { flush(true); setTimeout(rel, 130 - held); } else rel(); return; }
       flush(true); };
@@ -444,6 +498,28 @@
       drawTouch(g, L); TM.raf = requestAnimationFrame(frame);
     };
     TM.raf = requestAnimationFrame(frame);
+  }
+  // a big thumbstick for the run-around games: push a direction, your character runs that way on the TV
+  function renderStick(L) {
+    stage.innerHTML = `<div class="stickC"><div class="touchInfo" id="tInfo"></div>
+      <div class="stkZone" id="stz"><div class="stkBase"><i class="stkAr u"></i><i class="stkAr d"></i><i class="stkAr l"></i><i class="stkAr r"></i><div class="stkKnob" id="stk"></div></div></div>
+      <div class="rhint">Push the stick to move</div>
+      <div class="stkBtns">${L.btn2 ? `<button class="pbtn pb touchBtn" data-b="b">${icoBtn(L.btn2)}</button>` : ''}${L.btn ? `<button class="pbtn pa touchBtn" data-b="a">${icoBtn(L.btn)}</button>` : ''}</div></div>`;
+    stage.querySelectorAll('.pbtn').forEach(b => bindHold(b, b.dataset.b));
+    const z = $('#stz'), base = z.querySelector('.stkBase'), knob = $('#stk'); let pid = null;
+    z.style.touchAction = 'none';
+    const set = e => {
+      const r = base.getBoundingClientRect(), R = r.width * 0.36; let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      const m = Math.min(1, d / R); TM.stk = m < 0.14 ? null : { x: dx / R, y: dy / R };
+    };
+    z.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; try { z.setPointerCapture(pid); } catch (_) {} base.classList.add('on'); set(e); navigator.vibrate?.(8); flush(true); });
+    z.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; set(e); flush(); });
+    const up = e => { if (e.pointerId !== pid) return; pid = null; TM.stk = null; knob.style.transform = ''; base.classList.remove('on'); flush(true); };
+    z.addEventListener('pointerup', up); z.addEventListener('pointercancel', up);
+    // the game expects "where on the map to run to": aim a point ahead of my character in the stick's direction
+    clearInterval(TM.stkIv); TM.stkIv = setInterval(() => { if (!TM.on || !document.body.contains(z)) { clearInterval(TM.stkIv); return; } if (TM.stk) flush(); }, 50);
   }
   function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   function drawTouch(g, L) {
@@ -503,7 +579,7 @@
     const meDrag = L.mode === 'drag' && TM.touching && TM.fing;
     for (const k of order) for (const o of objs) {
       if (o.k !== k) continue;
-      let x = o.dx * W, y = o.dy * H; const r = o.r * W;
+      let x = o.dx * W, y = o.dy * H; const r = o.r * W * (TM.rk || 1);
       if (k === 6 || k === 7) { const hw = o.r * W, hh = o.r2 * H; g.fillStyle = k === 6 ? `rgba(255,59,59,${0.55 + 0.3 * Math.sin(t * 10)})` : '#0b1b3a'; rr(g, x - hw + d, y - hh + d, hw * 2 - 2 * d, hh * 2 - 2 * d, 4 * d); g.fill(); continue; }
       if (k === 5) { g.fillStyle = 'rgba(255,59,59,.28)'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = '#ff3b3b'; g.lineWidth = 3 * d; g.setLineDash([8 * d, 6 * d]); g.lineDashOffset = -t * 30 * d; g.stroke(); g.setLineDash([]); continue; }
       if (k === 11) { g.fillStyle = o.c; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 4 * d; g.stroke(); continue; }
@@ -593,7 +669,14 @@
     else renderMsg(L);
     updateTiltUI();
   }
-  function renderMsg(L) { stage.innerHTML = `<div class="center"><div class="bigEm">${esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
+  // the phone wears the colours and pattern of the game being played
+  function applyCh(id) {
+    const ch = id && typeof chOf === 'function' ? chOf(id) : null, b = document.body;
+    if (!ch) { delete b.dataset.ch; delete b.dataset.pat; return; }
+    b.dataset.ch = id; b.dataset.pat = ch.pat;
+    b.style.setProperty('--ch1', ch.c1); b.style.setProperty('--ch2', ch.c2); b.style.setProperty('--chDeep', ch.deep); b.style.setProperty('--chAcc', ch.accent);
+  }
+  function renderMsg(L) { stage.innerHTML = `<div class="center"><div class="bigEm">${icoSplit(L.emoji || '').icon || esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
   const COVER = id => id ? `covers/sm/${String(id).replace(/^_/, 'q-')}.jpg` : '';
   const ARROW = { up: 'M6 15l6-6 6 6', down: 'M6 9l6 6 6-6', left: 'M15 6l-6 6 6 6', right: 'M9 6l6 6-6 6' };
   const arrowSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="${ARROW[d]}"/></svg>`;
@@ -653,10 +736,10 @@
     // phone layout: pick columns from how many options there are and how long the labels are, so words never break
     const opts = L.options || [], n = opts.length, maxLen = Math.max(0, ...opts.map(o => [...String(o.label)].length));
     const shortL = maxLen <= 3;
-    const cols = n <= 1 ? 1 : shortL ? (n <= 4 ? 2 : n <= 10 ? 5 : n <= 20 ? 5 : 6) : (n <= 3 ? 1 : 2);
+    const cols = n <= 1 ? 1 : shortL ? (n <= 10 ? 2 : n <= 20 ? 5 : 6) : (n <= 3 ? 1 : 2);
     const rows = Math.ceil(n / cols);
-    stage.innerHTML = `<div class="choiceC"><div class="prompt ${L.secret ? 'secret' : ''}">${L.secret && /\n/.test(L.prompt || '') ? L.prompt.split('\n').map((t, i) => i === 1 ? `<b class="sw">${esc(t)}</b>` : `<small>${esc(t)}</small>`).join('') : esc(L.prompt || '')}</div>${multi ? `<div class="multiDots" id="dots">${'○'.repeat(multi)}</div>` : ''}
-      <div class="choiceGrid r${Math.min(rows, 5)} ${L.big ? 'cbig' : ''} ${shortL ? 'short' : ''}" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(0,1fr)">${opts.map((o, i) => `<button data-i="${i}" class="${light(o.color) ? 'light' : ''}" style="--bc:${esc(o.color)}" ${o.disabled ? 'disabled' : ''}>${L.letters && !shortL ? `<i class="cLet">${'ABCDEFGHIJ'[i] || ''}</i>` : ''}<span>${esc(o.label)}</span></button>`).join('')}</div></div>`;
+    stage.innerHTML = `<div class="choiceC"><div class="prompt ${L.secret ? 'secret' : ''}">${L.secret && /\n/.test(L.prompt || '') ? L.prompt.split('\n').map((t, i) => i === 1 ? `<b class="sw">${esc(t)}</b>` : `<small>${esc(t)}</small>`).join('') : esc(noEmo(L.prompt || ''))}</div>${multi ? `<div class="multiDots" id="dots">${'○'.repeat(multi)}</div>` : ''}
+      <div class="choiceGrid r${Math.min(rows, 5)} ${L.big ? 'cbig' : ''} ${shortL ? 'short' : ''}" style="grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(0,1fr)">${opts.map((o, i) => `<button data-i="${i}" class="${light(o.color) ? 'light' : ''}" style="--bc:${esc(o.color)}" ${o.disabled ? 'disabled' : ''}>${L.letters && !shortL ? `<i class="cLet">${'ABCDEFGHIJ'[i] || ''}</i>` : ''}${icoBtn(o.label)}</button>`).join('')}</div></div>`;
     stage.querySelectorAll('.choiceGrid button').forEach(b => b.onclick = () => {
       sendMsg({ t: 'act', a: 'choice', i: +b.dataset.i }); navigator.vibrate?.(20);
       if (multi) { taps++; const d = $('#dots'); if (d) d.textContent = '●'.repeat(taps) + '○'.repeat(Math.max(0, multi - taps)); b.style.transform = 'scale(.92)'; setTimeout(() => b.style.transform = '', 100); if (taps >= multi) stage.querySelectorAll('.choiceGrid button').forEach(x => x.disabled = true); }
@@ -828,10 +911,13 @@
   // generic game panel: your private cards (tap to play) + action buttons
   let lastPanel = null;
   function renderPanel(m) {
-    const cards = (m.cards || []).map((c, i) => `<button class="tcard ${c.ok ? 'ok' : ''}" data-i="${i}" ${c.ok ? '' : 'disabled'} style="--cc:${esc(c.color || '#495057')}">${c.icon ? `<span class="tci">${esc(c.icon)}</span>` : ''}<b>${esc(c.label)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</button>`).join('');
-    const btns = (m.buttons || []).map(b => `<button class="pbtn2 ${b.big ? 'big' : ''}" data-b="${esc(b.id)}" ${b.off ? 'disabled' : ''} style="--bc:${esc(b.color || '#4dabff')}">${esc(b.label)}</button>`).join('');
+    const isSuit = s => /^[\u2660\u2665\u2666\u2663]/.test(s || ''), deck = (m.cards || []).length > 0 && (m.cards || []).every(c => isSuit(c.icon));
+    const cards = deck ? (m.cards || []).map((c, i) => { const red = /[\u2665\u2666]/.test(c.icon), n = m.cards.length, a = (i - (n - 1) / 2) * Math.min(9, 34 / Math.max(1, n - 1 || 1));
+        return `<button class="tcard pcard ${red ? 'red' : ''} ${c.ok ? 'ok' : ''}" data-i="${i}" ${c.ok ? '' : 'disabled'} style="--a:${a}deg;--lift:${Math.abs(a) * 1.1}px"><span class="pcC"><b>${esc(c.label)}</b><i>${esc(c.icon)}</i></span><span class="pcBig">${esc(c.icon)}</span><span class="pcC bot"><b>${esc(c.label)}</b><i>${esc(c.icon)}</i></span></button>`; }).join('')
+      : (m.cards || []).map((c, i) => `<button class="tcard ${c.ok ? 'ok' : ''}" data-i="${i}" ${c.ok ? '' : 'disabled'} style="--cc:${esc(c.color || '#495057')}">${c.icon ? `<span class="tci">${esc(c.icon)}</span>` : ''}<b>${esc(c.label)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</button>`).join('');
+    const btns = (m.buttons || []).map(b => `<button class="pbtn2 ${b.big ? 'big' : ''}" data-b="${esc(b.id)}" ${b.off ? 'disabled' : ''} style="--bc:${esc(b.color || '#4dabff')}">${icoBtn(b.label)}</button>`).join('');
     stage.innerHTML = `<div class="gpanel ${m.myTurn ? 'my' : ''}"><div class="gpTop"><b>${esc(m.title || '')}</b><span>${esc(m.info || '')}</span></div>
-      ${m.sub ? `<div class="gpSub">${esc(m.sub)}</div>` : ''}<div class="gpHand">${cards || '<div class="muted" style="padding:20px;grid-column:1/-1;text-align:center">Nothing in your hand yet</div>'}</div><div class="gpBtns">${btns}</div></div>`;
+      ${m.sub ? `<div class="gpSub">${esc(shortHint(m.sub))}</div>` : ''}<div class="gpHand ${deck ? 'fan n' + Math.min(7, (m.cards || []).length) : ''}">${cards || '<div class="muted" style="padding:20px;grid-column:1/-1;text-align:center">Nothing in your hand yet</div>'}</div><div class="gpBtns">${btns}</div></div>`;
     stage.querySelectorAll('.tcard.ok').forEach(b => flickable(b, () => sendMsg({ t: 'act', a: 'card', i: +b.dataset.i })));
     if (stage.querySelector('.tcard.ok')) stage.querySelector('.gpHand').insertAdjacentHTML('beforebegin', '<div class="rhint">👆 Flick a glowing card up to throw it</div>');
     stage.querySelectorAll('.pbtn2').forEach(b => {
@@ -915,7 +1001,7 @@
       diceRoller($('#rollH'), () => { btn.a = true; flush(); setTimeout(() => { btn.a = false; flush(); }, 150); });
       return;
     }
-    stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${esc(L.label || 'TAP!')}</button><p class="muted">${esc(L.hint || '')}</p>${IS_PC ? '<p class="muted" style="font-size:13px">PC: Space</p>' : ''}</div>`;
+    stage.innerHTML = `<div class="center"><button class="tapBig" id="tap">${icoBtn(L.label || 'TAP!')}</button><p class="muted">${esc(shortHint(L.hint))}</p>${IS_PC ? '<p class="muted" style="font-size:13px">PC: Space</p>' : ''}</div>`;
     bindHold($('#tap'), 'a');
   }
   function renderShake(L) {
@@ -979,7 +1065,8 @@
       $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });
-    } else if (m.t === 'layout') render(m.layout);
+    } else if (m.t === 'ch') applyCh(m.id);
+    else if (m.t === 'layout') { if (m.layout && m.layout.name === 'intro') applyCh(m.layout.id); else if (m.layout && m.layout.name === 'lobby') applyCh(null); render(m.layout); }
     else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') renderPanel(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }

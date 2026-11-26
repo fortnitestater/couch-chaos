@@ -1,5 +1,16 @@
 /* Couch Chaos — shared bits (TV + controller) */
 const PREFIX = 'couchchaos-v1-';
+// Every game belongs to a "channel": its own colours, background pattern and HUD styling on the TV and the phones.
+const CHANNELS = {
+  show:   { name: 'Showtime',     c1: '#ff3d8b', c2: '#6a1fd6', deep: '#2a0b4f', accent: '#ffd43b', pat: 'dots' },
+  music:  { name: 'Music Hall',   c1: '#ff2e93', c2: '#00a6e0', deep: '#2b0a3d', accent: '#5ff2ff', pat: 'waves' },
+  cards:  { name: 'Card Club',    c1: '#13b07a', c2: '#065a42', deep: '#062e23', accent: '#f2c66d', pat: 'suits' },
+  board:  { name: 'Board Night',  c1: '#ff8a1f', c2: '#c2255c', deep: '#3d0d12', accent: '#ffe08a', pat: 'grid' },
+  sports: { name: 'Sports Arena', c1: '#2f7bff', c2: '#00b4d8', deep: '#071c4d', accent: '#c6ff3d', pat: 'stripes' },
+};
+const GAME_CH = { song: 'music', trivia: 'show', likely: 'show', elf: 'show', doodle: 'show', bomb: 'show', lowest: 'show', reflex: 'show',
+  blackjack: 'cards', storm: 'cards', avalanche: 'cards', four: 'board', tycoon: 'board', tennis: 'sports', bowling: 'sports', airhockey: 'sports' };
+const chOf = id => CHANNELS[GAME_CH[id]] || null;
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

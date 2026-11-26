@@ -127,3 +127,33 @@ body.tv { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transparen
 body.nativeOS #home, body.nativeOS #intro, body.nativeOS #results, body.nativeOS #snow { display: none !important; }
 body.nativeOS #cv { display: block !important; }
 body.nativeOS #start { opacity: 0; }
+
+/* ===== 2-second title splash in the game's channel colours ===== */
+#splash { position: fixed; inset: 0; z-index: 60; pointer-events: none; display: none; overflow: hidden; color: #fff;
+  background: radial-gradient(120% 90% at 50% 40%, var(--c1), var(--c2) 55%, var(--deep)); font-family: var(--font-display, Fredoka, sans-serif); }
+#splash.go { display: grid; place-items: center; animation: spOut 2.6s cubic-bezier(.6,0,.4,1) forwards; }
+#splash .spRays { position: absolute; left: 50%; top: 46%; width: 260vmax; height: 260vmax; transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,.16) 0 7deg, transparent 7deg 18deg); animation: spSpin 6s linear infinite;
+  -webkit-mask: radial-gradient(circle, #000 8%, transparent 46%); mask: radial-gradient(circle, #000 8%, transparent 46%); }
+#splash .spPat { position: absolute; inset: 0; opacity: .16; }
+#splash.pat-dots .spPat { background: radial-gradient(circle, #fff 3px, transparent 3.5px) 0 0 / 42px 42px; }
+#splash.pat-waves .spPat { background: repeating-radial-gradient(circle at 50% 120%, transparent 0 22px, #fff 22px 25px); }
+#splash.pat-suits .spPat { background: conic-gradient(from 45deg, #fff 0 25%, transparent 0 50%, #fff 0 75%, transparent 0) 0 0 / 60px 60px; opacity: .08; }
+#splash.pat-grid .spPat { background: linear-gradient(#fff 2px, transparent 2px) 0 0 / 64px 64px, linear-gradient(90deg, #fff 2px, transparent 2px) 0 0 / 64px 64px; opacity: .1; }
+#splash.pat-stripes .spPat { background: repeating-linear-gradient(-28deg, #fff 0 18px, transparent 18px 52px); opacity: .1; }
+#splash .spIn { position: relative; text-align: center; display: flex; flex-direction: column; align-items: center; }
+#splash .spKick { font-weight: 700; font-size: 3.2vh; letter-spacing: .32em; text-transform: uppercase; color: var(--acc); text-shadow: 0 3px 0 rgba(0,0,0,.35);
+  opacity: 0; animation: spUp .5s .15s cubic-bezier(.3,1.5,.5,1) forwards; }
+#splash .spBadge { width: 24vh; height: 24vh; margin: 2.4vh 0 1.6vh; border-radius: 30%; background: #fff; display: grid; place-items: center; transform: scale(0) rotate(-14deg);
+  box-shadow: 0 1.6vh 0 rgba(0,0,0,.28), 0 0 0 1.2vh var(--acc), 0 3vh 6vh rgba(0,0,0,.45); animation: spPop .6s .05s cubic-bezier(.3,1.7,.5,1) forwards; }
+#splash .spBadge span { font-size: 15vh; line-height: 1; }
+#splash h1 { margin: 0; font-weight: 700; font-size: 15vh; line-height: .95; letter-spacing: -.03em; color: #fff;
+  -webkit-text-stroke: .9vh var(--deep); paint-order: stroke fill; text-shadow: 0 1.4vh 0 var(--deep), 0 3vh 5vh rgba(0,0,0,.45);
+  transform: scale(2.6); opacity: 0; animation: spSlam .55s .22s cubic-bezier(.2,1.4,.4,1) forwards; }
+#splash p { margin: 3vh 0 0; max-width: 70vw; font-family: var(--font-ui, Inter, sans-serif); font-weight: 700; font-size: 3.4vh; color: rgba(255,255,255,.92);
+  opacity: 0; animation: spUp .45s .55s ease-out forwards; }
+@keyframes spSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes spPop { to { transform: scale(1) rotate(-6deg); } }
+@keyframes spSlam { to { transform: scale(1); opacity: 1; } }
+@keyframes spUp { from { transform: translateY(2vh); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes spOut { 0%, 82% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.08); } }

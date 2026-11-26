@@ -19,7 +19,7 @@ struct MeshBuilder {
 };
 struct RealProps {
   bool ready = false;
-  Mesh tennisNet{}, racketFrame{}, racketRest{}, tennisBall{}, pin{}, stone{}, stoneHandle{}, bat{}, hockeyGoal{}, baseball{}, hockeyStick{}, torsoShirt{}, torsoShorts{}, head{}, limb{}, dome{};
+  Mesh tennisNet{}, racketFrame{}, racketRest{}, tennisBall{}, pin{}, stone{}, stoneHandle{}, bat{}, hockeyGoal{}, baseball{}, hockeyStick{}, torsoShirt{}, torsoShorts{}, head{}, limb{}, dome{}, pine{}, pineSnow{};
   void Init();
 };
 extern RealProps props;

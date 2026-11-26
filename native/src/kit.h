@@ -30,7 +30,8 @@ inline std::string Pad(const std::string& stick, const std::string& a, const std
 inline const Color NAVY = Hex(0x0c1638), GOLDC = Hex(0xf2c66d);
 inline void Glass(float x, float y, float w, float h, float r = 26, unsigned char a = 215, bool gold = true) {
   RRect(x, y + 6, w, h, r, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true);
-  RRect(x, y, w, h, r, Hex(0x14204a, a), Hex(0x0a1230, a), gold ? Hex(0xffffff, 200) : Hex(0xffffff, 40), gold ? 3 : 1.5f, true, gold);
+  Color t = hud::TH().top, b = hud::TH().bot; t.a = b.a = a;
+  RRect(x, y, w, h, r, t, b, gold ? hud::TH().rim : Hex(0xffffff, 40), gold ? 3 : 1.5f, true, gold && hud::TH().gold);
 }
 // a glossy candy tile like the phone buttons: lip underneath, gradient top, gloss band
 inline void Tile(float x, float y, float w, float h, Color c, float alpha = 1, float press = 0, bool goldRim = false) {
@@ -66,10 +67,6 @@ inline void Timer(float t, float tMax, float x = 1500, float y = 70) {
   Text(x, y + 3, 46, t < 4 ? Hex(0xff6b81) : WHITE, I((int)ceilf(fmaxf(0, t))), 0, TS_DISPLAY | TS_SHADOW);
 }
 inline void HintBar(const std::string& s, float y = 860, Color c = WHITE) {
-  float fs = 32, w = Measure(s, fs, TS_HEAVY) + 84; if (w > 1520) { fs *= 1520 / w; w = 1520; }
-  y -= 14;
-  RRect(800 - w / 2, y - 26, w, 64, 32, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true);
-  RRect(800 - w / 2, y - 32, w, 64, 32, Hex(0x16245a, 235), Hex(0x0a1233, 235), Hex(0xffffff, 190), 2.5f, true, true);
-  Text(800, y + 1, fs, c, s, 0, TS_HEAVY | TS_PLAIN);
+  hud::Hint(s, c, y - 14);
 }
 }  // namespace kit

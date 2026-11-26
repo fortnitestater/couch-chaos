@@ -156,8 +156,26 @@ class NativeGame {
   resync(p) { const i = this.ps.indexOf(p); if (i >= 0 && this.sent && this.sent[i]) this.c.send(p, this.sent[i]); }
   // ---- called from C++ ----
   layout(pid, json) { const L = JSON.parse(json); if (pid < 0) this.c.setLayout('all', L); else if (this.ps[pid]) this.c.setLayout(this.ps[pid], L); }
-  sfx(n) { const f = this.c.sfx[n]; if (typeof f === 'function') f.call(this.c.sfx); }
-  banner(s, ms, col) { this.c.banner(s, ms, col); }
+  sfx(n) {
+    const f = this.c.sfx[n]; if (typeof f === 'function') f.call(this.c.sfx);
+    // the host reacts to reveals now and then
+    const H = this.c.sfx.host; if (!H) return;
+    if (n === 'ding' && Math.random() < 0.55) H.call(this.c.sfx, Math.random() < 0.6 ? 'correct' : 'what a play', { gap: 6 });
+    else if (n === 'buzz' && Math.random() < 0.5) H.call(this.c.sfx, Math.random() < 0.5 ? 'nobody' : 'so close', { gap: 6 });
+    else if (n === 'boom') H.call(this.c.sfx, 'boom', { gap: 4 });
+  }
+  banner(s, ms, col) {
+    this.c.banner(s, ms, col);
+    const H = this.c.sfx.host, t = String(s).toUpperCase(); if (!H) return;
+    if (/FINAL ROUND|LAST ROUND/.test(t)) H.call(this.c.sfx, 'final round', { force: true });
+    else if (/ROUND 1\b|ROUND ONE|HAND 1\b/.test(t)) H.call(this.c.sfx, 'round one', { gap: 2 });
+    else if (/ROUND \d|NEXT ROUND|HAND \d/.test(t)) H.call(this.c.sfx, 'next round', { gap: 5 });
+    else if (/TIME'?S UP|TIME UP/.test(t)) H.call(this.c.sfx, 'times up', { gap: 2 });
+    else if (/\bTIE\b|DRAW!/.test(t)) H.call(this.c.sfx, 'tie', { force: true });
+    else if (/WINS|WINNER|CHAMPION/.test(t)) H.call(this.c.sfx, 'what a game', { force: true });
+    else if (/YOUR TURN|'S TURN/.test(t)) H.call(this.c.sfx, 'your turn', { gap: 8 });
+    else if (/BOOM|EXPLOD|BUST/.test(t)) H.call(this.c.sfx, 'ouch', { gap: 4 });
+  }
   sendTo(pid, json) { const p = this.ps[pid]; if (!p || p.bot) return; const m = JSON.parse(json); if (m.t !== 'snap' && m.t !== 'paint') (this.sent = this.sent || {})[pid] = m; this.c.send(p, m); }
   buzz(pid, ms) { const p = this.ps[pid]; if (p && !p.bot) this.c.send(p, { t: 'buzz', ms }); }
   finish(s) {

@@ -12,7 +12,7 @@ struct Show : Game {
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitStage() {
-    cam.position = { 0, 3.7f, 12.3f }; cam.target = { 0, 3.05f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 40; cam.projection = CAMERA_PERSPECTIVE;
+    cam.position = { 0, 4.75f, 15.0f }; cam.target = { 0, 4.1f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 40; cam.projection = CAMERA_PERSPECTIVE;
     pts.assign(N(), 0); shown.assign(N(), Spring{}); cheer.assign(N(), 0); pop.assign(N(), 0); lit_.assign(N(), 0); popTxt.assign(N(), "");
   }
   float PodX(int i) { float sp = fminf(2.0f, 13.2f / fmaxf(1, N())); return (i - (N() - 1) / 2.f) * sp; }
@@ -47,6 +47,30 @@ struct Show : Game {
     float wz = -10;
     lit.Draw(prim.cube, TRS({ 0, 8, wz - 0.4f }, { 0, 0, 0 }, { 70, 20, 0.5f }), Hex(0x0c1230));
     lit.Draw(prim.cube, TRS({ 0, 6.3f, wz }, { 0, 0, 0 }, { 23.6f, 10.6f, 0.4f }), Hex(0x0a0e22));
+    // three different sets, picked by the show's colour: LED video wall, velvet curtain with marquee bulbs, neon arches
+    int var = ((tint.r >> 4) + (tint.g >> 5) * 3 + (tint.b >> 4) * 5) % 3;
+    if (var == 1) {
+      for (int q = 0; q < 24; q++) lit.Draw(prim.cyl, TRS({ -11.5f + q, 1.0f, wz + 0.3f }, { 0, 0, 0 }, { 1.08f, 10.6f, 0.55f }), q % 2 ? Shade(tint, -0.5f) : Shade(tint, -0.66f));
+      lit.Draw(prim.cube, TRS({ 0, 11.2f, wz + 0.5f }, { 0, 0, 0 }, { 23.6f, 1.1f, 0.5f }), Shade(tint, -0.35f));
+      for (int q = 0; q < 24; q++) lit.Draw(prim.sphere, TRS({ -11.5f + q, 10.6f, wz + 0.6f }, { 0, 0, 0 }, { 1.0f, 0.5f, 0.3f }), Hex(0xd9a441));
+      for (int q = 0; q < 66; q++) {   // chasing marquee bulbs round the frame
+        float u = q / 66.f * (2 * 23.6f + 2 * 10.6f), bx, by;
+        if (u < 23.6f) { bx = -11.8f + u; by = 11.75f; } else if (u < 34.2f) { bx = 11.8f; by = 11.75f - (u - 23.6f); } else if (u < 57.8f) { bx = 11.8f - (u - 34.2f); by = 1.15f; } else { bx = -11.8f; by = 1.15f + (u - 57.8f); }
+        bool on = ((q + (int)(time * 7)) % 3) == 0;
+        Glow(prim.sphere, TRS({ bx, by, wz + 0.75f }, { 0, 0, 0 }, { 0.3f, 0.3f, 0.3f }), on ? Hex(0xfff3c4) : Hex(0x8a6a2a));
+      }
+      for (int q = 0; q < 2; q++) Glow(prim.torus, TRS({ 0, 6.3f, wz + 0.9f }, { 0, 0, time * (q ? -0.25f : 0.2f) }, { 2.6f + q * 1.3f, 2.6f + q * 1.3f, 0.6f }), q ? Hex(0xd9a441) : Hex(0xfff0c2));
+    } else if (var == 2) {
+      for (int rg = 0; rg < 6; rg++) {
+        float rr = 2.6f + rg * 1.6f; int seg = 14 + rg * 4;
+        for (int q = 0; q < seg; q++) {
+          float an = PI * (q + 0.5f) / seg, pulse = 0.5f + 0.5f * sinf(time * 2.2f - rg * 0.8f + q * 0.15f);
+          Color cc = rg % 2 ? ColorLerp(Shade(tint, -0.5f), Hex(0xf2f6ff), pulse * 0.8f) : ColorLerp(Shade(tint, -0.55f), Shade(tint, 0.25f), pulse);
+          Glow(prim.cube, TRS({ cosf(an) * rr * 1.08f, 1.3f + sinf(an) * rr * 0.92f, wz + 0.24f }, { 0, 0, an + PI / 2 }, { PI * rr / seg * 0.82f, 0.2f, 0.06f }), cc);
+        }
+      }
+      for (int q = -5; q <= 5; q++) Glow(prim.cube, TRS({ q * 2.1f, 0.2f + 0.1f * sinf(time * 3 + q), wz + 0.3f }, { 0, 0, 0 }, { 0.14f, 2.2f + 1.2f * (0.5f + 0.5f * sinf(time * 1.7f + q * 1.3f)), 0.06f }), Shade(tint, 0.3f));
+    } else
     for (int y = 0; y < 10; y++) for (int x = 0; x < 22; x++) {
       float px = -10.5f + x, py = 1.75f + y, w = sinf(px * 0.35f + py * 0.25f - time * 1.6f) * 0.5f + 0.5f;
       float sweep = expf(-powf(fmodf(px * 0.6f - py * 0.4f - time * 4.5f, 30.f) + 6, 2) * 0.05f);

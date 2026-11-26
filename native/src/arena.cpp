@@ -478,10 +478,19 @@ struct IceHockey : Arena {
     lit.Draw(prim.cube, TRS(W3(800, cy, 0.03f), { 0, 0, 0 }, { 0.15f, 0.01f, (Y1 - Y0) * SC }), Hex(0xff6b6b));
     for (float fx2 : { 0.33f, 0.67f }) lit.Draw(prim.cube, TRS(W3(X0 + (X1 - X0) * fx2, cy, 0.03f), { 0, 0, 0 }, { 0.12f, 0.01f, (Y1 - Y0) * SC }), Hex(0x4dabff));
     // boards
-    for (float y : { Y0 - 10, Y1 + 10 }) lit.Draw(prim.cube, TRS(W3(800, y, 0.35f), { 0, 0, 0 }, { (X1 - X0 + 40) * SC, 0.7f, 0.25f }), Hex(0xffd43b));
+    // dasher boards: white wall, yellow kick plate, blue cap rail, sponsor panels, posts
+    auto Dasher = [&](Vector3 c, float sx, float sz, bool ads) {
+      lit.Draw(prim.cube, TRS({ c.x, 0.5f, c.z }, { 0, 0, 0 }, { sx, 1.0f, sz }), Hex(0xeef1f5));
+      lit.Draw(prim.cube, TRS({ c.x, 0.11f, c.z }, { 0, 0, 0 }, { sx + 0.07f, 0.22f, sz + 0.07f }), Hex(0xffd43b));
+      lit.Draw(prim.cube, TRS({ c.x, 1.04f, c.z }, { 0, 0, 0 }, { sx + 0.1f, 0.1f, sz + 0.1f }), Hex(0x1c7ed6));
+      if (ads) { const unsigned ac[] = { 0xe03131, 0x1c7ed6, 0x2f9e44, 0xf08c00, 0x7048e8, 0x0c8599 }; int n = (int)(sx / 3.2f);
+        for (int q = 0; q < n; q++) lit.Draw(prim.cube, TRS({ c.x - sx / 2 + (q + 0.5f) * sx / n, 0.6f, c.z + sz / 2 + 0.01f }, { 0, 0, 0 }, { sx / n * 0.78f, 0.5f, 0.02f }), Hex(ac[q % 6])); }
+    };
+    Dasher(W3(800, Y0 - 10, 0), (X1 - X0 + 40) * SC, 0.3f, true);
+    Dasher(W3(800, Y1 + 10, 0), (X1 - X0 + 40) * SC, 0.3f, false);
     for (int s = 0; s < 2; s++) {
       float x = s ? X1 + 10 : X0 - 10;
-      for (float y : { cy - GH - (cy - GH - Y0) / 2, cy + GH + (Y1 - cy - GH) / 2 }) lit.Draw(prim.cube, TRS(W3(x, y, 0.35f), { 0, 0, 0 }, { 0.25f, 0.7f, (cy - GH - Y0) * SC }), Hex(0xffd43b));
+      for (float y : { cy - GH - (cy - GH - Y0) / 2, cy + GH + (Y1 - cy - GH) / 2 }) Dasher(W3(x, y, 0), 0.3f, (cy - GH - Y0) * SC, false);
       // goal net
       Vector3 gp = W3(s ? X1 + 8 : X0 - 8, cy, 0);  // a real goal: red pipe frame + netting, mouth facing the rink
       DrawProp(props.hockeyGoal, MatrixMultiply(MatrixMultiply(MatrixScale(1.8f, 1.5f, GH * 2 * SC), MatrixRotateY(s ? PI : 0)), MatrixTranslate(gp.x, 0, gp.z)));

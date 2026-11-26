@@ -92,6 +92,31 @@ static std::vector<Vector2> Resample(const std::vector<Vector2>& p, int n) {  //
 
 void RealProps::Init() {
   if (ready) return; ready = true;
+  // a real conifer (1 unit tall): tapered bark trunk + six drooping, jagged branch tiers; the snowy one has white tips
+  for (int sn = 0; sn < 2; sn++) {
+    MeshBuilder b; const int NS = 14;
+    Color bark = Hex(0x5b3a26), barkD = Hex(0x3f271a);
+    for (int i = 0; i < 8; i++) {
+      float a0 = i * PI / 4, a1 = (i + 1) * PI / 4;
+      Vector3 b0 = { cosf(a0) * 0.085f, 0, sinf(a0) * 0.085f }, b1 = { cosf(a1) * 0.085f, 0, sinf(a1) * 0.085f }, t0 = { cosf(a0) * 0.035f, 0.66f, sinf(a0) * 0.035f }, t1 = { cosf(a1) * 0.035f, 0.66f, sinf(a1) * 0.035f };
+      Vector3 nn = Vector3Normalize({ cosf((a0 + a1) / 2), 0.1f, sinf((a0 + a1) / 2) });
+      b.Tri(b0, t0, b1, nn, nn, nn, i % 2 ? bark : barkD); b.Tri(b1, t0, t1, nn, nn, nn, i % 2 ? bark : barkD);
+    }
+    for (int tier = 0; tier < 6; tier++) {
+      float f = tier / 5.f, yb = 0.15f + f * 0.6f, yt = yb + 0.31f - f * 0.05f, r = 0.47f * (1 - f * 0.78f), twist = tier * 0.37f;
+      Color in = Hex(tier % 2 ? 0x1f6b3a : 0x175c33), tip = sn ? Hex(0xf2f7ff) : Hex(tier % 2 ? 0x3aa457 : 0x2f9449), under = Hex(0x0f3d24);
+      Vector3 top = { 0, yt, 0 }, mid = { 0, yb + 0.06f, 0 };
+      for (int i = 0; i < NS; i++) {
+        auto pt = [&](int k) { float a = twist + k * 2 * PI / NS, rr = r * (k % 2 ? 0.68f : 1.0f); return Vector3{ cosf(a) * rr, yb - (k % 2 ? 0 : 0.05f), sinf(a) * rr }; };
+        Vector3 p0 = pt(i), p1 = pt(i + 1);
+        Vector3 nn = Vector3Normalize(Vector3CrossProduct(Vector3Subtract(p1, top), Vector3Subtract(p0, top)));
+        if (nn.y < 0) nn = Vector3Negate(nn);
+        b.Vert(top, nn, in); b.Vert(p1, nn, tip); b.Vert(p0, nn, tip);
+        b.Tri(mid, p0, p1, { 0, -1, 0 }, { 0, -1, 0 }, { 0, -1, 0 }, under);
+      }
+    }
+    (sn ? pineSnow : pine) = b.Build();
+  }
   const Color WHT = { 245, 245, 240, 255 };
   // ---- tennis net (ITF size): 0.914 m at the centre, 1.07 m at the posts, posts 0.914 m outside the doubles lines ----
   {

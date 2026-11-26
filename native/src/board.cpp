@@ -742,7 +742,7 @@ struct Word : Table {
     int n = (int)word.size(); float w = fminf(0.9f, 9.0f / n);
     for (int k = 0; k < n; k++) {
       Vector3 p = { (k - (n - 1) / 2.f) * w, 0.3f, 2.2f }; bool show = used[word[k] - 'A'] || phase == "done";
-      lit.Draw(prim.cube, TRS(p, { -0.5f, 0, 0 }, { w * 0.86f, 0.12f, w * 1.05f }), show ? Hex(0xfff3bf) : Hex(0x1c3d7a));
+      lit.Draw(prim.cube, TRS(p, { -0.5f, 0, 0 }, { w * 0.86f, 0.12f, w * 1.05f }), show ? Hex(0xfff3bf) : Hex(0xc98a4b));
       if (show) Label({ p.x, p.y + 0.12f, p.z }, w * 0.86f, std::string(1, word[k]), used[word[k] - 'A'] ? Hex(0x1a1438) : Hex(0xe03131), 1.3f);
     }
     End3D();

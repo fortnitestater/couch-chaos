@@ -2,6 +2,20 @@
    so everything still works before the files load or offline. */
 const SFX = (() => {
   let ac = null, master = null, crowd = null, voiceOut = null, voiceBuf = null, voiceSrc = [];
+  let hostBuf = null, hostClips = [], hostSrc = null, hostLast = 0;
+  // split the host recording into its lines at the pauses between them
+  function findClips(buf) {
+    const d = buf.getChannelData(0), sr = buf.sampleRate, win = Math.floor(sr * 0.02), segs = [];
+    let on = -1, quiet = 0;
+    for (let i = 0; i + win < d.length; i += win) {
+      let e = 0; for (let j = i; j < i + win; j += 4) e += d[j] * d[j];
+      const loud = Math.sqrt(e / (win / 4)) > 0.018, t = i / sr;
+      if (loud) { if (on < 0) on = t; quiet = 0; }
+      else if (on >= 0 && (quiet += 0.02) > 0.5) { segs.push([Math.max(0, on - 0.04), t - quiet + 0.1]); on = -1; quiet = 0; }
+    }
+    if (on >= 0) segs.push([on, d.length / sr]);
+    return segs.filter(s => s[1] - s[0] > 0.18);
+  }
   // recorded samples (ElevenLabs sound effects + music)
   const SAMPLE_FILES = { crowd: 'crowd', cheer: 'cheer', ooh: 'ooh', applause: 'applause', hit: 'hit', bounce: 'bounce', smash: 'smash', strike: 'strike', bat: 'bat', music: 'music' };
   // studio sound effects (ElevenLabs); each synth sound below falls back to its old beep if the file is missing
@@ -49,6 +63,7 @@ const SFX = (() => {
       master = ac.createGain(); master.gain.value = 0.35; master.connect(ac.destination);
       voiceOut = ac.createGain(); voiceOut.gain.value = 1.0; voiceOut.connect(ac.destination);
       loadSamples();
+      if (typeof HOST !== 'undefined') fetch(HOST.url).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(buf => { hostBuf = buf; hostClips = findClips(buf); }).catch(() => {});
       if (typeof VOICE !== 'undefined') fetch(VOICE.url).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(buf => { voiceBuf = buf; }).catch(() => {});
     } catch (e) { ac = null; }
   }
@@ -132,6 +147,16 @@ const SFX = (() => {
     applause(k = 1) { if (!ac) return; if (play('applause', 1.3 * Math.min(1.4, k))) return; for (let i = 0; i < 40 * k; i++) noiseClap(Math.random() * 2.2 * k); },
     // announcer: the device's built-in voice (free). Replaceable by recorded clips later.
     voiceKeys: t => voiceKeys(t).map(k => (k >= 0 ? VOICE.lines[k] : '?')),
+    // the show host: plays one recorded line (by key), never talking over itself; gap = minimum seconds since the last line
+    host(key, o = {}) {
+      if (SFX.muteVoice || !ac || !hostBuf || typeof HOST === 'undefined') return false;
+      const i = HOST.lines.indexOf(key), c = hostClips[i]; if (i < 0 || !c) return false;
+      const now = ac.currentTime; if (!o.force && now - hostLast < (o.gap || 3.2)) return false;
+      if (hostSrc) { try { hostSrc.stop(); } catch (e) {} }
+      const src = ac.createBufferSource(); src.buffer = hostBuf; src.connect(voiceOut); src.start(now + (o.delay || 0) + 0.02, c[0], c[1] - c[0]);
+      hostSrc = src; hostLast = now + (o.delay || 0); return true;
+    },
+    hostClipCount() { return hostClips.length; },
     say(text, o = {}) {
       if (SFX.muteVoice) return;
       // 1) the recorded ElevenLabs announcer, when every sentence is a known call

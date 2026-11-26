@@ -399,7 +399,7 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
     players.push_back({ i++, name, ParseColor(col), bot == "1" });
   }
   std::string g = id;
-  game.reset(); lit.Reset();
+  game.reset(); lit.Reset(); hud::SetTheme(g);
   if (g == "skybrawl") game = MakeSkyBrawl();
   else if (g == "sumo") game = MakeSumo();
   else if (g == "snowball") game = MakeSnowball();
@@ -442,6 +442,7 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   lit.ShadowPass();
   PostBegin();
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)
+  hud::TagReset();
   game->Draw();
   PostEnd();
   lit.EndFrame(dt);

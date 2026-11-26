@@ -346,13 +346,13 @@ struct Simon : Classic {
     // speech bubble
     if (phase == "say" || phase == "judge") {
       std::string line = (simon ? "Simon says: " : "") + std::string(NAME[act]) + "!";
-      float w = fmaxf(560, Measure(line, 54, TS_DISPLAY) + 90);
-      UI::Shadow({ 800 - w / 2, 40, w, 150 }, 40, 26, Hex(0, 110), 8);
-      UI::Box({ 800 - w / 2, 40, w, 150 }, 40, simon ? Hex(0xfff3bf) : WHITE, simon ? Hex(0xffe066) : Hex(0xe9ecef), 90, simon ? Hex(0xfab005) : Hex(0xadb5bd), 4);
-      Text(800, 96, 54, Hex(0x212529), line, 0, TS_DISPLAY | TS_PLAIN);
-      Text(800, 152, 24, Hex(0x495057), HOW[act], 0, TS_PLAIN);
-      if (phase == "say") { UI::Box({ 800 - w / 2 + 40, 172, w - 80, 8 }, 4, Hex(0, 40)); UI::Box({ 800 - w / 2 + 40, 172, (w - 80) * fmaxf(0, t / win), 8 }, 4, Hex(0xfa5252)); }
-      if (phase == "judge" && !simon) Text(800, 230, 36, Hex(0xff6b6b), "Simon didn't say! 😜", 0, TS_DISPLAY | TS_SHADOW);
+      float w = fminf(660, fmaxf(520, Measure(line, 46, TS_DISPLAY) + 80));
+      UI::Shadow({ 360 - w / 2, 40, w, 150 }, 40, 26, Hex(0, 110), 8);
+      UI::Box({ 360 - w / 2, 40, w, 150 }, 40, simon ? Hex(0xfff3bf) : WHITE, simon ? Hex(0xffe066) : Hex(0xe9ecef), 90, simon ? Hex(0xfab005) : Hex(0xadb5bd), 4);
+      Text(360, 96, 46, Hex(0x212529), line, 0, TS_DISPLAY | TS_PLAIN);
+      Text(360, 152, 24, Hex(0x495057), HOW[act], 0, TS_PLAIN);
+      if (phase == "say") { UI::Box({ 360 - w / 2 + 40, 172, w - 80, 8 }, 4, Hex(0, 40)); UI::Box({ 360 - w / 2 + 40, 172, (w - 80) * fmaxf(0, t / win), 8 }, 4, Hex(0xfa5252)); }
+      if (phase == "judge" && !simon) Text(360, 230, 36, Hex(0xff6b6b), "Simon didn't say! 😜", 0, TS_DISPLAY | TS_SHADOW);
     }
     char b[32]; snprintf(b, sizeof b, "%d / %d", cmd, total); UI::Box({ 1440, 18, 140, 44 }, 22, Hex(0x0b1020, 150)); Text(1510, 40, 22, WHITE, b, 0, TS_HEAVY | TS_PLAIN);
     DrawCount();
@@ -557,7 +557,21 @@ struct Hockey : Classic {
   }
   void Draw() override {
     cam.position = { 0, 24, 16.5f }; cam.target = { 0, 0, 0.8f };
-    sc.Begin(cam);
+    UI::Sky(Hex(0x0d0826), Hex(0x24124f));
+    lit.Begin(cam, { 0.06f, 0.04f, 0.14f }, 0.005f);
+    BeginMode3D(cam);
+    lit.Pattern(PAT_TILE); lit.Draw(prim.plane, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 140, 1, 140 }), Hex(0x2a1c5e)); lit.Pattern(PAT_NONE);
+    // arcade hall: back wall with neon tubes and a row of game cabinets, glowing floor strips
+    lit.Draw(prim.cube, TRS({ 0, 6, -15.5f }, { 0, 0, 0 }, { 90, 14, 0.5f }), Hex(0x1a1040));
+    for (int q = -4; q <= 4; q++) {
+      float cx = q * 4.6f; bool od = (q & 1) != 0; Color nc = od ? Hex(0xff4d8d) : Hex(0x3dd6ff);
+      lit.Draw(prim.cube, TRS({ cx, 2.1f, -14.4f }, { 0, 0, 0 }, { 2.6f, 4.2f, 1.8f }), od ? Hex(0x2b2f77) : Hex(0x5a1f6e));
+      lit.Draw(prim.cube, TRS({ cx, 1.3f, -13.3f }, { -0.5f, 0, 0 }, { 2.3f, 0.2f, 1.2f }), Hex(0x15173a));
+      DrawCube({ cx, 3.0f, -13.45f }, 2.0f, 1.5f, 0.05f, (q + 8) % 3 == 0 ? Hex(0x7dffb0) : (q + 8) % 3 == 1 ? Hex(0xffe066) : Hex(0x8fd3ff));
+      DrawCube({ cx, 4.45f, -13.45f }, 2.4f, 0.5f, 0.05f, nc);
+      DrawCube({ cx, 9.5f + (od ? 0.8f : 0), -15.2f }, 3.6f, 0.16f, 0.1f, nc);
+    }
+    for (int sd = -1; sd <= 1; sd += 2) DrawCube({ sd * 19.f, 0.03f, 0.8f }, 0.2f, 0.02f, 24, sd < 0 ? Hex(0xff4d8d) : Hex(0x3dd6ff));
     float w = (R - L) * SC, d = (BOT - TOP) * SC; Vector3 c = W3(800, CY);
     for (int lg = 0; lg < 4; lg++) lit.Draw(prim.cube, TRS({ c.x + (lg % 2 ? 1 : -1) * (w / 2 - 0.6f), -1.6f, c.z + (lg / 2 ? 1 : -1) * (d / 2 - 0.6f) }, { 0, 0, 0 }, { 0.6f, 3.2f, 0.6f }), Hex(0x343a40));
     lit.Draw(prim.cube, TRS({ c.x, -0.35f, c.z }, { 0, 0, 0 }, { w + 1.2f, 0.6f, d + 1.2f }), Hex(0x1c2541));
@@ -569,7 +583,6 @@ struct Hockey : Classic {
     float gh = GH * SC, rail = 0.45f;
     for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ c.x, 0.2f, c.z + s * (d / 2 + 0.3f) }, { 0, 0, 0 }, { w + 1.2f, rail, 0.6f }), Hex(0xdee2e6));
     for (int s = -1; s <= 1; s += 2) for (int u = -1; u <= 1; u += 2) { float seg = (d / 2 - gh); lit.Draw(prim.cube, TRS({ c.x + s * (w / 2 + 0.3f), 0.2f, c.z + u * (gh + seg / 2) }, { 0, 0, 0 }, { 0.6f, rail, seg }), s < 0 ? Hex(0xff8787) : Hex(0x74c0fc)); lit.Draw(prim.cube, TRS({ c.x + s * (w / 2 + 0.3f), 0.0f, c.z }, { 0, 0, 0 }, { 0.62f, 0.12f, gh * 2 }), Hex(0x0b1020)); }
-    sc.Trees(time);
     // players stand at their end
     int j[2] = { 0, 0 };
     for (int i = 0; i < N(); i++) { int tm = m[i].team; Vector3 pos = W3(tm == 0 ? L - 95 : R + 95, CY + (j[tm]++ - 0.5f) * 170 * (N() > 2 ? 1 : 0) + (N() <= 2 ? 0 : 0)); Shadow(pos, 1.3f); DrawToon(pos, tm == 0 ? PI / 2 : -PI / 2, P(i).color, time + i, 0, 0.3f, 1.4f); }

@@ -338,3 +338,109 @@ body.landing { overflow: auto; touch-action: auto; user-select: auto; -webkit-us
 .padBody .gpanel:has(.gpBtns:empty) .gpHand { flex: 1; max-height: none; }
 .padBody .pbtn2.rb, .padBody .pbtn2.big.rb { min-height: 76px; border-radius: 24px !important; font-family: var(--font-display) !important; font-size: 30px !important; --depth: 12px; color: #fff !important; }
 .padBody .gpBtns .rollHold { flex: 1 1 100%; }
+
+/* ===== v5: arcade keycaps (flat face + solid lip), thumbstick, real playing cards, house icons ===== */
+.padBody .rb {
+  background-image: none !important; background-color: var(--bc) !important;
+  --lip: color-mix(in oklab, var(--bc) 58%, #000);
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.28), 0 var(--depth) 0 var(--lip), 0 calc(var(--depth) + 10px) 18px rgba(0,0,0,.45) !important;
+  text-shadow: none; }
+.padBody .rb.press, .padBody .rb.on { box-shadow: inset 0 3px 0 rgba(0,0,0,.14), 0 2px 0 var(--lip) !important; }
+.padBody .rb.light { color: #1a1408 !important; }
+.padBody .rb.light .cLet { background: #1a1408; color: #fff; }
+/* icons: one bold set, always above the label */
+.kIco { display: grid; place-items: center; width: 1.5em; height: 1.5em; flex: none; }
+.kIco svg { width: 100%; height: 100%; display: block; }
+.padBody .choiceGrid button:has(.kIco), .padBody .pbtn2:has(.kIco), .padBody .tapBig:has(.kIco), .padBody .touchBtn:has(.kIco) { display: flex; flex-direction: column !important; align-items: center; justify-content: center; gap: 6px; }
+.padBody .choiceGrid button:has(.kIco) span { flex: none !important; text-align: center !important; }
+.padBody .choiceGrid button:has(.kIco) .cLet { position: absolute; left: 12px; top: 12px; width: 34px; height: 34px; font-size: 18px; }
+.padBody .choiceGrid.short button { font-size: 44px; }
+.padBody .choiceGrid.short.r5 button { font-size: 40px; border-radius: 22px !important; }
+.padBody .pbtn2.rb { color: #fff !important; }
+.padBody .pbtn2.rb.light { color: #1a1408 !important; }
+
+/* thumbstick games */
+.stickC { height: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 14px calc(16px + env(safe-area-inset-bottom)); }
+.stickC .touchInfo { text-align: center; min-height: 22px; }
+.stkZone { flex: 1.25 1 0; min-height: 0; display: grid; place-items: center; touch-action: none; border-radius: 34px;
+  background: radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--me, #3b7bff) 26%, #0a0f2a), #0a0f2a 78%); box-shadow: inset 0 4px 18px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.08); }
+.stkBase { position: relative; width: min(74vw, 100%); aspect-ratio: 1; max-height: 94%; border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #2a3566, #141b40 70%); box-shadow: inset 0 6px 16px rgba(0,0,0,.6), 0 0 0 5px color-mix(in oklab, var(--me, #3b7bff) 80%, #fff), 0 0 0 9px rgba(0,0,0,.35), 0 10px 26px rgba(0,0,0,.5); display: grid; place-items: center; }
+.stkKnob { width: 44%; aspect-ratio: 1; border-radius: 50%; background: var(--me, #3b7bff);
+  box-shadow: inset 0 5px 0 rgba(255,255,255,.35), inset 0 -8px 0 rgba(0,0,0,.22), 0 10px 0 color-mix(in oklab, var(--me, #3b7bff) 55%, #000), 0 20px 24px rgba(0,0,0,.5); transition: transform 120ms cubic-bezier(.3,1.6,.5,1); will-change: transform; }
+.stkBase.on .stkKnob { transition: none; }
+.stkAr { position: absolute; width: 0; height: 0; border: 11px solid transparent; opacity: .55; }
+.stkAr.u { top: 5%; border-bottom-color: #fff; border-top-width: 0; } .stkAr.d { bottom: 5%; border-top-color: #fff; border-bottom-width: 0; }
+.stkAr.l { left: 5%; border-right-color: #fff; border-left-width: 0; } .stkAr.r { right: 5%; border-left-color: #fff; border-right-width: 0; }
+.stickC .rhint { flex: none; text-align: center; font-size: 17px; color: #dfe6ff; margin: 0; }
+.stkBtns { flex: 1 1 0; min-height: 110px; display: flex; gap: 12px; align-items: stretch; padding-bottom: 16px; }
+.stkBtns:empty { display: none; }
+.padBody .stkBtns .pbtn.touchBtn.rb { flex: 1 1 0; width: auto !important; max-width: none !important; height: auto !important; border-radius: 30px !important; font-size: 34px !important; --depth: 14px; }
+@media (orientation: landscape) and (max-height: 540px) {
+  .stickC { flex-direction: row; flex-wrap: wrap; align-content: stretch; }
+  .stickC .touchInfo, .stickC .rhint { display: none; }
+  .stkZone { flex: 1 1 0; height: 100%; } .stkBtns { flex: 1 1 0; height: 100%; padding-bottom: 14px; }
+}
+/* tap-target games (no buttons): the play field fills the phone */
+@media (orientation: portrait) {
+  .padBody .touchC.full .touchWrap { flex: 1 1 0; height: auto; max-height: none; }
+  .padBody .touchC.full .touchBottom { flex: 0 0 auto; }
+}
+.padBody .turnTip { color: #dfe6ff; font-size: 14px; }
+.padBody .touchBottom .rhint, .padBody .rhint { color: #dfe6ff; }
+
+/* real playing cards, fanned across the top half */
+.padBody .gpHand.fan { display: flex; justify-content: center; align-items: flex-start; flex: 1 1 0; max-height: none; min-height: 0; padding: 18px 8px 0; overflow: visible; }
+.padBody .tcard.pcard { --w: min(40vw, 190px); flex: none; width: var(--w); aspect-ratio: 5 / 7; margin: 0 calc(var(--w) * -0.2); padding: 0; border-radius: 16px !important;
+  background: linear-gradient(160deg, #ffffff, #f3f0e8) !important; color: #14182b !important; transform: translateY(var(--lift, 0)) rotate(var(--a, 0deg)) !important; transform-origin: 50% 120%;
+  box-shadow: 0 0 0 2px #d9d4c6, 0 10px 0 #b9b3a3, 0 22px 26px rgba(0,0,0,.5) !important; filter: none !important; opacity: 1 !important; display: block; position: relative; overflow: hidden; }
+.padBody .gpHand.fan.n1 .pcard, .padBody .gpHand.fan.n2 .pcard { margin: 0 calc(var(--w) * -0.08); }
+.padBody .gpHand.fan.n5 .pcard, .padBody .gpHand.fan.n6 .pcard, .padBody .gpHand.fan.n7 .pcard { --w: min(31vw, 150px); margin: 0 calc(var(--w) * -0.3); }
+.padBody .tcard.pcard::before, .padBody .tcard.pcard::after { content: none; }
+.padBody .tcard.pcard.red { color: #d62839 !important; }
+.padBody .pcard .pcC { position: absolute; left: 9%; top: 5%; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.padBody .pcard .pcC b { font: 800 calc(var(--w) * 0.24) / 1 var(--font-display); color: inherit; }
+.padBody .pcard .pcC i { font-style: normal; font-size: calc(var(--w) * 0.2); }
+.padBody .pcard .pcC.bot { left: auto; top: auto; right: 9%; bottom: 5%; transform: rotate(180deg); }
+.padBody .pcard .pcBig { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--w) * 0.62); line-height: 1; }
+.padBody .gpanel:has(.gpHand.fan) .gpBtns { flex: 0 0 auto; }
+.padBody .gpanel:has(.gpHand.fan) .pbtn2.rb { min-height: 120px; font-size: 38px !important; flex: 1 1 40%; }
+.padBody .gpTop b { font-size: 20px; } .padBody .gpSub { font-size: 16px; color: #dfe6ff; }
+
+/* waiting screens: a clear navy medallion with a player-colour ring */
+.padBody .center .bigEm { background: radial-gradient(circle at 50% 35%, #26336e, #0e1640 75%) !important;
+  box-shadow: 0 0 0 6px var(--me, #3b7bff), 0 0 0 10px rgba(255,255,255,.14), 0 14px 0 6px color-mix(in oklab, var(--me, #3b7bff) 45%, #000), 0 30px 40px rgba(0,0,0,.5) !important; color: #fff; }
+.padBody .center .bigEm svg { width: 60%; height: 60%; }
+/* v5 fixes */
+.padBody .choiceGrid button:has(.kIco), .padBody .pbtn2:has(.kIco), .padBody .tapBig:has(.kIco), .padBody .touchBtn:has(.kIco) { justify-content: center !important; align-items: center !important; }
+.padBody .gpanel:has(.gpHand.fan) .gpHand.fan { flex: 0 0 auto; padding-bottom: 34px; }
+.padBody .tcard.pcard { --w: min(44vw, 210px); }
+.padBody .gpanel:has(.gpHand.fan) .gpBtns { flex: 1 1 0; min-height: 130px; }
+.padBody .gpanel:has(.gpHand.fan) .pbtn2.rb { font-size: 40px !important; }
+/* card hand game (Crazy Eights): big cards, chunky keys */
+.padBody .cardsUI .hand { gap: 12px 10px; padding: 14px 10px; }
+.padBody .cardsUI .hand .card { width: 86px; height: 122px; border-radius: 14px; font-size: 30px; box-shadow: 0 0 0 2px #d9d4c6, 0 7px 0 #b9b3a3, 0 14px 16px rgba(0,0,0,.45); }
+.padBody .cardsUI .hand .card .cs { font-size: 34px; }
+.padBody .cardsUI .card.mini { width: 62px; height: 88px; font-size: 22px; }
+.padBody .cardBtns { gap: 12px; padding: 10px 14px 22px; }
+.padBody .cardBtns button.rb { min-height: 96px; border-radius: 24px !important; font-family: var(--font-display) !important; font-size: 30px; --depth: 12px; }
+.padBody .cardsUI .legend { display: none; }
+
+/* ===== per-game channel theme on the phone: colours + background pattern ===== */
+.padBody[data-ch] { --pat: none; --patSz: auto; }
+.padBody[data-pat="dots"] { --pat: radial-gradient(circle, rgba(255,255,255,.13) 2.5px, transparent 3px); --patSz: 30px 30px; }
+.padBody[data-pat="waves"] { --pat: repeating-radial-gradient(circle at 50% 115%, transparent 0 18px, rgba(255,255,255,.11) 18px 20px); --patSz: auto; }
+.padBody[data-pat="suits"] { --pat: conic-gradient(from 45deg, rgba(255,255,255,.06) 0 25%, transparent 0 50%, rgba(255,255,255,.06) 0 75%, transparent 0); --patSz: 44px 44px; }
+.padBody[data-pat="grid"] { --pat: linear-gradient(rgba(255,255,255,.08) 1.5px, transparent 1.5px), linear-gradient(90deg, rgba(255,255,255,.08) 1.5px, transparent 1.5px); --patSz: 46px 46px; }
+.padBody[data-pat="stripes"] { --pat: repeating-linear-gradient(-28deg, rgba(255,255,255,.07) 0 12px, transparent 12px 36px); --patSz: auto; }
+.padBody.inGame[data-ch] { background: var(--pat), radial-gradient(130% 75% at 50% -5%, var(--ch1) 0%, var(--ch2) 48%, var(--chDeep) 100%) !important; background-size: var(--patSz), auto !important; background-attachment: fixed !important; }
+.padBody.inGame[data-pat="grid"] { background: linear-gradient(rgba(255,255,255,.08) 1.5px, transparent 1.5px) 0 0 / 46px 46px, linear-gradient(90deg, rgba(255,255,255,.08) 1.5px, transparent 1.5px) 0 0 / 46px 46px, radial-gradient(130% 75% at 50% -5%, var(--ch1) 0%, var(--ch2) 48%, var(--chDeep) 100%) !important; }
+.padBody.inGame[data-ch] #stage { background: none; }
+.padBody[data-ch] .choiceC .prompt, .padBody[data-ch] .gpTop b, .padBody[data-ch] .touchInfo { color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.25); }
+.padBody[data-ch] .gpTop span, .padBody[data-ch] .gpanel.my .gpTop b { color: var(--chAcc) !important; }
+.padBody[data-ch] .stkZone { background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.10), rgba(0,0,0,.28) 78%); }
+.padBody[data-ch] .stkBase { background: radial-gradient(circle at 50% 40%, color-mix(in oklab, var(--chDeep) 70%, #fff 12%), var(--chDeep) 72%); }
+.padBody[data-ch] .center .bigEm { background: radial-gradient(circle at 50% 35%, color-mix(in oklab, var(--ch2) 70%, #fff 10%), var(--chDeep) 78%) !important; }
+.padBody[data-ch] .center h2 { color: #fff; }
+/* cards you can't play yet stay crisp, just a little dimmer */
+.padBody .tcard:disabled { filter: brightness(.86) !important; opacity: 1 !important; }

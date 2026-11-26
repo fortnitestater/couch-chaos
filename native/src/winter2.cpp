@@ -90,8 +90,8 @@ struct Ski : Classic {
     for (int sd = -1; sd <= 1; sd += 2) for (float z = floorf((dist - 8) / 3) * 3; z < dist + 60; z += 3) lit.Draw(prim.cube, TRS({ sd * 9.6f, 0.15f, z }, { 0, 0, 0 }, { 0.12f, 0.3f, 1.6f }), Hex(0xff922b));
     for (auto& t : side) {
       float s = t.z;
-      lit.Draw(prim.cyl, TRS({ t.x, 0, t.y }, { 0, 0, 0 }, { 0.22f * s, 0.5f * s, 0.22f * s }), Hex(0x5c3d2e));
-      for (int k = 0; k < 3; k++) { float y = 0.4f * s + k * 0.45f * s, r = (1.1f - k * 0.28f) * s; lit.Draw(prim.cone, TRS({ t.x, y, t.y }, { 0, 0, 0 }, { r, 0.75f * s, r }), Hex(0x2b8a3e)); lit.Draw(prim.cone, TRS({ t.x, y + 0.42f * s, t.y }, { 0, 0, 0 }, { r * 0.5f, 0.34f * s, r * 0.5f }), WHITE); }
+      float jx = sinf(t.y * 1.9f) * 1.6f, hs = 0.8f + 0.5f * (0.5f + 0.5f * sinf(t.y * 2.7f + t.x));   // a natural, uneven tree line
+      DrawProp(props.pineSnow, TRS({ t.x + jx, 0, t.y }, { 0, t.y * 1.3f, 0 }, { 1.6f * s * hs, 2.4f * s * hs, 1.6f * s * hs }));
     }
     for (auto& o : obs) {
       if (o.type == 0) {

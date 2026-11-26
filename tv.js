@@ -170,7 +170,7 @@
   const colMemo = {};
   let rowsData = [], focus = { r: 0, c: 0 }, heroDef = null, idleT = 0, heroCycle = 0;
   function buildRows() {
-    const SHORT = { classic: 'Classics', sports: 'Sports', winter: 'Winter', table: 'Cards & Board', party: 'Party', brain: 'Brain', action: 'Action' };
+    const SHORT = { show: 'Showtime', cards: 'Cards & Board', sports: 'Sports' };
     rowsData = [{ name: '🔥 Quick Play', short: 'Quick Play', items: QUICK.concat(recommended()) }, ...CATEGORIES.map(c => ({ name: c.name, short: SHORT[c.id] || c.name, items: GAMES.filter(gm => gm.cat === c.id) }))];
     $('#rows').innerHTML = rowsData.map((row, r) => `<div class="row"><h3>${row.name}</h3><div class="track">${row.items.map((gm, c) =>
       `<button class="tile ${gm.id[0] === '_' ? 'special' : ''}" data-r="${r}" data-c="${c}" style="--a1:${gm.art[0]};--a2:${gm.art[1]}"><span class="tc">${CTRL_LABEL[gm.ctrl] || ''}</span><span class="te">${gm.emoji}</span><span class="tn">${esc(gm.name)}</span></button>`).join('')}</div></div>`).join('');
@@ -289,11 +289,25 @@
     const cols = ['#ff4d6d', '#ffd43b', '#4dabff', '#51cf66', '#cc5de8', '#ff922b'];
     for (let i = 0; i < n; i++) { const e = document.createElement('i'); e.className = 'cf'; e.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${Math.random() * 1.6}s;animation-duration:${2.4 + Math.random() * 2}s;--r:${Math.random() * 720 - 360}deg`; box.appendChild(e); }
   }
+  function splash(def) {
+    const ch = chOf(def.id) || { c1: def.art[0], c2: def.art[1], deep: '#0b1030', accent: '#ffd43b', pat: 'dots', name: '' };
+    let el = document.getElementById('splash');
+    if (!el) { el = document.createElement('div'); el.id = 'splash'; document.body.appendChild(el); }
+    const tag = String(def.desc || '').split(/(?<=[.!?…:])\s/)[0].replace(/:$/, '');
+    el.className = 'pat-' + ch.pat;
+    el.style.cssText = `--c1:${ch.c1};--c2:${ch.c2};--deep:${ch.deep};--acc:${ch.accent}`;
+    el.innerHTML = `<div class="spRays"></div><div class="spPat"></div><div class="spIn"><div class="spKick">${esc(ch.name || '')}</div><div class="spBadge"><span>${def.emoji}</span></div><h1>${esc(def.name)}</h1><p>${esc(tag)}</p></div>`;
+    el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+    clearTimeout(splash.t); splash.t = setTimeout(() => el.classList.remove('go'), 2600);
+    if (SFX.host) setTimeout(() => SFX.host(def.id, { force: true }), 250);
+  }
   function launch() {
     if (S.state !== 'intro') return;
-    wipe(S.def.art[0], S.def.art[1]); SFX.whoosh(); SFX.musicOff && SFX.musicOff();
+    splash(S.def); SFX.whoosh(); SFX.musicOff && SFX.musicOff();
+    document.body.dataset.ch = GAME_CH[S.def.id] || '';
+    for (const p of humans()) send(p, { t: 'ch', id: S.def.id });
     // in-game soundtrack by kind of game (sports have the crowd; Song Guess and Musical Chairs bring their own music)
-    const TR = { table: 'lounge', winter: 'winter', classic: 'party', party: 'party', action: 'party', brain: 'lounge' };
+    const TR = { show: 'party', cards: 'lounge' };
     const tr = S.def.id === 'song' || S.def.id === 'chairs' ? null : TR[S.def.cat];
     if (SFX.setTrack) { SFX.setTrack(tr || (S.def.id === 'chairs' ? 'party' : 'menu')); if (tr) setTimeout(() => S.state === 'game' && SFX.musicOn(), 900); }
     S.state = 'game'; show('game');
@@ -322,6 +336,7 @@
   function endGame(results) {
     if (S.state !== 'game') return;
     S.state = 'results';
+    if (SFX.host) SFX.host(results.length > 1 && results[0] && results[1] && results[0].stat && results[0].stat === results[1].stat && /\d/.test(results[0].stat) ? 'tie' : 'and the winner is', { force: true });
     const awards = [3, 2, 1];
     results.forEach((r, i) => {
       const aw = !r.p.bot && i < 3 && results.length > 1 ? awards[i] : 0; r.aw = aw;
@@ -449,7 +464,7 @@
     }
     if (S.state === 'home') {
       idleT += dt;
-      if (idleT > 9) { idleT = 0; const feat = GAMES.filter(x => x.cat === 'winter' || x.cat === 'party'); setHero(feat[heroCycle++ % feat.length]); }
+      if (idleT > 9) { idleT = 0; const feat = GAMES; setHero(feat[heroCycle++ % feat.length]); }
       const d = new Date(); $('#clockTv').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
     if (S.state === 'intro') {

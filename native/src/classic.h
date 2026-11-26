@@ -2,6 +2,7 @@
 #pragma once
 #include "cc.h"
 #include "touch.h"
+#include "mesh.h"
 #include <functional>
 
 namespace {
@@ -48,8 +49,7 @@ struct Scenery {
     lit.Pattern(PAT_NONE);
     for (auto& tr : far) {   // dense, dark tree line that frames the arena
       float s = tr.z;
-      for (int i = 0; i < 2; i++) lit.Draw(prim.cone, TRS({ tr.x, 0.3f * s + i * 0.6f * s, tr.y }, { 0, tr.w, 0 }, { (1.3f - i * 0.45f) * s, 1.1f * s, (1.3f - i * 0.45f) * s }), snow ? Hex(i ? 0x3f8f63 : 0x2a6b4a) : Hex(i ? 0x2f9e44 : 0x237a36));
-      if (snow) lit.Draw(prim.cone, TRS({ tr.x, 1.3f * s, tr.y }, { 0, tr.w, 0 }, { 0.5f * s, 0.5f * s, 0.5f * s }), Hex(0xeaf2fc));
+      DrawProp(snow ? ::props.pineSnow : ::props.pine, TRS({ tr.x, 0, tr.y }, { 0, tr.w, 0 }, { 1.7f * s, (2.1f + 0.5f * sinf(tr.w * 3)) * s, 1.7f * s }), Color{ 205, 220, 212, 255 });
     }
     for (auto& p : peaks) {
       lit.Draw(prim.cone, TRS({ p.x, -2, p.y }, { 0, p.x, 0 }, { p.z * 2, p.w, p.z * 2 }), snow ? Hex(0x9fb4dc) : Hex(0x6c8fb8));
@@ -94,12 +94,7 @@ struct Scenery {
     Props(t);
     for (auto& tr : trees) {
       float s = tr.z, sw = sinf(t + tr.w) * 0.03f;
-      lit.Draw(prim.cyl, TRS({ tr.x, 0, tr.y }, { 0, 0, 0 }, { 0.22f * s, 0.5f * s, 0.22f * s }), Hex(0x5c3d2e));
-      for (int i = 0; i < 3; i++) {
-        float y = 0.4f * s + i * 0.45f * s, r = (1.1f - i * 0.28f) * s;
-        lit.Draw(prim.cone, TRS({ tr.x, y, tr.y }, { sw, 0, sw }, { r, 0.75f * s, r }), snow ? Hex(0x2b8a3e) : Hex(0x2f9e44));
-        if (snow) lit.Draw(prim.cone, TRS({ tr.x, y + 0.42f * s, tr.y }, { sw, 0, sw }, { r * 0.5f, 0.34f * s, r * 0.5f }), WHITE);
-      }
+      DrawProp(snow ? ::props.pineSnow : ::props.pine, TRS({ tr.x, 0, tr.y }, { sw, tr.w, sw }, { 1.55f * s, (2.2f + 0.4f * sinf(tr.w * 5)) * s, 1.55f * s }));
     }
   }
 };
@@ -118,26 +113,13 @@ struct Classic : Game {
   }
   void Recount() { cd = 3.5f; lastTick = 4; }
   void DrawCount() { if (cd > 0 && cd <= 3) { float f = cd - floorf(cd); Text(800, 420, 160 + 80 * f, Fade(WHITE, fminf(1, f * 2 + 0.3f)), std::to_string((int)ceilf(cd)), 0, TS_DISPLAY | TS_SHADOW); } }
-  void NameTag(Vector3 at, int pid, float size = 24) {   // a name plate in the player's colour, readable from the couch
-    size = fmaxf(size, 28); Vector2 s = GetWorldToScreen(at, cam); float w = Measure(P(pid).name, size, TS_HEAVY) + 30, h = size + 14; s.y -= 16;
-    RRect(s.x - w / 2, s.y - h / 2 + 3, w, h, h / 2, Hex(0x000000, 80), Hex(0x000000, 80), BLANK, 0);
-    RRect(s.x - w / 2, s.y - h / 2, w, h, h / 2, Shade(P(pid).color, 0.08f), Shade(P(pid).color, -0.28f), Hex(0xffffff, 235), 3, true);
-    Text(s.x, s.y + 1, size, WHITE, P(pid).name, 0, TS_HEAVY | TS_SHADOW);
-  }
+  void NameTag(Vector3 at, int pid, float size = 24) { Vector2 s = GetWorldToScreen(at, cam); hud::Tag(s.x, s.y - 16, P(pid).color, P(pid).name, fmaxf(size, 28)); }
   void Board(const std::string& title, const std::vector<int>& order, std::function<std::string(int)> val) {  // sized to read from the couch
-    float rh = order.size() > 5 ? 48.f : 58.f, bw = 400;
-    RRect(24, 30, bw, 70 + order.size() * rh, 26, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true);
-    RRect(24, 24, bw, 70 + order.size() * rh, 26, Hex(0x16245a, 235), Hex(0x0a1233, 235), Hex(0xffffff, 200), 3, true, true);
-    Text(52, 58, 22, Hex(0xf2c66d), title, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
-    for (size_t i = 0; i < order.size(); i++) {
-      float y = 112 + i * rh; int p = order[i];
-      if (i == 0) RRect(36, y - rh / 2 + 3, bw - 24, rh - 6, 16, Hex(0xffffff, 26), Hex(0xffffff, 26), BLANK, 0);
-      RRect(48, y - 16, 32, 32, 16, P(p).color, Shade(P(p).color, -0.25f), Hex(0xffffff, 230), 3, true);
-      Text(94, y + 1, rh > 50 ? 33 : 28, WHITE, P(p).name, -1, TS_HEAVY | TS_SHADOW); { std::string v = val(p); Text(24 + bw - 26, y + 1, v.size() > 6 ? 22 : rh > 50 ? 36 : 30, Hex(0xffd43b), v, 1, TS_DISPLAY | TS_SHADOW); }
-    }
+    std::vector<hud::Row> rows; for (size_t i = 0; i < order.size(); i++) rows.push_back({ P(order[i]).color, P(order[i]).name, val(order[i]), i == 0 });
+    hud::Board(title, rows);
   }
-  void Clock(float T, float x = 800) { int m = (int)ceilf(fmaxf(0, T)); char b[16]; snprintf(b, sizeof b, "%d:%02d", m / 60, m % 60); RRect(x - 100, 24, 200, 84, 42, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true); RRect(x - 100, 18, 200, 84, 42, Hex(0x16245a, 240), Hex(0x0a1233, 240), m <= 10 ? Hex(0xff4d6d) : Hex(0xffffff, 200), 3, true, m > 10); Text(x, 62, 58, m <= 10 ? Hex(0xff6b81) : WHITE, b, 0, TS_DISPLAY | TS_SHADOW); }
-  void Hint(const std::string& s, Color c = WHITE) { float fs = 34, w = Measure(s, fs, TS_HEAVY) + 84; if (w > 1520) { fs *= 1520 / w; w = 1520; } RRect(800 - w / 2, 812, w, 68, 34, Hex(0x000000, 70), Hex(0x000000, 0), BLANK, 0, true); RRect(800 - w / 2, 806, w, 68, 34, Hex(0x16245a, 235), Hex(0x0a1233, 235), Hex(0xffffff, 190), 2.5f, true, true); Text(800, 841, fs, c, s, 0, TS_HEAVY | TS_PLAIN); }
+  void Clock(float T, float x = 800) { hud::Clock(T, x); }
+  void Hint(const std::string& s, Color c = WHITE) { hud::Hint(s, c); }
   std::vector<int> Sorted(std::function<float(int)> key) { std::vector<int> o; for (int i = 0; i < N(); i++) o.push_back(i); std::stable_sort(o.begin(), o.end(), [&](int a, int b) { return key(a) > key(b); }); return o; }
   void FinishOrder(const std::vector<int>& o, std::function<std::string(int)> stat) { std::string r; for (int i : o) r += std::to_string(i) + ":" + stat(i) + ";"; Finish(r); }
   void Shadow(Vector3, float) {}  // characters cast soft contact shadows by themselves now

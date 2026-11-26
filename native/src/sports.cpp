@@ -214,6 +214,20 @@ struct Derby : Classic {
     lit.Draw(prim.cube, TRS({ 0, 0.03f, 0 }, { 0, 0, 0 }, { 0.44f, 0.01f, 0.44f }), WHITE);
     for (int k = 0; k <= 40; k++) { float a = -0.85f + 1.7f * k / 40.f; lit.Draw(prim.cube, TRS({ sinf(a) * 115, 2.25f, cosf(a) * 115 }, { 0, a, 0 }, { 9.2f, 4.5f, 0.4f }), Hex(0x0b3d6e)); lit.Draw(prim.cube, TRS({ sinf(a) * 115, 4.6f, cosf(a) * 115 }, { 0, a, 0 }, { 9.2f, 0.3f, 0.45f }), Hex(0xffd43b));
       for (int r = 0; r < 4; r++) lit.Draw(prim.cube, TRS({ sinf(a) * (119 + r * 3), 5 + r * 2.2f, cosf(a) * (119 + r * 3) }, { 0, a, 0 }, { 9.2f, 1.6f, 2.6f }), Hex(r % 2 ? 0x364fc7 : 0x4263eb)); }
+    for (int q = -2; q <= 2; q++) {   // floodlight towers
+      float a = q * 0.36f; Vector3 tp = { sinf(a) * 136, 0, cosf(a) * 136 };
+      lit.Draw(prim.cube, TRS({ tp.x, 18, tp.z }, { 0, a, 0 }, { 1.0f, 36, 1.0f }), Hex(0x495057));
+      lit.Draw(prim.cube, TRS({ tp.x, 36.5f, tp.z }, { 0, a, 0 }, { 12, 5.5f, 0.8f }), Hex(0x343a40));
+      for (int r = 0; r < 3; r++) for (int u = 0; u < 6; u++) DrawSphere({ tp.x + cosf(a) * (u - 2.5f) * 1.7f, 35 + r * 1.6f, tp.z - sinf(a) * (u - 2.5f) * 1.7f - 0.7f }, 0.6f, Hex(0xfff8e0));
+    }
+    for (int q = 0; q <= 40; q++) {   // the crowd: rows of fans in team colours, bobbing
+      float a = -0.85f + 1.7f * q / 40.f;
+      for (int r = 0; r < 4; r++) for (int u = 0; u < 7; u++) {
+        unsigned hh = (unsigned)(q * 131 + r * 17 + u * 7); static const unsigned cc[] = { 0xff6b6b, 0xffd43b, 0xf8f9fa, 0x74c0fc, 0x69db7c, 0xffa94d };
+        float off = (u - 3) * 1.25f, rad = 118.2f + r * 3;
+        lit.Draw(prim.cube, TRS({ sinf(a) * rad + cosf(a) * off, 6.3f + r * 2.2f + 0.14f * sinf(time * 3 + (float)(hh % 13)), cosf(a) * rad - sinf(a) * off }, { 0, a, 0 }, { 0.85f, 1.1f, 0.6f }), Hex(cc[hh % 6]));
+      }
+    }
     DrawToon({ 0, 0.25f, 18.4f }, PI, Hex(0xadb5bd), time, 0, phase == "pitch" && pt < 0 ? Clamp(-pt, 0, 1) : 0, 1.2f);
     for (int i = 0; i < N(); i++) {
       DrawToon({ BX(i) - 0.5f, 0, -0.3f }, PI / 2 - 0.25f, P(i).color, time + i, 0, 0, 1.0f);

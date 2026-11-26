@@ -1,5 +1,5 @@
 /* Couch Chaos — game catalog. ctrl: 'tap' (phone buttons only), 'move' (stick / tilt / keys), 'shake', 'talk' (play out loud) */
-const CATEGORIES = [
+const ALL_CATEGORIES = [
   { id: 'classic', name: '⭐ Classics Everyone Knows' },
   { id: 'sports', name: '🎾 Sports' },
   { id: 'winter', name: '❄️ Winter Games' },
@@ -8,7 +8,7 @@ const CATEGORIES = [
   { id: 'brain', name: '🧠 Brain Games' },
   { id: 'action', name: '⚡ Action' },
 ];
-const GAMES = [
+const ALL_GAMES = [
   { id: 'song', cat: 'classic', name: 'Song Guess', emoji: '🎵', art: ['#cc5de8', '#1c0b3d'], ctrl: 'type', players: '1-8', mins: 5,
     desc: 'Hear 0.1 seconds of a famous song… then 0.5… then 1… Name it first! Taylor Swift, Avicii, Queen, The Weeknd and 190 more.', how: ['Listen — the first clip is only 0.1 seconds!', 'Start typing on your phone and tap the song', 'Skip to hear more. Earlier guess = more points'], make: c => new SongGuess(c) },
   // ⭐ classics everyone already knows (C++ / raylib)
@@ -114,3 +114,13 @@ const GAMES = [
     desc: 'Stop the swinging needle right in the gold zone.', how: ['Watch the needle', 'Tap STOP in the gold zone', 'Perfect = 150 points'], make: c => new NativeGame(c, 'meter', 1) },
 ];
 const CTRL_LABEL = { touch: '👆 Touch map', swing: '📱 Swing motion', tap: '👆 Tap only', move: '🕹️ Move / tilt', shake: '📳 Shake', talk: '🗣️ Talk & vote', type: '⌨️ Type on phone' };
+// The line-up: 16 polished games in three rows (the other games stay in the code, off the menu)
+const CATEGORIES = [
+  { id: 'show', name: '🎤 Showtime' },
+  { id: 'cards', name: '🃏 Cards & Board' },
+  { id: 'sports', name: '🏆 Sports' },
+];
+const LINEUP = { song: 'show', trivia: 'show', likely: 'show', elf: 'show', doodle: 'show', bomb: 'show', lowest: 'show', reflex: 'show',
+  blackjack: 'cards', storm: 'cards', avalanche: 'cards', four: 'cards', tycoon: 'cards', tennis: 'sports', bowling: 'sports', airhockey: 'sports' };
+const ORDER = ['song', 'trivia', 'likely', 'elf', 'doodle', 'bomb', 'lowest', 'reflex', 'storm', 'avalanche', 'four', 'tycoon', 'blackjack', 'tennis', 'bowling', 'airhockey'];
+const GAMES = ORDER.map(id => ALL_GAMES.find(g => g.id === id)).filter(Boolean).map(g => Object.assign({}, g, { cat: LINEUP[g.id] }));

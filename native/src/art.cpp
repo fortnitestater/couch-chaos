@@ -91,7 +91,8 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
   Vector3 cs = ChunkS(); float thick = Chunky() ? 1.42f : 1.0f;
   lit.Caster(pos, (Chunky() ? 0.56f : 0.38f) * sc);
   float lean = moving ? 0.1f * run : 0.f;
-  Matrix place = MatrixMultiply(MatrixMultiply(MatrixRotateX(lean), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop * 0.35f + bob * sc, pos.z));
+  float swy = moving ? 0.f : sinf(t * 1.3f + (float)(hsh % 7)) * 0.035f;   // idle weight shift
+  Matrix place = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixRotateX(lean), MatrixRotateZ(swy)), MatrixRotateY(yaw)), MatrixTranslate(pos.x, pos.y + hop * 0.35f + bob * sc, pos.z));
   Matrix base = MatrixMultiply(MatrixScale(sc * cs.x, sc * cs.y, sc * cs.z), place);
   auto X = [&](Vector3 p) { return Vector3Transform(p, base); };
   auto E = [&](Vector3 p, Vector3 r, Vector3 s, Color col) { lit.Draw(prim.sphere, MatrixMultiply(TRS(p, r, s), base), col); };
@@ -134,6 +135,12 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
     else {
       float a = -s1 * s * (0.45f + 0.35f * run), br = moving ? 0 : sinf(t * 2.2f + s) * 0.01f;
       wrist = { s * 0.255f, 1.4f - 0.49f * cosf(a) + (moving ? 0.1f * run : 0.03f) + br, 0.49f * sinf(a) + (moving ? 0.12f * run : 0.07f) };
+      if (!moving && Chunky()) {   // idle personality: hands on hips, a wave now and then, or a thoughtful chin rub
+        int pose = (int)((hsh / 13) % 3); float cyc = fmodf(t * 0.9f + (float)(hsh % 9), 7.f);
+        if (pose == 1) wrist = { s * 0.215f, 1.0f + br, 0.05f };
+        if (pose == 2 && s == 1 && cyc < 1.7f) wrist = { 0.36f + 0.08f * sinf(t * 11), 1.84f, 0.12f };
+        if (pose == 0 && s == -1 && cyc > 5.0f) wrist = { -0.09f, 1.52f, 0.2f };
+      }
     }
     Vector3 el = Ik(sh, wrist, 0.28f, 0.25f, { s * 0.5f, -0.3f, -0.6f });
     Vector3 elDir = Vector3Normalize(Vector3Subtract(el, sh));
@@ -148,7 +155,9 @@ void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, 
   // ---- neck + head (head ~1.3x natural: friendlier and readable from the couch) ----
   if (Chunky()) {  // big readable head: scaled up around the neck, sitting on the wide body
     const float HK = 1.62f, piv = 1.5f;
-    base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -piv, 0), MatrixScale(sc * HK, sc * HK, sc * HK)), MatrixTranslate(0, (piv - 0.05f) * cs.y * sc, 0)), place);
+    float look = sinf(t * 0.6f + (float)(hsh % 11)) * 0.3f, tilt = sinf(t * 0.9f + (float)(hsh % 5)) * 0.07f + (cheer > 0.3f ? -0.12f : 0);   // heads look around
+    Matrix hr = MatrixMultiply(MatrixRotateZ(tilt), MatrixRotateY(look));
+    base = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -piv, 0), MatrixScale(sc * HK, sc * HK, sc * HK)), hr), MatrixTranslate(0, (piv - 0.05f) * cs.y * sc, 0)), place);
     thick = HK;
   }
   Tl({ 0, 1.43f, 0 }, { 0, 1.56f, 0.01f }, 0.058f, 0, skin);
