@@ -15,7 +15,13 @@ constexpr int W = 1600, H = 900;  // the logical screen every game draws in
 extern float g_rs;
 extern int g_dbg;  // debug switches (7 = tennis close-up camera)
 // world → screen in LOGICAL 1600x900 space (overlay text + 2D drawing use logical coordinates)
-inline Vector2 CC_WorldToScreen(Vector3 p, Camera3D c) { return GetWorldToScreenEx(p, c, W, H); }
+// cinematic camera (main.cpp): every 3D view goes through it, and so do labels pinned to 3D things
+Camera3D CineCam(Camera3D c);
+void CC_BeginMode3D(Camera3D c);
+void CC_EndMode3D();
+#define BeginMode3D(c) CC_BeginMode3D(c)
+#define EndMode3D() CC_EndMode3D()
+inline Vector2 CC_WorldToScreen(Vector3 p, Camera3D c) { return GetWorldToScreenEx(p, CineCam(c), W, H); }
 #define GetWorldToScreen(...) CC_WorldToScreen(__VA_ARGS__)
 inline void BeginScissorL(float x, float y, float w, float h) { BeginScissorMode((int)(x * g_rs), (int)(y * g_rs), (int)(w * g_rs), (int)(h * g_rs)); }
 
