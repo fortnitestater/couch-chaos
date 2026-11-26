@@ -385,6 +385,7 @@ EMSCRIPTEN_KEEPALIVE void cc_init(float rs) {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
   g_rs = ClampRS(rs > 0 ? rs : 1); FW = (int)roundf(W * g_rs); FH = (int)roundf(H * g_rs);
   InitWindow(FW, FH, "Couch Chaos");
+  InstallFileLoader();
   lit.Init(); prim.Init(); UI::Init(); PostInit(); props.Init();
   rlSetClipPlanes(0.3, 600); // better depth precision = no z-fighting
 }

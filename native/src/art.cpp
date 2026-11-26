@@ -76,9 +76,10 @@ static Vector3 Ik(Vector3 sh, Vector3 target, float l1, float l2, Vector3 pole) 
 }
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc) {
   // a friendly, polished person: natural body, slightly larger head, big bright eyes, smile, smooth tapered limbs
+  unsigned hsh = (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29;
+  if (!g_hold.on && DrawPerson(pos, yaw, c, t, hop, cheer, sc, g_toonK, hsh)) return;   // real rigged people when loaded
   sc *= g_toonK;
   bool moving = hop > 0.02f, flash = c.r == 255 && c.g == 255 && c.b == 255;
-  unsigned hsh = (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29;
   const Color SKINS[] = { Hex(0xf5d0b0), Hex(0xe8b48c), Hex(0xc98f63), Hex(0x94603f), Hex(0xf8dcc4) };
   const Color HAIRS[] = { Hex(0x3a2516), Hex(0x6b4423), Hex(0xd9a441), Hex(0x221a16), Hex(0x9c4a22), Hex(0x2e2e34) };
   Color skin = flash ? WHITE : SKINS[hsh % 5], hair = flash ? WHITE : HAIRS[(hsh / 5) % 6];

@@ -38,7 +38,7 @@ struct Table : Game {
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
   void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; }
-  void TableCam() { InitCam({ 0, 11.6f, 10.2f }, { 0, -0.5f, -1.15f }, 40.5f); }
+  void TableCam() { InitCam({ 0, 12.2f, 10.8f }, { 0, -0.1f, -1.9f }, 41.5f); }
   // seats run around the far half of the table so nobody blocks the view
   float SeatA(int i) { int n = N(); float span = n <= 2 ? 1.2f : n == 3 ? 1.9f : n == 4 ? 2.3f : 3.5f; return -PI / 2 + (n == 1 ? 0 : -span / 2 + span * i / (n - 1)); }
   Vector3 Seat(int i, float r = 7.4f) { float a = SeatA(i); return { cosf(a) * r, 0, sinf(a) * r * 0.78f }; }
@@ -93,6 +93,8 @@ struct Table : Game {
       float x = wx + s * (3.4f + f * 0.32f);
       lit.Draw(prim.cyl, TRS({ x, 1.0f, wz + 0.95f + (f % 2) * 0.12f }, { 0, 0, 0 }, { 0.42f, 8.6f, 0.32f }), Hex(f % 2 ? M.curtA : M.curtB));
     }
+    // sofa under the window: a real model in the room's colour (block sofa until it has loaded)
+    if (!DrawModel("sofa.glb", { wx, F, wz + 2.2f }, 0, 2.9f, WHITE, Hex(M.sofa))) {
     // sofa under the window, with cushions
     lit.Draw(prim.cube, TRS({ wx, F + 0.75f, wz + 1.9f }, { 0, 0, 0 }, { 6.4f, 1.2f, 2.2f }), Hex(M.sofa));
     lit.Draw(prim.cube, TRS({ wx, F + 2.0f, wz + 1.05f }, { 0, 0, 0 }, { 6.4f, 2.2f, 0.6f }), Hex(M.sofaD));
@@ -101,6 +103,8 @@ struct Table : Game {
     lit.Draw(prim.cube, TRS({ wx - 1.8f, F + 2.25f, wz + 1.5f }, { -0.25f, 0, 0.15f }, { 1.0f, 1.0f, 0.3f }), Hex(0xf2c14e));
     lit.Draw(prim.cube, TRS({ wx + 1.9f, F + 2.25f, wz + 1.5f }, { -0.25f, 0, -0.12f }, { 1.0f, 1.0f, 0.3f }), Hex(0xe76f51));
     for (int s = -1; s <= 1; s += 2) for (int q = -1; q <= 1; q += 2) lit.Draw(prim.cyl, TRS({ wx + s * 3.0f, F, wz + 1.9f + q * 0.9f }, { 0, 0, 0 }, { 0.14f, 0.18f, 0.14f }), Hex(0x3a2a1a));
+    }
+    DrawModel("floorlamp.glb", { wx + 5.0f, F, wz + 2.0f }, 0, 5.2f);
     } else {
       // brick fireplace with a timber mantel, logs, a gilt mirror, candles and two wing chairs
       lit.Pattern(PAT_STONE);
@@ -113,7 +117,7 @@ struct Table : Game {
       lit.Draw(prim.cube, TRS({ wx, F + 8.2f, wz + 1.05f }, { 0, 0, 0 }, { 3.4f, 3.0f, 0.14f }), Hex(0xc9a227));
       lit.Draw(prim.cube, TRS({ wx, F + 8.2f, wz + 1.14f }, { 0, 0, 0 }, { 2.9f, 2.5f, 0.04f }), Hex(0xbfd4e6));
       for (int q = 0; q < 3; q++) lit.Draw(prim.cyl, TRS({ wx - 2.6f + q * 2.6f, F + 5.7f, wz + 1.2f }, { 0, 0, 0 }, { 0.22f, 0.7f + (q % 2) * 0.4f, 0.22f }), Hex(0xf4f1ea));
-      for (int sd = -1; sd <= 1; sd += 2) {
+      for (int sd = -1; sd <= 1; sd += 2) if (!DrawModel("armchair.glb", { wx + sd * 5.6f, F, wz + 2.6f }, -sd * 0.45f, 3.0f, WHITE, Hex(M.sofa))) {
         lit.Draw(prim.cube, TRS({ wx + sd * 5.6f, F + 0.9f, wz + 2.4f }, { 0, -sd * 0.35f, 0 }, { 2.4f, 1.3f, 2.2f }), Hex(M.sofa));
         lit.Draw(prim.cube, TRS({ wx + sd * 5.9f, F + 2.6f, wz + 1.6f }, { 0, -sd * 0.35f, 0 }, { 2.4f, 3.4f, 0.6f }), Hex(M.sofaD));
       }
@@ -169,8 +173,12 @@ struct Table : Game {
     for (int k = 0; k < 2; k++) lit.Draw(prim.cube, TRS({ 2.6f + k * 2.0f, F + 1.3f, wz + 1.82f }, { 0, 0, 0 }, { 1.85f, 2.2f, 0.05f }), Hex(0x8a5a35));
     lit.Draw(prim.cyl, TRS({ 4.6f, F + 2.6f, wz + 1.1f }, { 0, 0, 0 }, { 0.5f, 1.2f, 0.5f }), Hex(0x2a9d8f));
     lit.Draw(prim.cone, TRS({ 4.6f, F + 3.7f, wz + 1.1f }, { 0, 0, 0 }, { 1.4f, 1.0f, 1.4f }), Hex(0xf6e7c8));
+    if (!DrawModel("monstera.glb", { -4.6f, F, wz + 2.0f }, 0.4f, 4.6f)) {
     lit.Draw(prim.cyl, TRS({ -4.6f, F, wz + 1.6f }, { 0, 0, 0 }, { 1.3f, 1.5f, 1.3f }), Hex(0xe9e4d8));
     for (int k = 0; k < 9; k++) { float a = k * 0.7f; lit.Draw(prim.sphere, TRS({ -4.6f + cosf(a) * 0.55f, F + 2.6f + (k % 3) * 0.8f, wz + 1.6f + sinf(a) * 0.35f }, { 0, 0, cosf(a) * 0.7f }, { 0.55f, 1.9f, 0.35f }), Hex(k % 2 ? 0x2d6a4f : 0x40916c)); }
+    }
+    DrawModel("snakeplant.glb", { 13.6f, F, wz + 2.6f }, 0, 3.6f);
+    DrawModel("sidetable.glb", { 1.1f, F, wz + 2.0f }, 0, 2.4f, WHITE, Hex(0x5a3a22));
     // warm light: lamp glows + soft pools on the wall (unlit, so they bloom)
     rlDrawRenderBatchActive(); rlDisableDepthMask(); BeginBlendMode(BLEND_ADDITIVE);
     DrawSphere({ 4.6f, F + 3.4f, wz + 1.1f }, 0.5f, Fade(Hex(0xffd59a), 0.55f));
@@ -193,15 +201,21 @@ struct Table : Game {
   void Seats(std::function<bool(int)> hot = nullptr, std::function<float(int)> cheer = nullptr) {
     for (int i = 0; i < N(); i++) {
       Vector3 s = Seat(i); bool h = hot ? hot(i) : i == turn;
-      if (h) lit.Draw(prim.cyl, TRS({ s.x, -0.6f, s.z }, { 0, 0, 0 }, { 2.0f, 0.05f, 2.0f }), Fade(P(i).color, 0.85f));
+      if (h) lit.Draw(prim.cyl, TRS({ s.x, -3.17f, s.z }, { 0, 0, 0 }, { 3.2f, 0.04f, 3.2f }), Fade(P(i).color, 0.9f));
       float yaw = atan2f(-s.x, -s.z);
-      lit.Draw(prim.cube, TRS({ s.x * 1.08f, -1.3f, s.z * 1.08f }, { 0, yaw, 0 }, { 1.7f, 2.6f, 0.35f }), Hex(0x5c2f1a));  // chair back
-      DrawToon({ s.x, -0.55f, s.z }, yaw, P(i).color, time + i, h ? fabsf(sinf(time * 5)) * 0.18f : 0, cheer ? cheer(i) : 0, 1.3f);
+      if (HaveFile("p0.glb")) {
+        Vector3 c = Seat(i, 9.4f);
+        DrawModel("chair.glb", { c.x, -3.2f, c.z }, yaw, 3.4f);   // their chair, pushed back from the table
+        DrawToon({ s.x, -3.2f, s.z }, yaw, P(i).color, time + i, h ? 0.01f : 0, cheer ? cheer(i) : 0, 2.05f);
+      } else {
+        lit.Draw(prim.cube, TRS({ s.x * 1.08f, -1.3f, s.z * 1.08f }, { 0, yaw, 0 }, { 1.7f, 2.6f, 0.35f }), Hex(0x5c2f1a));  // chair back
+        DrawToon({ s.x, -0.55f, s.z }, yaw, P(i).color, time + i, h ? fabsf(sinf(time * 5)) * 0.18f : 0, cheer ? cheer(i) : 0, 1.3f);
+      }
     }
   }
   void SeatNames(std::function<std::string(int)> extra = nullptr) {
     for (int i = 0; i < N(); i++) {
-      Vector3 s = Seat(i); Vector2 p = GetWorldToScreen({ s.x, 2.2f, s.z }, cam);
+      Vector3 s = Seat(i); Vector2 p = GetWorldToScreen({ s.x, HaveFile("p0.glb") ? 3.3f : 2.2f, s.z }, cam);
       hud::Tag(p.x, p.y - 26, P(i).color, P(i).name, 28);
       if (i == turn) Text(p.x, p.y - 62, 30, Hex(0xffd43b), "▼", 0, TS_HEAVY | TS_SHADOW);
       if (extra) { std::string e = extra(i); if (!e.empty()) Text(p.x, p.y + 10, 28, WHITE, e, 0, TS_HEAVY | TS_SHADOW); }

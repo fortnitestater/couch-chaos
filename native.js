@@ -29,6 +29,11 @@ function nativeLoad() {
       .then(m => {
         m.measure = (s, size, style) => { _mctx.font = nativeFont(size, style); return _mctx.measureText(s).width; };
         NATIVE.mod = m; NATIVE.rs = nativeScale(); m._cc_init(NATIVE.rs); ok(m);
+        // rigged character models: fetched in the background, handed to the engine as they arrive
+        ['p0.glb', 'p1.glb', 'p2.glb', 'p3.glb', 'sofa.glb', 'armchair.glb', 'loveseat.glb', 'fireplace.glb', 'snakeplant.glb', 'monstera.glb', 'floorlamp.glb', 'sidetable.glb', 'chair.glb'].forEach(f => fetch(NATIVE.base + 'models/' + f + '?v=' + NATIVE.v).then(r => r.ok ? r.arrayBuffer() : null).then(b => {
+          if (!b) return; const u = new Uint8Array(b), p = m._malloc(u.length); m.HEAPU8.set(u, p);
+          m.ccall('cc_put_file', null, ['string', 'number', 'number'], [f, p, u.length]); m._free(p);
+        }).catch(() => {}));
       }, bad);
     s.onerror = bad; document.head.appendChild(s);
   });

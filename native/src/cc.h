@@ -181,6 +181,11 @@ inline float EaseOut(float t) { t = Clamp(t, 0, 1); return 1 - (1 - t) * (1 - t)
 inline float EaseBack(float t) { t = Clamp(t, 0, 1); float c = 1.7f; return 1 + (c + 1) * powf(t - 1, 3) + c * powf(t - 1, 2); }
 // cartoon character: hop = jump height, cheer 0..1 raises arms
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop = 0, float cheer = 0, float scale = 1);
+// rigged character models (people.cpp)
+bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc, float k, unsigned hsh);
+void InstallFileLoader();
+bool DrawModel(const char* file, Vector3 pos, float yaw, float height, Color tint = WHITE, Color force = BLANK);
+bool HaveFile(const std::string& n);
 // make the next DrawToon hold something: its right hand goes to 'hand' (toon-local space, before scale)
 struct ToonHold { bool on = false; Vector3 hand{}; };
 extern ToonHold g_hold;
