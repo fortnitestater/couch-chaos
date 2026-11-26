@@ -444,3 +444,39 @@ body.landing { overflow: auto; touch-action: auto; user-select: auto; -webkit-us
 .padBody[data-ch] .center h2 { color: #fff; }
 /* cards you can't play yet stay crisp, just a little dimmer */
 .padBody .tcard:disabled { filter: brightness(.86) !important; opacity: 1 !important; }
+
+/* ===== reactions (phone) ===== */
+.padBody .reactBtn { font-size: 18px !important; padding: 3px 10px !important; margin-left: auto; line-height: 1.2; }
+.padBody .reactBtn + .status { margin-left: 4px; }
+.padBody .reactBtn.on { background: var(--cc-gold, #ffd43b) !important; }
+.reactRow { position: fixed; z-index: 40; left: 10px; right: 10px; top: calc(58px + env(safe-area-inset-top)); display: flex; justify-content: space-between; gap: 6px; padding: 8px; border-radius: 24px;
+  background: rgba(12, 9, 36, .92); backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0, 0, 0, .5), inset 0 0 0 1.5px rgba(255, 255, 255, .16); }
+.reactRow.hidden { display: none; }
+.reactE { flex: 1; font-size: 30px; line-height: 1; padding: 10px 0; border: 0; border-radius: 16px; background: rgba(255, 255, 255, .08); color: #fff; touch-action: manipulation; }
+.reactE:active, .reactE.pop { animation: rpop .35s ease-out; background: rgba(255, 255, 255, .22); }
+@keyframes rpop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+/* ===== bowling (phone) ===== */
+.bowlPad { height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 2px 8px calc(10px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+.bwTop { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 8px; }
+.bwTop b { color: var(--chAcc, #ffd43b); letter-spacing: .08em; font-size: 15px; }
+.bwTop span { opacity: .85; font-size: 13px; font-weight: 700; }
+.bwWrap { position: relative; flex: 1; min-height: 0; border-radius: 20px; overflow: hidden; background: #17102e; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14), 0 8px 24px rgba(0, 0, 0, .35); touch-action: none; }
+.bowlPad:not(.mine) .bwWrap { opacity: .92; }
+.bwWrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bwPrompt { position: absolute; left: 0; right: 0; top: 44%; text-align: center; font: 800 21px/1.1 Fredoka, system-ui, sans-serif; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, .55); pointer-events: none; letter-spacing: .06em; }
+.bwPrompt.bwBig { font-size: 46px; top: 34%; color: #ffd43b; animation: rpop .5s ease-out; background: none; box-shadow: none; padding: 0; }
+.bwBot { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.bwPow { position: relative; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.bwPow.off { display: none; }
+.bwPow i { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, #51cf66, #ffd43b, #ff4d6d); transition: width .06s linear; }
+.bwPow span { position: absolute; inset: 0; display: grid; place-items: center; font: 800 11px system-ui; letter-spacing: .3em; color: #fff; text-shadow: 0 1px 2px #000; }
+.bowlPad .rhint { text-align: center; font-size: 15px; min-height: 38px; margin: 0; color: #dfe6ff; }
+
+/* ===== tennis (phone) ===== */
+.tnPad { height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 2px 8px calc(10px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+.tnShots { display: flex; gap: 8px; flex: none; }
+.tnShots button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 10px 4px 9px; border: 0; border-radius: 16px; color: #fff; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14); touch-action: manipulation; }
+.tnShots button b { font: 800 17px/1.1 Fredoka, system-ui, sans-serif; letter-spacing: .06em; }
+.tnShots button small { font-size: 11px; opacity: .75; }
+.tnShots button.on { background: linear-gradient(180deg, #c6ff3d, #7fd01c); color: #17310a; box-shadow: 0 4px 0 #4a8a0c, 0 8px 18px rgba(0, 0, 0, .3); transform: translateY(-1px); }
+.tnPad .rhint { text-align: center; font-size: 15px; min-height: 22px; margin: 0; color: #dfe6ff; }

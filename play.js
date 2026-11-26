@@ -663,7 +663,7 @@
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour, touch: renderTouch };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, bowl: renderBowl, tennis: renderTennis, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour, touch: renderTouch };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -675,6 +675,215 @@
     if (!ch) { delete b.dataset.ch; delete b.dataset.pat; return; }
     b.dataset.ch = id; b.dataset.pat = ch.pat;
     b.style.setProperty('--ch1', ch.c1); b.style.setProperty('--ch2', ch.c2); b.style.setProperty('--chDeep', ch.deep); b.style.setProperty('--chAcc', ch.accent);
+  }
+  // ---------- 😀 reactions: something to do while you wait; they pop up over the TV with your name ----------
+  const REACTS = ['🔥', '👏', '😂', '😱', '😭', '🤯'];
+  let lastReact = 0;
+  function setupReacts() {
+    const row = $('#reactRow'), btn = $('#reactBtn'); if (!row || !btn || row.dataset.ready) return; row.dataset.ready = '1';
+    row.innerHTML = REACTS.map(e => `<button class="reactE" data-e="${e}">${e}</button>`).join('');
+    btn.onclick = () => { row.classList.toggle('hidden'); btn.classList.toggle('on', !row.classList.contains('hidden')); };
+    row.addEventListener('click', ev => {
+      const b = ev.target.closest('.reactE'); if (!b) return;
+      const now = Date.now(); if (now - lastReact < 700) return; lastReact = now;
+      sendMsg({ t: 'react', e: b.dataset.e }); navigator.vibrate?.(12);
+      b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+    });
+  }
+  // ---------- 🎳 bowling: slide the ball, FLICK it up, curve your flick for a hook, steer it while it rolls ----------
+  // The lane is drawn on your phone; the TV streams the ball back so you can steer it. Lane units: x in metres (screen-right positive), z down the lane 0..20.
+  const BW = { st: { ph: 'aim', x: 0, z: 0.3, pins: 1023, msg: '' }, raf: 0, x: 0, aimN: 0, hookN: 0, powN: 0, mode: null, steer: 0, thrown: 0, throwT: 0 };
+  const BW_L = 18.3, BW_PIN = i => { let r = 0, k = i; while (k > r) { r++; k -= r; } return { x: (k - r / 2) * 0.305, z: 18.3 + r * 0.264 }; };
+  // the ball's planned path: starts at x0 with a straight slope, then curves (hook) late
+  const bwPath = (x0, aimN, hookN, z) => x0 + aimN * 0.035 * z + hookN * 0.42 * (z / BW_L) * (z / BW_L);
+  // fit a flick: initial slope + curvature from the finger's path, power from how fast it ended
+  function bwFit(pts) {
+    if (pts.length < 3) return null;
+    const p0 = pts[0], p1 = pts[pts.length - 1], dy = p0.y - p1.y; if (dy < 24) return null;
+    let s11 = 0, s12 = 0, s22 = 0, b1 = 0, b2 = 0;
+    for (const q of pts) { const u = (p0.y - q.y) / dy, x = q.x - p0.x; s11 += u * u; s12 += u * u * u; s22 += u * u * u * u; b1 += x * u; b2 += x * u * u; }
+    const det = s11 * s22 - s12 * s12; let c1 = 0, c2 = 0;
+    if (Math.abs(det) > 1e-6) { c1 = (b1 * s22 - b2 * s12) / det; c2 = (s11 * b2 - s12 * b1) / det; } else c1 = (p1.x - p0.x);
+    const r1 = c1 / dy, r2 = c2 / dy;
+    const dz = v => (Math.abs(v) < 0.16 ? 0 : Math.sign(v) * (Math.abs(v) - 0.16) / 0.84);   // a straight flick stays straight
+    let k = pts.length - 1; while (k > 0 && p1.t - pts[k].t < 90) k--;
+    const q = pts[k], dt = Math.max(30, p1.t - q.t), v = Math.max(0, (q.y - p1.y) / dt);       // px per ms, upward
+    return { aimN: clamp(r1 * 1.5), hookN: clamp(dz(r2 * 1.3)), powN: clamp((v - 0.35) / 1.7, 0.18, 1), dy, v };
+  }
+  function renderBowl(L) {
+    BW.L = L; BW.mine = !!L.mine; BW.mode = null; BW.thrown = 0; BW.steer = 0;
+    BW.st.who = L.who || ''; BW.st.frame = L.frame || 1; BW.st.frames = L.frames || 3; BW.st.ball = L.ball || 1; BW.st.ph = L.ph || 'aim'; BW.st.msg = ''; if (L.pins != null) BW.st.pins = L.pins;
+    if (BW.mine) { BW.x = 0; BW.aimN = 0; BW.hookN = 0; BW.powN = 0; }
+    stage.innerHTML = `<div class="bowlPad ${BW.mine ? 'mine' : ''}"><div class="bwTop"><b>${BW.mine ? 'YOUR ROLL' : esc((L.who || 'Someone') + ' is bowling')}</b><span>Frame ${BW.st.frame}/${BW.st.frames} · ${BW.st.ball === 1 ? '1st' : '2nd'} ball</span></div>
+      <div class="bwWrap" id="bwWrap"><canvas id="bwCv"></canvas><div class="bwPrompt" id="bwPrompt"></div></div>
+      <div class="bwBot"><div class="bwPow ${BW.mine ? '' : 'off'}"><i id="bwPowI"></i><span>POWER</span></div><div class="rhint" id="bwHint"></div></div></div>`;
+    const wrap = $('#bwWrap'), cv = $('#bwCv'), g = cv.getContext('2d'); let cw = 0, ch = 0, d = 1;
+    const fit = () => { const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return; d = Math.min(2, devicePixelRatio || 1); cw = W; ch = H; cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px'; cv.style.height = H + 'px'; };
+    fit(); addEventListener('resize', fit);
+    // lane → screen (a gentle perspective so the pins feel far away)
+    const yB = () => ch - 46, yT = () => 30, hwB = () => cw * 0.42, hwT = () => cw * 0.2;
+    const T = z => Math.min(1, z / 20), Y = z => { const t = T(z); return yB() - (yB() - yT()) * (1 - Math.pow(1 - t, 1.45)); };
+    const HW = z => { const t = Y(z); const k = (yB() - t) / (yB() - yT()); return hwB() + (hwT() - hwB()) * k; };
+    const X = (x, z) => cw / 2 + (x / 0.53) * HW(z) * 0.78, S = z => HW(z) / cw * 2.4;    // metres → px scale at depth z
+    const fromPx = px => clamp(((px - cw / 2) / (HW(0) * 0.78)) * 0.53 / 0.42);             // finger x at the foul line → -1..1
+    const hint = t => { const e = $('#bwHint'); if (e && e.textContent !== t) e.textContent = t; };
+    const draw = () => {
+      if (!document.body.contains(cv)) return; if (!cw) fit();
+      g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, cw, ch);
+      // lane
+      const grd = g.createLinearGradient(0, yT(), 0, yB()); grd.addColorStop(0, '#c99a5f'); grd.addColorStop(1, '#f0c58a');
+      g.fillStyle = '#17102e'; g.fillRect(0, 0, cw, ch);
+      const quad = (xa, xb, za, zb, fill) => { g.beginPath(); g.moveTo(X(xa, za), Y(za)); g.lineTo(X(xb, za), Y(za)); g.lineTo(X(xb, zb), Y(zb)); g.lineTo(X(xa, zb), Y(zb)); g.closePath(); g.fillStyle = fill; g.fill(); };
+      quad(-0.78, 0.78, 0, 20, '#0d0a20');                       // gutters
+      quad(-0.53, 0.53, 0, 20, grd);                              // wood
+      g.strokeStyle = 'rgba(120,70,20,.28)'; g.lineWidth = 1; for (let i = -6; i <= 6; i++) { g.beginPath(); g.moveTo(X(i * 0.0815, 0), Y(0)); g.lineTo(X(i * 0.0815, 20), Y(20)); g.stroke(); }
+      for (const sd of [-1, 1]) { quad(sd * 0.46, sd * 0.53, 0, 17.6, 'rgba(255,212,59,.95)'); quad(sd * 0.53, sd * 0.6, 0, 17.6, '#4a2a8a'); }   // bumpers
+      g.fillStyle = 'rgba(120,70,20,.55)'; for (let i = -3; i <= 3; i++) { const z = 4.6 + Math.abs(i) * 0.3, x = i * 0.12, w = 0.04 * S(z) * cw * 0.12; g.beginPath(); g.moveTo(X(x, z) - w, Y(z)); g.lineTo(X(x, z) + w, Y(z)); g.lineTo(X(x, z + 0.9), Y(z + 0.9)); g.closePath(); g.fill(); }
+      g.fillStyle = '#e03131'; g.fillRect(X(-0.53, 1), Y(1) - 2, X(0.53, 1) - X(-0.53, 1), 3);
+      // pins (standing ones)
+      const st = BW.st, pr = 10;
+      for (let i = pr - 1; i >= 0; i--) if (st.pins & (1 << i)) { const q = BW_PIN(i), px = X(q.x, q.z), py = Y(q.z), s = Math.max(5, S(q.z) * 17);
+        g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(px, py + s * 0.5, s * 0.5, s * 0.22, 0, 0, 7); g.fill();
+        g.fillStyle = '#f8f9fa'; g.beginPath(); g.ellipse(px, py, s * 0.42, s * 0.72, 0, 0, 7); g.fill(); g.fillStyle = '#e03131'; g.fillRect(px - s * 0.4, py - s * 0.18, s * 0.8, s * 0.12); }
+      // plan: where this ball will go (the dashed path). Your phone and the TV draw the same line.
+      const rolling = st.ph === 'roll', bx = rolling ? st.x : BW.x * 0.42;
+      if (BW.mine && st.ph === 'aim') {
+        g.setLineDash([2, 9]); g.lineCap = 'round'; g.lineWidth = 5; const hot = BW.mode === 'throw';
+        for (let z = 0.6; z < 18.6; z += 0.5) { const a = 1 - z / 24; g.strokeStyle = hot ? `rgba(120,255,200,${a})` : `rgba(255,255,255,${a * 0.7})`; g.beginPath(); g.moveTo(X(bwPath(bx, BW.aimN, BW.hookN, z), z), Y(z)); g.lineTo(X(bwPath(bx, BW.aimN, BW.hookN, z + 0.5), z + 0.5), Y(z + 0.5)); g.stroke(); }
+        g.setLineDash([]); const ex = X(bwPath(bx, BW.aimN, BW.hookN, 18.3), 18.3), ey = Y(18.3); g.strokeStyle = hot ? '#7dffc8' : '#fff'; g.lineWidth = 3; g.beginPath(); g.arc(ex, ey, 9, 0, 7); g.stroke();
+      }
+      // the ball
+      const bz = rolling || st.ph === 'show' ? Math.max(0.3, st.z) : 0.3, bxx = rolling ? st.x : bx;
+      if (!(st.ph === 'show' && bz > 20.5)) { const br = Math.max(5, S(bz) * 20), px = X(bxx, bz), py = Y(bz);
+        g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(px, py + br * 0.7, br * 0.9, br * 0.35, 0, 0, 7); g.fill();
+        const bg = g.createRadialGradient(px - br * 0.3, py - br * 0.35, br * 0.1, px, py, br); bg.addColorStop(0, '#9fd3ff'); bg.addColorStop(1, me && me.color ? me.color : '#3b7bff'); g.fillStyle = bg; g.beginPath(); g.arc(px, py, br, 0, 7); g.fill();
+        g.fillStyle = '#0a0a14'; for (const o of [[-0.28, -0.35], [0.1, -0.5], [-0.05, -0.15]]) { g.beginPath(); g.arc(px + o[0] * br, py + o[1] * br, br * 0.13, 0, 7); g.fill(); } }
+      // prompts
+      const pe = $('#bwPrompt'); let pt = '';
+      if (!BW.mine) pt = st.ph === 'show' && st.msg ? st.msg : '';
+      else if (st.ph === 'roll') pt = '◀  DRAG TO STEER  ▶';
+      else if (st.ph === 'show') pt = st.msg || '';
+      else if (BW.mode === 'throw') pt = BW.hookN ? (BW.hookN > 0 ? 'HOOK →' : '← HOOK') : 'RELEASE!';
+      if (pe && pe.textContent !== pt) { pe.textContent = pt; pe.classList.toggle('bwBig', st.ph === 'show'); }
+      const pw = $('#bwPowI'); if (pw) pw.style.width = Math.round((BW.mode === 'throw' ? BW.powN : (st.ph === 'roll' ? 0 : 0)) * 100) + '%';
+      if (!BW.mine) hint(st.ph === 'roll' ? 'Rolling…' : 'Watch the TV — send a reaction 😀');
+      else if (st.ph === 'aim') hint(BW.mode === 'throw' ? 'Keep going up — faster = harder' : 'Slide the ball side to side, then FLICK it up. Curve the flick for a hook!');
+      else if (st.ph === 'roll') hint('Nudge the ball with your thumb');
+      else hint('');
+      BW.raf = requestAnimationFrame(draw);
+    };
+    cancelAnimationFrame(BW.raf); BW.raf = requestAnimationFrame(draw);
+    if (!BW.mine) return;
+    // ----- touch -----
+    let pid = null, pts = [], sx0 = 0, lastSend = 0;
+    wrap.style.touchAction = 'none';
+    const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() }; };
+    const sendAim = (force) => { const n = performance.now(); if (!force && n - lastSend < 70) return; lastSend = n; sendMsg({ t: 'act', a: 'bowlaim', id: [BW.x, BW.aimN, BW.hookN].map(v => +v.toFixed(3)).join('|'), p: +BW.powN.toFixed(2) }); };
+    wrap.addEventListener('pointerdown', e => {
+      e.preventDefault(); if (pid != null) return; pid = e.pointerId; try { wrap.setPointerCapture(pid); } catch (_) {}
+      const q = pos(e); pts = [q]; sx0 = q.x;
+      if (BW.st.ph === 'aim') { BW.mode = 'slide'; BW.x = fromPx(q.x); BW.aimN = 0; BW.hookN = 0; BW.powN = 0; sendAim(true); navigator.vibrate?.(8); }
+      else if (BW.st.ph === 'roll') { BW.mode = 'steer'; }
+    });
+    wrap.addEventListener('pointermove', e => {
+      if (e.pointerId !== pid) return; const q = pos(e); pts.push(q); if (pts.length > 80) pts.shift();
+      if (BW.mode === 'slide') { const dy = pts[0].y - q.y; if (dy > 22) { BW.mode = 'throw'; navigator.vibrate?.(10); let k = pts.length - 1; while (k > 0 && pts[k].y < pts[0].y - 6) k--; pts = pts.slice(k); } /* the flick starts where the finger started rising */ else { BW.x = fromPx(q.x); sendAim(); } }
+      if (BW.mode === 'throw') { const f = bwFit(pts); if (f) { BW.aimN = f.aimN; BW.hookN = f.hookN; BW.powN = f.powN; sendAim(); } }
+      if (BW.mode === 'steer') { BW.steer = clamp((q.x - sx0) / (cw * 0.22)); const n = performance.now(); if (n - lastSend > 50) { lastSend = n; sendMsg({ t: 'in', x: +BW.steer.toFixed(2), y: 0, a: false, b: false, touch: true }); } }
+    });
+    const end = e => {
+      if (e.pointerId !== pid) return; pid = null;
+      if (BW.mode === 'throw') {
+        const f = bwFit(pts);
+        if (f && f.dy >= 70 && f.v >= 0.3) {
+          BW.aimN = f.aimN; BW.hookN = f.hookN; BW.powN = f.powN; BW.thrown = Date.now();
+          sendMsg({ t: 'act', a: 'bowl', id: [BW.x, f.aimN, f.hookN].map(v => +v.toFixed(3)).join('|'), p: +f.powN.toFixed(2) }); navigator.vibrate?.([30, 20, 50]);
+        } else { toast('Flick a bit longer and faster! 💨'); BW.mode = null; BW.powN = 0; }
+      } else if (BW.mode === 'steer') { BW.steer = 0; sendMsg({ t: 'in', x: 0, y: 0, a: false, b: false, touch: false }); }
+      else if (BW.mode === 'slide') sendAim(true);
+      if (BW.mode !== 'throw' || !BW.thrown) BW.mode = null;
+    };
+    wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
+  }
+  // ---------- 🎾 tennis: the court is on your phone. Watch the ring close, FLICK to hit, pick DRIVE / LOB / DROP ----------
+  const TN = { st: null, shot: 'd', raf: 0, trail: null, sw: 0 };
+  function renderTennis(L) {
+    TN.st = null; TN.trail = null; TN.serve = !!L.serve;
+    stage.innerHTML = `<div class="tnPad"><div class="bwTop"><b>YOUR SHOT</b><span id="tnScore">${L.serve ? 'You serve' : 'Rally'}</span></div>
+      <div class="bwWrap" id="tnWrap"><canvas id="tnCv"></canvas><div class="bwPrompt" id="tnPrompt"></div></div>
+      <div class="tnShots">${[['d', 'DRIVE', 'fast · flat'], ['l', 'LOB', 'high · deep'], ['s', 'DROP', 'short · soft']].map(s => `<button data-s="${s[0]}" class="${TN.shot === s[0] ? 'on' : ''}"><b>${s[1]}</b><small>${s[2]}</small></button>`).join('')}</div>
+      <div class="rhint" id="tnHint"></div></div>`;
+    stage.querySelectorAll('.tnShots button').forEach(b => b.addEventListener('pointerdown', e => { e.stopPropagation(); TN.shot = b.dataset.s; stage.querySelectorAll('.tnShots button').forEach(x => x.classList.toggle('on', x === b)); navigator.vibrate?.(10); }));
+    const wrap = $('#tnWrap'), cv = $('#tnCv'), g = cv.getContext('2d'); let cw = 0, ch = 0, d = 1;
+    const fit = () => { const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return; d = Math.min(2, devicePixelRatio || 1); cw = W; ch = H; cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px'; cv.style.height = H + 'px'; };
+    fit(); addEventListener('resize', fit);
+    // court metres → screen: depth 0 = my baseline (bottom), 23.77 = theirs; a mild perspective
+    const HLn = 11.885, DWn = 5.485, HWn = 4.115, SVn = 6.4, DMIN = -4.5, DMAX = 28.3;
+    const yB = () => ch - 22, yT = () => 26, Yd = dd => { const t = (dd - DMIN) / (DMAX - DMIN); return yB() - (yB() - yT()) * (1 - Math.pow(1 - t, 1.3)); };
+    const HWd = dd => { const k = (yB() - Yd(dd)) / (yB() - yT()); return cw * 0.5 * (0.94 + (0.5 - 0.94) * k); };
+    const Xd = (sx, dd) => cw / 2 + (sx / (DWn + 1.6)) * HWd(dd), Sc = dd => HWd(dd) / cw * 2;
+    const line = (x0, d0, x1, d1, w = 2.5, col = '#fff') => { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(Xd(x0, d0), Yd(d0)); g.lineTo(Xd(x1, d1), Yd(d1)); g.stroke(); };
+    const poly = (pts, fill) => { g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(Xd(q[0], q[1]), Yd(q[1])) : g.moveTo(Xd(q[0], q[1]), Yd(q[1])))); g.closePath(); g.fillStyle = fill; g.fill(); };
+    const draw = () => {
+      if (!document.body.contains(cv)) return; if (!cw) fit();
+      g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, cw, ch); g.fillStyle = '#0e4a36'; g.fillRect(0, 0, cw, ch);
+      poly([[-DWn - 1.6, DMIN], [DWn + 1.6, DMIN], [DWn + 1.6, DMAX], [-DWn - 1.6, DMAX]], '#1d7a55');
+      poly([[-DWn - 0.8, -2.2], [DWn + 0.8, -2.2], [DWn + 0.8, 2 * HLn + 2.2], [-DWn - 0.8, 2 * HLn + 2.2]], '#2b6a52');
+      poly([[-DWn, 0], [DWn, 0], [DWn, 2 * HLn], [-DWn, 2 * HLn]], '#2a6fb0');
+      const st = TN.st, mineSide = st && st.ph === 'rally' && st.r;
+      if (mineSide) poly([[-DWn, 0], [DWn, 0], [DWn, HLn], [-DWn, HLn]], 'rgba(255,255,255,.07)');
+      line(-DWn, 0, DWn, 0); line(-DWn, 2 * HLn, DWn, 2 * HLn); for (const x of [-DWn, DWn, -HWn, HWn]) line(x, 0, x, 2 * HLn, 2);
+      line(-HWn, HLn - SVn, HWn, HLn - SVn, 2); line(-HWn, HLn + SVn, HWn, HLn + SVn, 2); line(0, HLn - SVn, 0, HLn + SVn, 2);
+      // the net
+      g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 4; const nx0 = Xd(-DWn - 0.6, HLn), nx1 = Xd(DWn + 0.6, HLn), ny = Yd(HLn); g.beginPath(); g.moveTo(nx0, ny - 9); g.lineTo(nx1, ny - 9); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1; for (let x = nx0; x < nx1; x += 7) { g.beginPath(); g.moveTo(x, ny - 9); g.lineTo(x, ny); g.stroke(); } g.fillStyle = '#fff'; g.fillRect(nx0 - 3, ny - 13, 5, 14); g.fillRect(nx1 - 2, ny - 13, 5, 14);
+      let prompt = '', hint = '';
+      if (!st) { prompt = ''; hint = 'Get ready…'; }
+      else {
+        const pls = st.pl || [];
+        for (const q of pls.slice().sort((a, b) => b[1] - a[1])) { const mine = q[2] === 1, x = Xd(q[0], q[1]), y = Yd(q[1]), r = Math.max(7, Sc(q[1]) * 15);
+          g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x, y + r * 0.7, r * 0.95, r * 0.38, 0, 0, 7); g.fill();
+          g.fillStyle = mine ? (me && me.color) || '#ff4d6d' : '#cfd8ea'; g.beginPath(); g.arc(x, y - r * 0.9, r, 0, 7); g.fill(); g.lineWidth = 3; g.strokeStyle = mine ? '#fff' : 'rgba(0,0,0,.35)'; g.stroke();
+          if (mine) { g.fillStyle = '#fff'; g.font = '800 11px system-ui'; g.textAlign = 'center'; g.fillText('YOU', x, y - r * 2.2); } }
+        // my timing ring
+        const my = pls.find(q => q[2] === 1);
+        if (my && st.r && st.live) { const x = Xd(my[0], my[1]), y = Yd(my[1]) - 4, rr = (16 + st.k * 78) * Math.max(0.8, Sc(my[1])), col = st.z === 2 ? '#51cf66' : st.z === 1 ? '#ffd43b' : '#ffffff';
+          g.lineWidth = 6; g.strokeStyle = col; g.globalAlpha = 0.95; g.beginPath(); g.arc(x, y, rr, 0, 7); g.stroke(); g.globalAlpha = 1; g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(x, y, 16 * Math.max(0.8, Sc(my[1])), 0, 7); g.stroke();
+          if (st.z === 2) prompt = 'NOW!'; else if (st.z === 1) prompt = 'almost…'; }
+        // ball (a shadow on the court, the ball above it)
+        if (st.live && st.b) { const bx = Xd(st.b[0], st.b[1]), by = Yd(st.b[1]), s = Math.max(0.7, Sc(st.b[1])), h = st.b[2] * 15 * s, br = Math.max(4.5, 7 * s);
+          g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(bx, by, br * 1.1, br * 0.45, 0, 0, 7); g.fill();
+          g.fillStyle = '#e6f76a'; g.beginPath(); g.arc(bx, by - h - br, br, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.4; g.beginPath(); g.arc(bx, by - h - br, br * 0.7, 0.5, 2.6); g.stroke(); }
+        if (st.ph === 'serve') { if (st.sv) { prompt = 'FLICK UP TO SERVE'; hint = 'Flick up to toss and serve · flick faster = harder'; } else hint = 'Get ready to return'; }
+        else if (st.ph === 'rally') hint = st.r ? (st.z === 2 ? 'Flick NOW!' : 'Wait for the ring to close, then flick') : 'Their ball — get ready';
+        else if (st.ph === 'point') { prompt = st.msg || ''; hint = ''; }
+        else if (st.ph === 'var') { prompt = 'HAWK-EYE'; hint = 'Reviewing the line…'; }
+        else if (st.ph === 'end') { prompt = st.msg || 'GAME OVER'; }
+        if (hint === '' && st.ph !== 'point' && st.ph !== 'end' && st.ph !== 'var') hint = 'Flick up to hit · aim with the flick direction';
+      }
+      // the finger's trail
+      if (TN.trail) { const a = 1 - (performance.now() - TN.trail.t) / 450; if (a > 0) { g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 8; g.strokeStyle = `rgba(255,255,255,${a * 0.8})`; g.beginPath(); TN.trail.pts.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y))); g.stroke(); } else TN.trail = null; }
+      const sc = $('#tnScore'); if (sc) { const t = !st ? '' : st.ph === 'serve' ? (st.sv ? 'You serve' : 'Return') : st.ph === 'rally' ? (st.r ? 'Your shot' : 'Their ball') : st.ph === 'var' ? 'Review' : ''; if (sc.textContent !== t) sc.textContent = t; }
+      const pe = $('#tnPrompt'); if (pe && pe.textContent !== prompt) { pe.textContent = prompt; pe.classList.toggle('bwBig', !!prompt && (st && (st.ph === 'point' || st.ph === 'end' || st.z === 2))); }
+      const he = $('#tnHint'); if (he && he.textContent !== hint) he.textContent = hint;
+      TN.raf = requestAnimationFrame(draw);
+    };
+    cancelAnimationFrame(TN.raf); TN.raf = requestAnimationFrame(draw);
+    // ----- a flick (or just a tap) is a swing -----
+    let pid = null, pts = [];
+    wrap.style.touchAction = 'none';
+    const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() }; };
+    wrap.addEventListener('pointerdown', e => { e.preventDefault(); if (pid != null) return; pid = e.pointerId; try { wrap.setPointerCapture(pid); } catch (_) {} pts = [pos(e)]; });
+    wrap.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; pts.push(pos(e)); if (pts.length > 60) pts.shift(); TN.trail = { pts: pts.slice(), t: performance.now() + 9999 }; });
+    const end = e => {
+      if (e.pointerId !== pid) return; pid = null;
+      const f = bwFit(pts); let aim = 0, pw = 0.62;
+      if (f && f.dy >= 50) { aim = clamp(f.aimN * 1.2); pw = clamp(0.3 + f.powN * 0.7, 0.3, 1); }
+      else if (pts.length > 4 && Math.abs(pts[pts.length - 1].x - pts[0].x) > 30) return;   // a sideways scribble isn't a swing
+      TN.trail = pts.length > 4 ? { pts: pts.slice(), t: performance.now() } : null;
+      sendMsg({ t: 'act', a: 'swing', id: aim.toFixed(2) + '|' + TN.shot, p: +pw.toFixed(2) }); navigator.vibrate?.([20, 15, 30]);
+    };
+    wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
   }
   function renderMsg(L) { stage.innerHTML = `<div class="center"><div class="bigEm">${icoSplit(L.emoji || '').icon || esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
   const COVER = id => id ? `covers/sm/${String(id).replace(/^_/, 'q-')}.jpg` : '';
@@ -917,7 +1126,7 @@
       : (m.cards || []).map((c, i) => `<button class="tcard ${c.ok ? 'ok' : ''}" data-i="${i}" ${c.ok ? '' : 'disabled'} style="--cc:${esc(c.color || '#495057')}">${c.icon ? `<span class="tci">${esc(c.icon)}</span>` : ''}<b>${esc(c.label)}</b>${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</button>`).join('');
     const btns = (m.buttons || []).map(b => `<button class="pbtn2 ${b.big ? 'big' : ''}" data-b="${esc(b.id)}" ${b.off ? 'disabled' : ''} style="--bc:${esc(b.color || '#4dabff')}">${icoBtn(b.label)}</button>`).join('');
     stage.innerHTML = `<div class="gpanel ${m.myTurn ? 'my' : ''}"><div class="gpTop"><b>${esc(m.title || '')}</b><span>${esc(m.info || '')}</span></div>
-      ${m.sub ? `<div class="gpSub">${esc(shortHint(m.sub))}</div>` : ''}<div class="gpHand ${deck ? 'fan n' + Math.min(7, (m.cards || []).length) : ''}">${cards || '<div class="muted" style="padding:20px;grid-column:1/-1;text-align:center">Nothing in your hand yet</div>'}</div><div class="gpBtns">${btns}</div></div>`;
+      ${m.sub ? `<div class="gpSub">${esc(shortHint(m.sub))}</div>` : ''}<div class="gpHand ${deck ? 'fan n' + Math.min(7, (m.cards || []).length) : ''}">${cards}</div><div class="gpBtns">${btns}</div></div>`;
     stage.querySelectorAll('.tcard.ok').forEach(b => flickable(b, () => sendMsg({ t: 'act', a: 'card', i: +b.dataset.i })));
     if (stage.querySelector('.tcard.ok')) stage.querySelector('.gpHand').insertAdjacentHTML('beforebegin', '<div class="rhint">👆 Flick a glowing card up to throw it</div>');
     stage.querySelectorAll('.pbtn2').forEach(b => {
@@ -1060,6 +1269,7 @@
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong', ts: m.ts }); } catch (e) {} return; }
     if (m.t === 'welcome') {
+      setupReacts();
       joined = true; me = m; document.body.style.setProperty('--me', m.color || '#3b7bff'); document.body.classList.add('inGame'); tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
@@ -1071,6 +1281,8 @@
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
+    else if (m.t === 'tn') { TN.st = m; }
+    else if (m.t === 'bowl') { const s = BW.st; s.ph = m.ph; if (m.x != null) { s.x = +m.x; s.z = +m.z; } if (m.pins != null) s.pins = m.pins | 0; s.msg = m.msg || ''; if (m.ph !== 'aim') BW.thrown = BW.thrown || 1; if (m.ph === 'aim') { BW.thrown = 0; BW.mode = null; } }
     else if (m.t === 'paint') { if (TM.on) TM.paint = m; }
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);
     else if (m.t === 'toast') toast(m.text);

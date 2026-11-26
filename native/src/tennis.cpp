@@ -62,14 +62,14 @@ struct Tennis : Classic {
     else if (frand(0, 1) < 0.3f) Say(0, "Quiet, please."); t = 7; tossT = -1; recv = -1; hitAt = -1; rally = 0;
     for (int i = 0; i < N(); i++) if (!P(i).bot) {
       bool srv = on[server].pid == i; bool playing = false; for (auto& p : on) playing |= p.pid == i;
-      Layout(i, playing ? std::string("{\"name\":\"swing\",\"sport\":\"tennis\",\"label\":\"SWING!\",\"aim\":true,\"hint\":") + kit::Q(srv ? "Your serve! Swing to toss + hit · tilt to aim" : "Swing when the ring around you is smallest · tilt to aim left/right") + "}"
+      Layout(i, playing ? std::string("{\"name\":\"tennis\",\"serve\":") + (srv ? "true" : "false") + "}"
                         : kit::Msg("🎾", "Next up soon!", "You rotate in after this point"));
     }
   }
   // launch the ball from 'from' to land at target, at speed v (m/s), clearing the net
-  void Launch(Vector3 from, Vector3 target, float speed) {
+  void Launch(Vector3 from, Vector3 target, float speed, float tmul = 1) {
     Vector3 d = { target.x - from.x, 0, target.z - from.z }; float dist = hypotf(d.x, d.z);
-    float T = fmaxf(0.55f, dist / (speed * GSPD)), g = G * gK;
+    float T = fmaxf(0.55f, dist / (speed * GSPD)) * tmul, g = G * gK;
     for (int k = 0; k < 12; k++) {  // make sure it clears the net with room to spare
       float vy = (0 - from.y + 0.5f * g * T * T) / T, tn = fabsf(from.z) / fmaxf(0.01f, fabsf(d.z)) * T;
       float hn = from.y + vy * tn - 0.5f * g * tn * tn;
@@ -156,7 +156,8 @@ struct Tennis : Classic {
     Matrix xf = RacketXf(Vector3Subtract(fist, Vector3Scale(dir, 0.1f)), dir, face, 1.4f);
     DrawProp(props.racketFrame, xf, c); DrawProp(props.racketRest, xf, WHITE);
   }
-  void Hit(int i, float power, float aim, bool good) {
+  int AiShot() { float r = frand(0, 1); return r < 0.14f ? 1 : r < 0.26f ? 2 : 0; }
+  void Hit(int i, float power, float aim, bool good, int shot = 0) {
     Pl& p = on[i]; lastHitTeam = p.team; rally++; if (p.pid >= 0) hits[p.pid]++;
     // harder swings go deeper and closer to the lines: more winners, more close calls (and the odd one out)
     float risk = Clamp((power - 0.55f) / 0.45f, 0, 1), wl = Doubles() ? DW : HW;
@@ -168,29 +169,51 @@ struct Tennis : Classic {
     if (smash) { float w = Doubles() ? DW : HW; tz = -Side(p.team) * frand(HL * 0.45f, HL * 0.72f); tx = Clamp(aim, -1, 1) * w * 0.55f; }
     float spd = (smash ? 34 : 20 + power * 13) * (good ? 1 : 0.82f);
     gK = smash ? 1.0f : power > 0.7f ? 1.3f : power < 0.45f ? 0.85f : 1.15f; spinR = smash ? 14 : power > 0.7f ? 48 : power < 0.45f ? -26 : 32;
-    Launch(bp, { tx, 0, tz }, spd); smashLive = smash;
-    int kmh = (int)(spd * 3.6f * 1.1f); radar = I(kmh) + " km/h"; radarT = 1.6f;
+    float tmul = 1;
+    if (!smash && shot == 1) { tz = -Side(p.team) * (HL - 0.7f - frand(0, 1.3f)); spd = 13; tmul = 1.12f; gK = 0.95f; spinR = -18; }       // LOB: high and deep, over a player who has come in
+    else if (!smash && shot == 2) { tz = -Side(p.team) * frand(2.4f, 4.2f); spd = 10; gK = 0.8f; spinR = -34; }                               // DROP: short and soft, drags the other player forward
+    Launch(bp, { tx, 0, tz }, spd, tmul); smashLive = smash;
+    int kmh = (int)(spd * 3.6f * 1.1f); radar = shot == 1 && !smash ? "LOB" : shot == 2 && !smash ? "DROP SHOT" : I(kmh) + " km/h"; radarT = 1.6f;
     Sfx(smash ? "smash" : "pok"); Shake(smash ? 10 : 2); if (!smash) fx.Burst(bp, 12, WHITE, 3, 0.5f, 0.05f, 2);
     if (smash) SmashShot(p); else if (good && power > 0.8f) { call = "💥 POWER SHOT!"; callT = 1; }
     p.sw = 1; p.swDir = bp.x > p.pos.x ? 1.f : -1.f;
     if (rally == 8) Sfx("cheer");
     Predict(); recv = Receiver();
   }
-  void Swing(int pid, float power) {
+  void Swing(int pid, float power, float aim = NAN, int shot = 0) {
     for (size_t i = 0; i < on.size(); i++) {
       Pl& p = on[i]; if (p.pid != pid || p.cool > 0) continue;
+      float aimW = std::isnan(aim) ? P(pid).stick.x : (p.team == 0 ? -aim : aim);   // a flick's "right" is the player's right on screen
       p.cool = 0.3f; p.sw = 1; Sfx("swish");
-      if (phase == "serve" && (int)i == server && tossT < 0) { tossT = 0; servePow = power; serveAim = P(pid).stick.x; return; }
+      if (phase == "serve" && (int)i == server && tossT < 0) { tossT = 0; servePow = power; serveAim = aimW; return; }
       if (phase != "rally" || !live || (int)i != recv) return;
       if (smashLive) { call = "TOO FAST!"; callT = 0.8f; return; }   // a smash can't be returned
       // generous: anywhere near the ball counts; closer to the ideal moment = better shot
       Vector3 rk = RacketPt(p); float d = Vector3Distance(rk, bp);
-      if (d < 3.2f && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, P(pid).stick.x, d < 1.6f); if (d < 1.1f) { call = "PERFECT!"; callT = 0.8f; } return; }
-      call = d < 6 ? "TOO EARLY!" : "WAIT FOR IT…"; callT = 0.6f;
+      if (d < 4.6f && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, aimW, d < 2.4f, shot); if (d < 1.3f) { call = "PERFECT!"; callT = 0.8f; } return; }
+      if (d < 20 && !smashLive) { qPid = pid; qT = 1.5f; qPow = power; qAim = aimW; qShot = shot; call = ""; return; }   // flick as soon as you see the ball coming: the swing is held and goes the moment it's in reach
+      call = "WAIT FOR IT…"; callT = 0.6f;
     }
   }
   float servePow = 0.7f, serveAim = 0;
-  void Act(int p, const std::string& k, int, float pw) override { if (k.rfind("swing", 0) == 0) Swing(p, Clamp(pw > 0 ? pw : 0.65f, 0.2f, 1)); }
+  void Act(int p, const std::string& k, int, float pw) override {
+    if (k.rfind("swing", 0) != 0) return;
+    float aim = NAN; int shot = 0; size_t c = k.find(':');
+    if (c != std::string::npos) { float a = 0; char sh = 'd'; if (sscanf(k.c_str() + c + 1, "%f|%c", &a, &sh) >= 1) { aim = Clamp(a, -1, 1); shot = sh == 'l' ? 1 : sh == 's' ? 2 : 0; } }
+    Swing(p, Clamp(pw > 0 ? pw : 0.65f, 0.2f, 1), aim, shot);
+  }
+  // every player's phone shows the court live: where everyone is, the ball, and the ring that closes on their racket
+  float tnT = 0; int qPid = -1, qShot = 0; float qT = 0, qPow = 0.6f, qAim = 0;
+  void SendTn() {
+    for (size_t i = 0; i < on.size(); i++) {
+      Pl& me = on[i]; if (me.pid < 0 || P(me.pid).bot) continue;
+      int T = me.team; auto SX = [&](float x) { return T == 0 ? -x : x; }; auto SD = [&](float z) { return T == 0 ? z + HL : HL - z; };
+      float d = Vector3Distance(RacketPt(me), bp); bool rm = phase == "rally" && live && (int)i == recv, showBall = live || (phase == "serve" && tossT >= 0);
+      std::string pl; for (auto& q : on) { char b[64]; snprintf(b, sizeof b, "%s[%.2f,%.2f,%d]", pl.empty() ? "" : ",", SX(q.pos.x), SD(q.pos.z), &q == &me ? 1 : 0); pl += b; }
+      char b[520]; snprintf(b, sizeof b, "{\"t\":\"tn\",\"ph\":\"%s\",\"live\":%d,\"b\":[%.2f,%.2f,%.2f],\"k\":%.2f,\"z\":%d,\"r\":%d,\"sv\":%d,\"pl\":[%s],\"msg\":%s}", phase.c_str(), showBall ? 1 : 0, SX(bp.x), SD(bp.z), bp.y, Clamp((d - 1) / 9, 0, 1), d < 2.4f ? 2 : d < 4.6f ? 1 : 0, rm ? 1 : 0, phase == "serve" && (int)i == server ? 1 : 0, pl.c_str(), kit::Q(call).c_str());
+      Send(me.pid, b);
+    }
+  }
   void Point(int team, const std::string& why) {
     if (phase == "point") return;
     sinceVar++; std::string pre = Prefix(why);
@@ -212,6 +235,7 @@ struct Tennis : Classic {
   std::string Score(int tm) { int a = pts[tm], b = pts[1 - tm]; if (a >= 3 && b >= 3) return a == b ? "40" : a > b ? "AD" : "40"; const char* S[] = { "0", "15", "30", "40" }; return S[std::min(3, a)]; }
   void Update(float dt) override {
     time += dt; fx.Update(dt); conf.Update(dt); callT -= dt; radarT -= dt; t -= dt;
+    tnT -= dt; if (tnT <= 0) { tnT = 0.066f; SendTn(); }
     talkT -= dt; judgeT -= dt; squeakT -= dt; spinA += spinR * dt; squash = fmaxf(0, squash - dt * 9);
     for (auto& m : marks) m.life -= dt;
     for (int i = 0; i < N(); i++) if (!P(i).bot && P(i).a && !P(i).pa) Swing(i, 0.65f);
@@ -276,9 +300,14 @@ struct Tennis : Classic {
         }
       }
       trail.push_back(bp); if (trail.size() > 16) trail.erase(trail.begin());
+      if (qT > 0) {
+        qT -= dt;
+        if (recv >= 0 && on[recv].pid == qPid) { Vector3 rk = RacketPt(on[recv]); float d = Vector3Distance(rk, bp); if (d < 3.0f && bp.z * Side(on[recv].team) > -0.5f) { qT = 0; Hit(recv, qPow, qAim, true, qShot); } }
+        else qT = 0;
+      }
       // the AI (bots + the practice machine) hits on time, most of the time
       if (recv >= 0) { Pl& r = on[recv]; bool ai = r.pid < 0 || P(r.pid).bot || g_dbg == 21 || g_dbg == 22; /* 21 = debug autoplay */ Vector3 rk = RacketPt(r);
-        if (ai && !smashLive && Vector3Distance(rk, bp) < 1.9f && bounces == 1) { if (frand(0, 1) < (r.pid < 0 ? 0.9f : 0.8f)) Hit(recv, frand(0.45f, 0.9f), frand(-0.8f, 0.8f), true); else { recv = -1; } } }
+        if (ai && !smashLive && Vector3Distance(rk, bp) < 1.9f && bounces == 1) { if (frand(0, 1) < (r.pid < 0 ? 0.9f : 0.8f)) Hit(recv, frand(0.45f, 0.9f), frand(-0.8f, 0.8f), true, AiShot()); else { recv = -1; } } }
       if (fabsf(bp.z) > HL + 9 || fabsf(bp.x) > 14) { live = false; Point(bounces >= 1 ? lastHitTeam : 1 - lastHitTeam, bounces >= 1 ? (smashLive ? "SMASH WINNER!" : "WINNER!") : "OUT!"); }
     }
   }
@@ -478,7 +507,7 @@ struct Tennis : Classic {
     // timing ring: closes around the receiver as the ball arrives
     if (phase == "rally" && live && recv >= 0 && on[recv].pid >= 0 && !P(on[recv].pid).bot) {
       Pl& r = on[recv]; Vector3 rp = RacketPt(r); float d = Vector3Distance(rp, bp), k = Clamp((d - 1.0f) / 9.0f, 0, 1);
-      Color rc = d < 3.2f ? (d < 1.6f ? Hex(0x51cf66) : Hex(0xffd43b)) : Hex(0xffffff);
+      Color rc = d < 4.6f ? (d < 2.4f ? Hex(0x51cf66) : Hex(0xffd43b)) : Hex(0xffffff);
       DrawCircle3D({ rp.x, 0.03f, rp.z }, 0.7f + k * 3.2f, { 1, 0, 0 }, 90, Fade(rc, 0.95f));
       DrawCircle3D({ rp.x, 0.035f, rp.z }, 0.72f + k * 3.2f, { 1, 0, 0 }, 90, Fade(rc, 0.95f));
       DrawCircle3D({ rp.x, 0.03f, rp.z }, 0.7f, { 1, 0, 0 }, 90, Fade(WHITE, 0.6f));
@@ -562,7 +591,7 @@ struct Tennis : Classic {
     }
     if (callT > 0 && phase != "var") Text(800, 330, 70 + 10 * EaseBack(fminf(1, (2.2f - callT) * 4)), Fade(WHITE, fminf(1, callT * 2)), call, 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (radarT > 0) { kit::Glass(1330, 110, 240, 60, 20); Text(1450, 140, 30, Hex(0xffe066), radar, 0, TS_DISPLAY | TS_SHADOW); }
-    Hint("🎾 Swing when the ring around you is smallest (green = perfect) · tilt to aim · you run to the ball by yourself", Hex(0xd8f5a2));
+    Hint("Flick up on your phone to hit · pick DRIVE, LOB or DROP · you run to the ball by yourself", Hex(0xd8f5a2));
   }
 };
 }  // namespace

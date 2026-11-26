@@ -157,3 +157,10 @@ body.nativeOS #start { opacity: 0; }
 @keyframes spSlam { to { transform: scale(1); opacity: 1; } }
 @keyframes spUp { from { transform: translateY(2vh); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes spOut { 0%, 82% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.08); } }
+
+/* floating phone reactions */
+#reacts { position: fixed; inset: 0; pointer-events: none; z-index: 8; overflow: hidden; }
+.react { position: absolute; left: var(--x, 6vw); bottom: -12vh; display: flex; flex-direction: column; align-items: center; gap: .6vh; animation: reactUp 3.1s cubic-bezier(.2, .7, .3, 1) forwards; }
+.react b { font-size: 9vh; line-height: 1; filter: drop-shadow(0 .6vh 0 rgba(0, 0, 0, .35)); }
+.react span { font: 800 2.1vh Inter, system-ui, sans-serif; color: #fff; padding: .25em .8em; border-radius: 999px; box-shadow: 0 .4vh 1.2vh rgba(0, 0, 0, .4); }
+@keyframes reactUp { 0% { transform: translate(0, 0) scale(.4); opacity: 0; } 10% { opacity: 1; transform: translate(0, -8vh) scale(1.25); } 25% { transform: translate(calc(var(--dx, 0vw) * .4), -22vh) scale(1); } 100% { transform: translate(var(--dx, 0vw), -86vh) scale(1); opacity: 0; } }

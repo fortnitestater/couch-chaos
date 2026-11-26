@@ -73,6 +73,7 @@
         break;
       }
       case 'act': if (S.state === 'game' && S.game && S.game.onAct) S.game.onAct(p, m); break;
+      case 'react': reactFx(p, String(m.e || '').slice(0, 4)); break;
       case 'pump': if (S.state === 'game' && S.game && S.game.onPump) S.game.onPump(p, +m.n || 1); break;
       case 'ready': if (S.state === 'intro') { S.ready.add(p); renderReady(); if (humans().filter(h => !h.cam).every(h => S.ready.has(h))) launchSoon(0.8); } break;
       case 'camOn': p.isCam = true; p.input = { x: 0, y: 0, a: false, b: false }; banner('📷 AI camera is ON — step into view!', 2200, '#a5d8ff'); renderPlayers(); if (S.state === 'home') sendLobby(); break;
@@ -253,6 +254,15 @@
     const b = $('#banner'); b.textContent = text; b.style.color = color; b.style.setProperty('--d', ms + 'ms');
     b.style.fontSize = text.length > 22 ? '5vh' : text.length > 14 ? '6.5vh' : '9vh';
     b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  }
+  // a phone reaction floats up the side of the screen with the player's name
+  const REACT_OK = ['🔥', '👏', '😂', '😱', '😭', '🤯'];
+  function reactFx(p, e) {
+    if (!REACT_OK.includes(e) || !p) return; const box = $('#reacts'); if (!box) return;
+    if (box.children.length > 14) box.firstChild.remove();
+    const el = document.createElement('div'); el.className = 'react'; el.style.setProperty('--x', (4 + Math.random() * 10) + 'vw'); el.style.setProperty('--dx', (Math.random() * 6 - 3) + 'vw');
+    el.innerHTML = `<b>${e}</b><span style="background:${p.color || '#3b7bff'}">${String(p.name || '').replace(/[<>&]/g, '')}</span>`;
+    box.appendChild(el); setTimeout(() => el.remove(), 3200); try { SFX.blip && SFX.blip(); } catch (_) {}
   }
   function toastTV(t) { if (S.state === 'game') return; banner(t, 1400, '#a5d8ff'); }
 

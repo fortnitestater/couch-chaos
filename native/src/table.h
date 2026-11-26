@@ -41,20 +41,42 @@ struct Table : Game {
   void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; master = cam; }
   // what the camera should favour right now (default: the player whose turn it is); w = how strongly
   virtual bool Focus(Vector3& p, float& w) { if (over || turn < 0 || turn >= N()) return false; p = Seat(turn, 5.6f); p.y = 0.4f; w = 1; return true; }
+  // ---- the player's-eye camera: on your turn the TV looks over YOUR shoulder, across the table ----
+  int povWho = -1; float povHold = 0;                    // a game can lend the camera to someone for a moment (Blackjack: whoever just acted)
+  virtual int ViewSeat() { return povHold > 0 ? povWho : -1; }   // whose view to show (-1: the film angle on the whole table)
+  virtual float PovAngle(int who) { return SeatA(who) + 0.21f; }   // where around the table that view sits
+  virtual float PovMix() { return 1.f; }                 // 1 = fully from their seat, less = keep more of the overview (boards you must read)
+  virtual Vector3 PovTarget(int who) { float a = SeatA(who); return { -cosf(a) * 1.4f, 0.0f, -sinf(a) * 1.4f }; }
+  float povR = 13.8f, povH = 6.8f, povF = 44.f;
+  void LendCamera(int who, float secs = 2.4f) { povWho = who; povHold = secs; }
+  float cA = 0, cAv = 0, cR = 14, cRv = 0, cH = 7, cHv = 0, cF = 40, cFv = 0; Vector3 cT{}, cTv{}; bool cOn = false;
+  static void Spr(float& x, float& v, float want, float k, float dt) { float a = (want - x) * k * k - v * 2 * k; v += a * dt; x += v * dt; }
+  void UpdateCam() {
+    float dt = fminf(g_frameDt, 0.05f); povHold -= dt;
+    Vector3 m = master.position; float mA = atan2f(m.z / 0.78f, m.x), mR = hypotf(m.x, m.z / 0.78f), mH = m.y;
+    int who = ViewSeat(); float k = who >= 0 ? PovMix() : 0;
+    float wA = mA, wR = mR, wH = mH, wF = master.fovy; Vector3 wT = master.target;
+    if (who >= 0) {
+      wA = mA + angDiff(mA, PovAngle(who)) * k; wR = Lerp(mR, povR, k); wH = Lerp(mH, povH, k); wF = Lerp(master.fovy, povF, k);
+      wT = Vector3Lerp(master.target, PovTarget(who), k);
+    }
+    // the slow crane drift stays on top; when something is happening (Focus) the target leans toward it
+    Vector3 fp{}; float fw = 0; if (Focus(fp, fw)) wT = Vector3Lerp(wT, fp, 0.22f * fw);
+    wA += 0.05f * sinf(time * 0.1f) + 0.018f * sinf(time * 0.29f); wH += 0.3f * sinf(time * 0.12f + 1); wR *= 1 + 0.025f * sinf(time * 0.16f);
+    if (!cOn) { cOn = true; cA = wA; cR = wR; cH = wH; cF = wF; cT = wT; cAv = cRv = cHv = cFv = 0; cTv = {}; }
+    float dA = angDiff(cA, wA); Spr(cA, cAv, cA + dA, 1.35f, dt); Spr(cR, cRv, wR, 1.6f, dt); Spr(cH, cHv, wH, 1.6f, dt); Spr(cF, cFv, wF, 1.8f, dt);
+    for (int i = 0; i < 3; i++) { float* x = (&cT.x) + i; float* v = (&cTv.x) + i; Spr(*x, *v, (&wT.x)[i], 1.8f, dt); }
+    cam.position = { cosf(cA) * cR, cH, sinf(cA) * cR * 0.78f }; cam.target = cT; cam.fovy = cF; cam.up = { 0, 1, 0 };
+  }
   void TableCam() { InitCam({ 2.4f, 7.4f, 13.4f }, { 0.3f, 0.1f, -2.6f }, 40); }   // low, a little off-centre: a film angle on the table
   // seats run around the far half of the table so nobody blocks the view
   float SeatA(int i) { int n = N(); float span = n <= 2 ? 1.2f : n == 3 ? 1.9f : n == 4 ? 2.3f : 3.5f; return -PI / 2 + (n == 1 ? 0 : -span / 2 + span * i / (n - 1)); }
   Vector3 Seat(int i, float r = 7.4f) { float a = SeatA(i); return { cosf(a) * r, 0, sinf(a) * r * 0.78f }; }
   Vector3 Front(int i, float r = 4.6f, float h = 0.05f) { Vector3 s = Seat(i, r); s.y = h; return s; }
+  // looking from a seat: the camera sits behind the player, a little off to one side, and looks at the middle of the table
+  Vector3 SeatAway(int who) { float a = SeatA(who); return { -cosf(a), 0, -sinf(a) }; }
   void Room(bool table = true) {
-    { // a slow crane move; when the turn changes the camera glides over to favour that player
-      Vector3 fp{}; float fw = 0; bool f = Focus(fp, fw);
-      float yaw = 0.075f * sinf(time * 0.1f) + 0.025f * sinf(time * 0.29f), lift = 0.35f * sinf(time * 0.12f + 1), dolly = 1 + 0.03f * sinf(time * 0.16f);
-      Vector3 tg = master.target;
-      if (f) { tg = Vector3Lerp(tg, fp, 0.28f * fw); yaw -= Clamp(fp.x / 7, -1, 1) * 0.1f * fw; dolly -= 0.07f * fw; }
-      Camera3D c = rig.Go(Vector3Add(Jib(master.position, master.target, yaw, lift, dolly), Vector3Subtract(tg, master.target)), tg, master.fovy, 1.7f);
-      cam.position = c.position; cam.target = c.target; cam.fovy = c.fovy;
-    }
+    UpdateCam();
     UI::Sky(Hex(0x2a1d16), Hex(0x4a3324));
     lit.Begin(cam, { 0.2f, 0.15f, 0.12f }, 0.01f);
     BeginMode3D(cam);
@@ -89,6 +111,34 @@ struct Table : Game {
     lit.Draw(prim.cube, TRS({ 0, 0.85f, wz + 0.45f }, { 0, 0, 0 }, { 80, 0.18f, 0.25f }), Hex(0xf4f1ea));     // dado rail
     lit.Draw(prim.cube, TRS({ 0, F + 0.25f, wz + 0.45f }, { 0, 0, 0 }, { 80, 0.5f, 0.25f }), Hex(0xf4f1ea));  // skirting
     lit.Draw(prim.cube, TRS({ 0, 15.4f, wz + 0.5f }, { 0, 0, 0 }, { 80, 0.5f, 0.5f }), Hex(0xf4f1ea));        // crown
+    {   // the other three walls (the TV's default angle never sees them; the player's-seat camera does)
+      const float FZ = 21.f, SX = 27.f;
+      for (int s = 0; s < 3; s++) {
+        float yaw = s == 0 ? 0 : PI / 2; Vector3 c = s == 0 ? Vector3{ 0, 6, FZ } : Vector3{ s == 1 ? -SX : SX, 6, 4 };
+        Vector3 al = { cosf(yaw), 0, -sinf(yaw) }, in = s == 0 ? Vector3{ 0, 0, -1 } : Vector3{ s == 1 ? 1.f : -1.f, 0, 0 };
+        float len = s == 0 ? 80 : 70;
+        auto at = [&](float la, float y, float inn) { return Vector3{ c.x + al.x * la + in.x * inn, y, c.z + al.z * la + in.z * inn }; };
+        lit.Draw(prim.cube, TRS(c, { 0, yaw, 0 }, { len, 19, 0.4f }), Hex(M.wall));
+        for (int i = -22; i <= 22; i++) lit.Draw(prim.cube, TRS(at(i * 1.6f, 7.2f, 0.21f), { 0, yaw, 0 }, { 0.5f, 16.6f, 0.02f }), Hex(M.stripe));
+        lit.Draw(prim.cube, TRS(at(0, -1.2f, 0.3f), { 0, yaw, 0 }, { len, 4.0f, 0.2f }), Hex(0xe9e4d8));
+        lit.Draw(prim.cube, TRS(at(0, 0.85f, 0.45f), { 0, yaw, 0 }, { len, 0.18f, 0.25f }), Hex(0xf4f1ea));
+        lit.Draw(prim.cube, TRS(at(0, F + 0.25f, 0.45f), { 0, yaw, 0 }, { len, 0.5f, 0.25f }), Hex(0xf4f1ea));
+        lit.Draw(prim.cube, TRS(at(0, 15.4f, 0.5f), { 0, yaw, 0 }, { len, 0.5f, 0.5f }), Hex(0xf4f1ea));
+        for (int w = -1; w <= 1; w += 2) {   // two tall windows onto a night sky, with a moon and a warm lamp glow on the sill
+          float lx = w * 9.5f;
+          lit.Draw(prim.cube, TRS(at(lx, 6.2f, 0.3f), { 0, yaw, 0 }, { 5.6f, 5.6f, 0.3f }), Hex(0xf4f1ea));
+          lit.Draw(prim.cube, TRS(at(lx, 6.2f, 0.45f), { 0, yaw, 0 }, { 5.0f, 5.0f, 0.1f }), Hex(0x1c2b5a));
+          if (w > 0) lit.Draw(prim.sphere, TRS(at(lx + 1.1f, 7.4f, 0.55f), { 0, yaw, 0 }, { 1.0f, 1.0f, 0.1f }), Hex(0xfff3bf));
+          for (int k = 0; k < 9; k++) lit.Draw(prim.sphere, TRS(at(lx - 2.1f + fmodf(k * 1.37f + w, 4.2f), 4.3f + fmodf(k * 1.9f, 3.6f), 0.55f), { 0, yaw, 0 }, { 0.08f, 0.08f, 0.05f }), WHITE);
+          lit.Draw(prim.cube, TRS(at(lx, 6.2f, 0.58f), { 0, yaw, 0 }, { 0.16f, 4.8f, 0.1f }), Hex(0xf4f1ea));
+          lit.Draw(prim.cube, TRS(at(lx, 6.2f, 0.58f), { 0, yaw, 0 }, { 5.0f, 0.16f, 0.1f }), Hex(0xf4f1ea));
+          lit.Draw(prim.cube, TRS(at(lx, 3.45f, 0.7f), { 0, yaw, 0 }, { 6.0f, 0.2f, 0.7f }), Hex(0xf4f1ea));
+          for (int cs = -1; cs <= 1; cs += 2) lit.Draw(prim.cube, TRS(at(lx + cs * 3.3f, 6.4f, 0.75f), { 0, yaw, 0 }, { 1.4f, 6.4f, 0.35f }), cs < 0 ? Hex(M.curtA) : Hex(M.curtB));
+        }
+        // framed pictures between the windows, and a tall plant in the corner
+        for (int f = 0; f < 3; f++) { float lx = -2.5f + f * 2.5f; lit.Draw(prim.cube, TRS(at(lx, 7.0f, 0.3f), { 0, yaw, 0 }, { 1.9f, 2.5f, 0.15f }), Hex(0xf1ede3)); lit.Draw(prim.cube, TRS(at(lx, 7.0f, 0.4f), { 0, yaw, 0 }, { 1.6f, 2.2f, 0.1f }), Hex(f % 3 == 0 ? M.sofa : f % 3 == 1 ? M.curtB : M.rug)); }
+      }
+    }
     float wx = -9;
     if (!fire) {
     // window: frame, glass with the night sky + moon, sill, mullions, curtains on a rail
@@ -285,8 +335,9 @@ struct Table : Game {
     cine::Shot sh; sh.kind = cine::WIN; sh.at = { s.x, real ? 0.9f : 0.5f, s.z }; sh.size = real ? 2.3f : 1.6f; sh.c = P(pid).color;
     sh.face = { -s.x, 0, -s.z }; sh.elev = 0.3f; sh.floorY = real ? -3.2f : -1.6f; sh.hero = true; cine::Play(sh);
   }
-  void DebugShot(int k) override { if (k == cine::WIN) WinShot(0); }
+  void DebugShot(int k) override { if (k >= 7) { turn = (k - 7) % N(); LendCamera(turn, 5); } else if (k == cine::WIN) WinShot(0); }   // 7, 8, 9: hand the turn (and the camera) to player 0, 1, 2
   void Tick(float dt) { time += dt; fx.Update(dt); conf.Update(dt); }
+
   void End3D() { fx.Draw(); conf.Draw(); EndMode3D(); FlushText(); }
 };
 }  // namespace

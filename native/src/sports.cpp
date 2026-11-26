@@ -11,7 +11,9 @@ std::string SwingL(const char* sport, const char* label, const char* hint) { ret
 // ===================================================================================== STRIKE BOWLING
 struct Bowling : Classic {
   struct Pin { float x, z, vx = 0, vz = 0, fall = 0, dir = 0; bool down = false, gone = false; };
-  struct Ball { float x, z, vx, vz, y = 0.11f, rot = 0; bool on = false; } ball;
+  struct Ball { float x, z, vx, vz, y = 0.11f, rot = 0; bool on = false; float ax = 0; } ball;
+  // the phone's plan for this ball: where it starts (bxn, -1..1 screen-right), its slope (baimN), its late curve (bhookN), how hard (bpowN)
+  float bxn = 0, bxs = 0, baimN = 0, bhookN = 0, bpowN = 0.7f, sendT = 0; bool aimLive = false; std::string res;
   std::vector<Pin> pins; std::vector<int> order, pts, strikes; int ti = -1, cur = 0, roll = 0, firstDown = 0, frames = 3, frameNo = 1;
   std::string phase = "aim", pop; Color popC = WHITE; float wait = 0, rollT = 0, aim = 0, camZ = -3, ts = 1, popT = 0, swingAnim = 0; bool again = false, fin = false, shot = false;
   void Start() override {
@@ -32,19 +34,44 @@ struct Bowling : Classic {
   }
   void AimPhase() {
     phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : 20; ball.on = false; camZ = -3.4f; shot = false;
-    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == cur ? SwingL("bowling", "ROLL!", "Tilt or drag to move the 🎯 line, then swing your arm (or tap ROLL)") : kit::Msg("🎳", P(cur).name + " is bowling", "Watch the TV!"));
+    bxn = bxs = baimN = bhookN = 0; bpowN = 0.7f; aimLive = false; aim = 0;
+    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, BowlL(i == cur));
     Pop(P(cur).name + (roll == 0 ? " · FRAME " + I(frameNo) + "/" + I(frames) : " · 2ND BALL"), P(cur).color);
   }
-  void Release(float power) {
-    if (phase != "aim") return;
-    float x = -Clamp(aim, -1, 1) * 0.42f, spd = 7 + power * 8;
-    // gentle aim assist: close to the middle → nudged toward the head pin
-    float vx = -x * 0.09f + frand(-0.015f, 0.015f); if (fabsf(x) < 0.12f) vx = -x * 0.35f;
-    ball = { x, 0.3f, vx, spd, 0.11f, 0, true };
-    phase = "roll"; rollT = 0; swingAnim = 1; Sfx("whoosh"); Shake(3);
-    if (!P(cur).bot) Layout(cur, kit::Msg("🎳", "Rolling…", power > 0.8f ? "Monster throw! 💪" : "Fingers crossed!"));
+  std::string BowlL(bool mine) {
+    char b[320]; snprintf(b, sizeof b, "{\"name\":\"bowl\",\"mine\":%s,\"who\":%s,\"frame\":%d,\"frames\":%d,\"ball\":%d,\"pins\":%d,\"ph\":\"aim\"}", mine ? "true" : "false", kit::Q(P(cur).name).c_str(), std::min(frameNo, frames), frames, roll + 1, StandMask());
+    return b;
   }
-  void Act(int p, const std::string& k, int, float pw) override { if (p == cur && k.rfind("swing", 0) == 0) Release(Clamp(pw > 0 ? pw : 0.6f, 0.25f, 1)); }
+  int StandMask() { int m = 0; for (size_t i = 0; i < pins.size(); i++) if (!pins[i].down && !pins[i].gone) m |= 1 << i; return m; }
+  // every phone gets the lane live: the ball, the pins still standing, and what just happened
+  void SendBowl(const char* ph, const std::string& msg = "") {
+    char b[260]; snprintf(b, sizeof b, "{\"t\":\"bowl\",\"ph\":\"%s\",\"x\":%.3f,\"z\":%.2f,\"pins\":%d,\"msg\":%s}", ph, -ball.x, ball.on ? ball.z : 0.3f, StandMask(), kit::Q(msg).c_str());
+    for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, b);
+  }
+  // The throw. xn: where on the foul line (-1..1, screen-right +) · aimN: the straight part of the line · hookN: how late it curves · power 0..1
+  void Throw(float xn, float aimN, float hookN, float power) {
+    if (phase != "aim") return;
+    const float L = 18.3f; float x = -Clamp(xn, -1, 1) * 0.42f, vz = 7 + power * 8, slope = -Clamp(aimN, -1, 1) * 0.035f, H = -Clamp(hookN, -1, 1) * 0.42f;
+    float xi = x + slope * L + H;
+    // a gentle assist: a ball that would arrive near the head pin is nudged toward the nearest pocket, so a good line is rewarded and a decent one isn't punished
+    if (fabsf(xi) < 0.26f) { float tgt = copysignf(0.075f, xi == 0 ? 1.f : xi); xi += (tgt - xi) * 0.55f; slope = (xi - x - H) / L; }
+    float T = (L - 0.3f) / vz;
+    ball = { x, 0.3f, slope * vz, vz, 0.11f, 0, true }; ball.ax = 2 * H / (T * T);
+    phase = "roll"; rollT = 0; swingAnim = 1; Sfx("whoosh"); Shake(3); sendT = 0; SendBowl("roll");
+  }
+  void BotThrow() {
+    float xn = Clamp(bxn, -0.6f, 0.6f), x = -xn * 0.42f, tgt = frand(0, 1) < 0.5f ? -0.075f : 0.075f;
+    float aimN = -((tgt - x) / 18.3f) / 0.035f + frand(-0.22f, 0.22f);
+    Throw(xn, aimN, frand(-0.25f, 0.25f), frand(0.55f, 1));
+  }
+  void Release(float power) { Throw(Clamp(aim, -1, 1), 0, 0, power); }   // the old swing (motion / camera / key): straight, from where the stick was
+  void Act(int p, const std::string& k, int, float pw) override {
+    if (p != cur) return;
+    float a = 0, b = 0, c = 0;
+    if (k.rfind("bowlaim:", 0) == 0) { if (sscanf(k.c_str() + 8, "%f|%f|%f", &a, &b, &c) == 3) { bxn = Clamp(a, -1, 1); baimN = Clamp(b, -1, 1); bhookN = Clamp(c, -1, 1); bpowN = pw; aimLive = true; } return; }
+    if (k.rfind("bowl:", 0) == 0) { if (sscanf(k.c_str() + 5, "%f|%f|%f", &a, &b, &c) == 3) Throw(a, b, c, Clamp(pw, 0.18f, 1)); return; }
+    if (k.rfind("swing", 0) == 0) Release(Clamp(pw > 0 ? pw : 0.6f, 0.25f, 1));
+  }
   void Knock(Pin& pn) { if (pn.down) return; bool first = true; for (auto& q : pins) if (q.down && !q.gone) first = false; if (first) Sfx("strike"); pn.down = true; pn.dir = atan2f(pn.vx, pn.vz); Sfx("bonk"); fx.Burst({ pn.x, 0.25f, pn.z }, 8, WHITE, 2.5f, 0.4f, 0.03f, 3);
     if (!shot) { int up = 0; for (auto& q : pins) if (!q.gone && !q.down) up++;
       if (up == 0) { shot = true; StrikeShot(roll == 0); } } }
@@ -59,25 +86,31 @@ struct Bowling : Classic {
   void Score() {
     ts = 1; int newly = 0; for (auto& p : pins) newly += p.down && !p.gone;
     int before = roll == 0 ? 0 : firstDown, down = before + newly, gain = newly; again = false;
-    if (roll == 0 && down == 10) { gain = 20; Pop("STRIKE  +20", Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120, 1.5f, 4); Shake(10); }
-    else if (roll == 1 && down == 10) { gain = 15 - before; Pop("SPARE  +" + I(gain), Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
-    else { Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } Sfx("ding"); }
+    res = "";
+    if (roll == 0 && down == 10) { res = "STRIKE!"; gain = 20; Pop("STRIKE  +20", Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120, 1.5f, 4); Shake(10); }
+    else if (roll == 1 && down == 10) { res = "SPARE!"; gain = 15 - before; Pop("SPARE  +" + I(gain), Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
+    else { res = newly == 0 ? "MISS" : I(newly) + (newly == 1 ? " PIN" : " PINS"); Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } Sfx("ding"); }
     pts[cur] += gain;
     if (again) { for (auto& p : pins) { if (p.down) p.gone = true; p.vx = p.vz = 0; } roll = 1; }
-    phase = "show"; wait = down == 10 ? 3 : 2.2f;
+    phase = "show"; wait = down == 10 ? 3 : 2.2f; SendBowl("show", res);
   }
   void Update(float dt) override {
     time += dt; fx.Update(dt); conf.Update(dt); popT -= dt; swingAnim = fmaxf(0, swingAnim - dt * 2);
     if (phase == "end") { wait -= dt; if (wait <= 0 && !fin) { fin = true; FinishOrder(Sorted([&](int i) { return pts[i] * 10.f + strikes[i]; }), [&](int i) { return I(pts[i]) + " pts" + (strikes[i] ? " · " + I(strikes[i]) + " strikes" : ""); }); } return; }
     if (phase == "aim") {
-      aim = P(cur).bot ? sinf(time * 1.6f) * 0.35f : aim + (Clamp(P(cur).stick.x, -1, 1) - aim) * fminf(1, dt * 12);
+      if (P(cur).bot) bxn += (sinf(time * 1.3f) * 0.5f - bxn) * fminf(1, dt * 3);
+      else if (!aimLive) { aim += (Clamp(P(cur).stick.x, -1, 1) - aim) * fminf(1, dt * 12); bxn = aim; }   // no phone plan: the old tilt / stick
+      bxs += (bxn - bxs) * fminf(1, dt * 14);
       if (!P(cur).bot && P(cur).a && !P(cur).pa) Release(0.6f);
-      wait -= dt; if (wait <= 0) Release(P(cur).bot ? frand(0.5f, 1) : 0.55f);
+      wait -= dt; if (wait <= 0) { if (P(cur).bot) BotThrow(); else Throw(bxn, baimN, bhookN, 0.55f); }   // out of time: roll what you lined up
       return;
     }
     if (phase == "roll") {
       float sdt = dt * ts; Ball& b = ball; rollT += dt;
+      if (b.z < 18.3f) b.vx += b.ax * sdt;                                                          // the hook: a late curve
+      if (!P(cur).bot && b.z < 15.5f) b.vx += -Clamp(P(cur).stick.x, -1, 1) * 0.12f * sdt;         // body english: your thumb nudges it
       b.z += b.vz * sdt; b.x += b.vx * sdt; b.rot += b.vz * sdt / 0.11f;
+      sendT -= dt; if (sendT <= 0) { sendT = 0.07f; SendBowl("roll"); }
       if (b.z < 17.6f && fabsf(b.x) > 0.46f) { b.x = copysignf(0.46f, b.x); b.vx = -b.vx * 0.5f - copysignf(0.05f, b.x); Sfx("tink"); }  // bumpers!
       if (b.z > 21.5f) b.y -= sdt * 2;
       for (auto& pn : pins) {
@@ -108,7 +141,7 @@ struct Bowling : Classic {
     Vector3 wp, wt; float wf = 50, k = 2.2f;
     if (phase == "roll") { wp = { ball.x * 0.4f, 1.0f, camZ }; wt = { ball.x * 0.3f, 0.12f, camZ + 13 }; k = 6; }
     else if (phase == "show") { wp = { 1.25f, 1.15f, 16.2f }; wt = { -0.05f, 0.18f, 19.4f }; wf = 38; k = 2.4f; }
-    else { float s = sinf(time * 0.15f); wp = { 2.0f + 0.25f * s, 1.45f, -1.9f }; wt = { 0.0f, 0.3f, 9.0f }; wf = 42; }   // over the bowler's shoulder
+    else { float s = sinf(time * 0.15f); wp = { -1.15f + 0.25f * s, 1.5f, -2.3f }; wt = { 0.1f, 0.25f, 9.0f }; wf = 42; }   // low on the other side of the lane from the bowler, so the ball and the plan are in view
     { Camera3D rc = rig.Go(wp, wt, wf, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     UI::Sky(Hex(0x0b0620), Hex(0x1a0b3a));
     lit.Begin(cam, { 0.04f, 0.02f, 0.1f }, 0.02f);
@@ -132,12 +165,12 @@ struct Bowling : Classic {
       DrawProp(props.pin, m);  // regulation ten-pin shape with the red neck stripes
       if (!pn.down) lit.Caster({ pn.x, 0, pn.z }, 0.07f);
     }
-    float ax = -Clamp(aim, -1, 1) * 0.42f;
+    float ax = -Clamp(bxs, -1, 1) * 0.42f;
     Vector3 bp = ball.on ? Vector3{ ball.x, ball.y, ball.z } : Vector3{ ax, 0.11f, 0.35f };
     lit.Draw(prim.sphere, TRS(bp, { ball.rot, 0, 0 }, { 0.11f, 0.11f, 0.11f }), P(cur).color);
     { Matrix bm = MatrixMultiply(MatrixRotateX(ball.rot), MatrixTranslate(bp.x, bp.y, bp.z)); const Vector3 H[3] = { { 0.03f, 0.06f, -0.09f }, { -0.03f, 0.06f, -0.09f }, { 0, 0.0f, -0.108f } };
       for (auto& h : H) { Vector3 w = Vector3Transform(h, bm); lit.Draw(prim.sphere, TRS(w, { 0, 0, 0 }, { 0.032f, 0.032f, 0.032f }), Hex(0x111111)); } } lit.Caster({ bp.x, 0, bp.z }, 0.1f);
-    if (phase == "aim") for (int i = 0; i < 22; i++) { float z = 1.8f + i * 0.72f; lit.Draw(prim.cyl, TRS({ ax, 0.006f, z }, { 0, 0, 0 }, { 0.05f, 0.005f, 0.05f }), Fade(P(cur).color, 0.9f * (1 - i / 26.f) * (0.6f + 0.4f * sinf(time * 8 - i * 0.6f)))); }
+    if (phase == "aim") for (int i = 0; i < 24; i++) { float z = 1.2f + i * 0.74f, u = z / 18.3f, px = ax - baimN * 0.035f * z - bhookN * 0.42f * u * u; lit.Draw(prim.cyl, TRS({ px, 0.006f, z }, { 0, 0, 0 }, { 0.05f, 0.005f, 0.05f }), Fade(P(cur).color, 0.9f * (1 - i / 28.f) * (0.6f + 0.4f * sinf(time * 8 - i * 0.6f)))); }
     if (!ball.on || ball.z < 4) DrawToon({ 1.45f, 0, 1.3f }, -0.6f, P(cur).color, time, 0, swingAnim, 1.0f);
     fx.Draw(); conf.Draw();
     // neon arches
@@ -154,7 +187,7 @@ struct Bowling : Classic {
       DrawCircle((int)(800 - w / 2 + 40), (int)(134 - 8 * (1 - k)), 12, Fade(popC, a));
       Text(800 + 14, 134 - 8 * (1 - k), fs, Fade(WHITE, a), pop, 0, TS_DISPLAY | TS_SHADOW);
     }
-    if (phase == "aim") Hint(P(cur).bot ? P(cur).name + " is aiming…" : "🎳 " + P(cur).name + ": tilt / drag to aim, then SWING! (bumpers are up)", P(cur).color);
+    if (phase == "aim") Hint(P(cur).bot ? P(cur).name + " is aiming…" : P(cur).name + ": slide the ball, flick it up, curve the flick for a hook!", P(cur).color);
   }
 };
 

@@ -154,6 +154,11 @@ static Mesh BuildFourDisc() {
   return b.Build();
 }
 struct Four : Table {
+  // everyone stands round the board: the TV looks at the grid from the active team's side, low, like a player leaning in
+  int ViewSeat() override { return over || turn < 0 || turn >= N() ? -1 : turn; }
+  float PovAngle(int who) override { return PI / 2 + (side ? 0.62f : -0.62f); }
+  Vector3 PovTarget(int who) override { return { side ? -0.5f : 0.5f, 0.5f, 0 }; }
+  float PovMix() override { return 1.f; }
   bool Focus(Vector3& p, float& w) override { if (drop.c >= 0) { p = { (drop.c - 3) * 0.95f, 0.4f, 0 }; w = 0.7f; return true; } return false; }
   Mesh gridM{}, discM{}; const float Y0 = -2.55f, F = -3.2f;
   ~Four() { if (gridM.vertexCount) UnloadMesh(gridM); if (discM.vertexCount) UnloadMesh(discM); }
@@ -163,7 +168,7 @@ struct Four : Table {
   const Color TC[2] = { Hex(0xff4d6d), Hex(0xffd43b) };
   int Cur() { return T[side][team[side] % T[side].size()]; }
   void Start() override {
-    InitCam({ 2.6f, 1.8f, 14.6f }, { 0, 0.45f, 0 }, 40);   // low three-quarter view of the board
+    InitCam({ 2.6f, 1.8f, 14.6f }, { 0, 0.45f, 0 }, 40); povR = 13.6f; povH = 2.7f; povF = 42;   // low three-quarter view of the board
     for (int i = 0; i < N(); i++) T[i % 2].push_back(i);
     side = rand() % 2; turn = Cur(); Push();
     Banner("🔴 RED vs 🟡 YELLOW", 1800, "#ffd43b");
@@ -185,7 +190,7 @@ struct Four : Table {
     if (!line.empty()) { cen = {}; for (auto& q : line) cen = Vector3Add(cen, { (q.first - 3) * 0.95f, Y0 + 0.55f + q.second * 0.95f, 0.3f }); cen = Vector3Scale(cen, 1.f / line.size()); }
     cine::Shot s; s.kind = cine::WIN; s.at = cen; s.size = 2.4f; s.c = TC[who - 1]; s.floorY = F; s.elev = 0.1f; cine::Play(s);
   }
-  void DebugShot(int k) override { if (k == cine::WIN) LineShot(1); }
+  void DebugShot(int k) override { if (k >= 7) { side = (k - 7) % 2; turn = Cur(); } else if (k == cine::WIN) LineShot(1); }
   bool Wins(int who, std::vector<std::pair<int, int>>* out = nullptr) {
     int d[4][2] = { { 1, 0 }, { 0, 1 }, { 1, 1 }, { 1, -1 } };
     for (int c = 0; c < 7; c++) for (int r = 0; r < 6; r++) for (auto& v : d) {
@@ -364,6 +369,7 @@ struct Snakes : Table {
 // BLACKJACK — everyone plays the dealer at once. Get closer to 21 than the dealer without going over.
 // =====================================================================================
 struct Blackjack : Table {
+  int ViewSeat() override { return povHold > 0 ? povWho : -1; }   // everyone plays at once: the camera visits whoever just hit or stood
   // everyone plays at once, so the camera holds the table, then leans in on the dealer's cards
   bool Focus(Vector3& p, float& w) override { if (phase == "dealer" || phase == "settle") { p = { 0, 0.3f, 2.9f }; w = 0.8f; return true; } return false; }
   std::vector<Card> deck; std::vector<std::vector<Card>> hand; std::vector<Card> dealer;
@@ -392,6 +398,7 @@ struct Blackjack : Table {
   void SyncAll() { for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, Panel(i)); }
   void Act(int p, const std::string& k, int, float) override {
     if (phase != "play" || state[p] != 0) return;
+    if (k == "btn:hit" || k == "btn:stand") LendCamera(p, 2.2f);
     if (k == "btn:hit") { hand[p].push_back(Pull()); Sfx("card"); int v = Val(hand[p]); if (v > 21) { state[p] = 2; Sfx("buzz"); Buzz(p, 300); } else if (v == 21) state[p] = 1; }
     else if (k == "btn:stand") state[p] = 1;
     if (!P(p).bot) Send(p, Panel(p));
