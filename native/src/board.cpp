@@ -178,6 +178,13 @@ struct Four : Table {
       Layout(i, "{\"name\":\"four\",\"my\":" + B(my) + ",\"side\":" + std::to_string(mine) + ",\"text\":" + Q(text) + ",\"board\":[" + b + "],\"win\":[" + w + "]}");
     }
   }
+  // the winning four light up while the camera orbits the board
+  void LineShot(int who) {
+    Vector3 cen = { 0, Y0 + 0.55f + 2.5f * 0.95f, 0.3f };
+    if (!line.empty()) { cen = {}; for (auto& q : line) cen = Vector3Add(cen, { (q.first - 3) * 0.95f, Y0 + 0.55f + q.second * 0.95f, 0.3f }); cen = Vector3Scale(cen, 1.f / line.size()); }
+    cine::Shot s; s.kind = cine::WIN; s.at = cen; s.size = 2.4f; s.c = TC[who - 1]; s.floorY = F; s.elev = 0.1f; cine::Play(s);
+  }
+  void DebugShot(int k) override { if (k == cine::WIN) LineShot(1); }
   bool Wins(int who, std::vector<std::pair<int, int>>* out = nullptr) {
     int d[4][2] = { { 1, 0 }, { 0, 1 }, { 1, 1 }, { 1, -1 } };
     for (int c = 0; c < 7; c++) for (int r = 0; r < 6; r++) for (auto& v : d) {
@@ -203,7 +210,9 @@ struct Four : Table {
       if (drop.y <= ty) {
         g[drop.c][drop.r] = drop.who; Sfx("pok"); fx.Burst({ (drop.c - 3) * 0.95f, ty + Y0, 0.4f }, 8, TC[drop.who - 1], 3, 0.4f, 0.1f);
         int who = drop.who; drop.c = -1;
-        if (Wins(who, &line)) { win = who - 1; over = true; endT = 4; conf.Spawn({ 0, 6, 0 }, 160, 6, 6); Sfx("win"); Banner(who == 1 ? "🔴 RED TEAM WINS!" : "🟡 YELLOW TEAM WINS!", 2600, who == 1 ? "#ff4d6d" : "#ffd43b"); Push(); return; }
+        if (Wins(who, &line)) { win = who - 1; over = true; endT = 4; conf.Spawn({ 0, 6, 0 }, 160, 6, 6); Sfx("win"); Banner(who == 1 ? "🔴 RED TEAM WINS!" : "🟡 YELLOW TEAM WINS!", 2600, who == 1 ? "#ff4d6d" : "#ffd43b");
+          LineShot(who);
+          Push(); return; }
         bool full = true; for (int c = 0; c < 7; c++) full &= RowFor(c) < 0;
         if (full) { over = true; endT = 3; Banner("It's a draw!", 2000); Push(); return; }
         team[side]++; side = 1 - side; turn = Cur(); botT = frand(0.9f, 1.6f); timer = 25; Push();
@@ -366,6 +375,7 @@ struct Blackjack : Table {
     hand.assign(N(), {}); state.assign(N(), 0); delta.assign(N(), 0); dealer.clear();
     for (int k = 0; k < 2; k++) { for (int i = 0; i < N(); i++) hand[i].push_back(Pull()); dealer.push_back(Pull()); }
     for (int i = 0; i < N(); i++) if (Val(hand[i]) == 21) state[i] = 3;
+    for (int i = 0; i < N(); i++) if (state[i] == 3) { Vector3 st = Seat(i); cine::Shot s; s.kind = cine::STRIKE; s.at = Front(i, 4.2f, 0.4f); s.size = 1.3f; s.c = Hex(0xffd43b); s.caption = "BLACKJACK!"; s.sub = P(i).name; s.elev = 0.75f; s.floorY = 0.02f; s.face = { -st.x, 0, -st.z }; s.yaw = -1.0f; cine::Play(s); break; }
     Sfx("card"); SyncAll();
   }
   std::string Panel(int i) {

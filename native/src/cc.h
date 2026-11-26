@@ -93,6 +93,30 @@ struct Particles3D {
   void Draw();
 };
 
+// ---------- cinematic moments (cine.cpp): big plays cut to a movie shot with slow motion and effects ----------
+namespace cine {
+enum Kind { BOOM, STRIKE, SMASH, GOAL, WIN, REVEAL, SNOW };
+struct Shot {
+  int kind = BOOM; Vector3 at{}; float size = 1;   // what the shot looks at, and how big it is (world units)
+  Color c = WHITE; std::string caption, sub;       // the moment's colour, a big title and a line under it
+  float floorY = -1e9f;                            // where debris lands and ground shockwaves spread (none if unset)
+  Vector3 face{};                                  // which way the camera should look from (default: the game camera's side)
+  float yaw = 0, elev = -10, side = 0, dur = 0;    // extra orbit angle, camera height angle (rad), orbit direction, length
+  bool hero = false;                               // WIN: the player in colour c celebrates
+};
+void Play(const Shot& s);
+inline void Moment(int kind, Vector3 at, float size, Color c, const std::string& caption = "", const std::string& sub = "", float floorY = -1e9f) {
+  Shot s; s.kind = kind; s.at = at; s.size = size; s.c = c; s.caption = caption; s.sub = sub; s.floorY = floorY; Play(s);
+}
+bool Busy();
+bool Hero(Color c);
+// engine side (main.cpp)
+struct PostFx { float flash, aber, zoom, speed, bars, impact; Vector2 ctr; Color fc; };
+void Reset(); void Update(float realDt); float TimeScale(); Camera3D Apply(Camera3D c);
+void Light(Vector4& pos, Vector3& col); PostFx Post(); void Draw3D(); void Draw2D();
+}
+extern float g_hudA;
+
 // ---------- UI kit (art.cpp) ----------
 namespace UI {
   void Init();
@@ -218,6 +242,7 @@ struct Game {
   virtual void Update(float dt) = 0;
   virtual void Draw() = 0;
   virtual void Act(int pid, const std::string& kind, int i, float p) {}
+  virtual void DebugShot(int kind) {}   // debug: play this game's own cinematic moment of that kind
 };
 std::unique_ptr<Game> MakeSkyBrawl();
 std::unique_ptr<Game> MakeSumo();

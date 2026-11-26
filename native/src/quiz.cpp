@@ -63,7 +63,9 @@ struct QuizShow : Show {
       if (!P(i).bot) Layout(i, Msg(ans[i] < 0 ? "⏰" : gain[i] > 0 ? "✅" : "❌", ans[i] < 0 ? "Too slow!" : gain[i] > 0 ? "+" + I(gain[i]) + " points!" : "Not this time", q.reveal));
     }
     Sfx(any ? "ding" : "buzz");
-    if (any) fx.Burst({ 0, 5, 0 }, 30, Hex(0xffd43b), 6, 0.9f, 0.12f, 4);
+
+    int best = -1; for (int i = 0; i < N(); i++) if (gain[i] > 0 && (best < 0 || gain[i] > gain[best])) best = i;
+    if (best >= 0) RevealShot(best);
   }
   void Update(float dt) override {
     Tick(dt); t -= dt; phaseT += dt;
@@ -322,9 +324,15 @@ struct Bomb : QuizShow {
   void Resolve() override {
     QuizShow::Resolve();
     bool wrong = false; for (int a : ans) if (a >= 0 && a != ansW) wrong = true;
-    if (wrong) { boom = true; boomT = 0; fx.Burst({ 0, 3.6f, -3 }, 70, Hex(0xff922b), 9, 1.2f, 0.25f, 3); fx.Burst({ 0, 3.6f, -3 }, 40, Hex(0xffd43b), 7, 1.0f, 0.2f, 2); Sfx("boom"); Shake(16); flash = 1; for (int i = 0; i < N(); i++) if (ans[i] >= 0 && ans[i] != ansW) Buzz(i, 500); }
-    else fx.Burst({ 0, 3.6f, -3 }, 40, Hex(0x51cf66), 5, 0.8f, 0.15f, 1);
+    if (wrong) { boom = true; boomT = 0; Sfx("boom"); Shake(16); flash = 1; for (int i = 0; i < N(); i++) if (ans[i] >= 0 && ans[i] != ansW) Buzz(i, 500);
+      cine::Moment(cine::BOOM, { 0, 4.15f, -2.6f }, 2.4f, Hex(0xff922b), "BOOM!", "Wrong wire!", 0.1f); }
+    else {
+      fx.Burst({ 0, 3.6f, -3 }, 40, Hex(0x51cf66), 5, 0.8f, 0.15f, 1);
+      bool any = false; for (int a : ans) any |= a >= 0;
+      if (any) cine::Moment(cine::REVEAL, { 0, 4.15f, -2.6f }, 2.4f, Hex(0x51cf66), "DEFUSED!", "", 0.1f);
+    }
   }
+  void DebugShot(int k) override { if (k == cine::BOOM) cine::Moment(cine::BOOM, { 0, 4.15f, -2.6f }, 2.4f, Hex(0xff922b), "BOOM!", "Wrong wire!", 0.1f); else QuizShow::DebugShot(k); }
   float WY(int i) { int n = (int)wires.size(); return 5.35f - (i + 0.5f) * (2.4f / n); }
   void Props3D() override {
     float z = -3, sh = boom && phase == "reveal" ? sinf(time * 60) * 0.05f * fmaxf(0, 1 - phaseT) : 0;

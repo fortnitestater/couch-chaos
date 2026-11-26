@@ -13,7 +13,7 @@ struct Bowling : Classic {
   struct Pin { float x, z, vx = 0, vz = 0, fall = 0, dir = 0; bool down = false, gone = false; };
   struct Ball { float x, z, vx, vz, y = 0.11f, rot = 0; bool on = false; } ball;
   std::vector<Pin> pins; std::vector<int> order, pts, strikes; int ti = -1, cur = 0, roll = 0, firstDown = 0, frames = 3, frameNo = 1;
-  std::string phase = "aim", pop; Color popC = WHITE; float wait = 0, rollT = 0, aim = 0, camZ = -3, ts = 1, popT = 0, swingAnim = 0; bool again = false, fin = false;
+  std::string phase = "aim", pop; Color popC = WHITE; float wait = 0, rollT = 0, aim = 0, camZ = -3, ts = 1, popT = 0, swingAnim = 0; bool again = false, fin = false, shot = false;
   void Start() override {
     InitCam(50); frames = N() > 4 ? 2 : 3; pts.assign(N(), 0); strikes.assign(N(), 0);
     for (int f = 0; f < frames; f++) for (int i = 0; i < N(); i++) order.push_back(i);
@@ -24,11 +24,14 @@ struct Bowling : Classic {
   void Pop(const std::string& s, Color c) { pop = s; popC = c; popT = 2.2f; }
   void NextTurn() {
     ti++;
-    if (ti >= (int)order.size()) { phase = "end"; wait = 3; auto o = Sorted([&](int i) { return pts[i] * 10.f + strikes[i]; }); Sfx("win"); conf.Spawn({ 0, 2, 4 }, 140, 3, 5); Banner(P(o[0]).name + " WINS!", 2400, kit::Hx(P(o[0]).color).c_str()); return; }
+    if (ti >= (int)order.size()) { phase = "end"; wait = 3.9f; auto o = Sorted([&](int i) { return pts[i] * 10.f + strikes[i]; }); Sfx("win"); conf.Spawn({ 0, 2, 4 }, 140, 3, 5); Banner(P(o[0]).name + " WINS!", 2400, kit::Hx(P(o[0]).color).c_str());
+      cur = o[0]; ball.on = false;
+      cine::Shot s; s.kind = cine::WIN; s.at = { 1.45f, 0.95f, 1.3f }; s.size = 0.85f; s.c = P(o[0]).color; s.face = { sinf(-0.6f), 0, cosf(-0.6f) }; s.floorY = 0; s.hero = true; cine::Play(s);
+      return; }
     cur = order[ti]; roll = 0; SetPins(); frameNo = ti / N() + 1; AimPhase();
   }
   void AimPhase() {
-    phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : 20; ball.on = false; camZ = -3.4f;
+    phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : 20; ball.on = false; camZ = -3.4f; shot = false;
     for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == cur ? SwingL("bowling", "ROLL!", "Tilt or drag to move the 🎯 line, then swing your arm (or tap ROLL)") : kit::Msg("🎳", P(cur).name + " is bowling", "Watch the TV!"));
     Pop(P(cur).name + (roll == 0 ? " · FRAME " + I(frameNo) + "/" + I(frames) : " · 2ND BALL"), P(cur).color);
   }
@@ -42,12 +45,22 @@ struct Bowling : Classic {
     if (!P(cur).bot) Layout(cur, kit::Msg("🎳", "Rolling…", power > 0.8f ? "Monster throw! 💪" : "Fingers crossed!"));
   }
   void Act(int p, const std::string& k, int, float pw) override { if (p == cur && k.rfind("swing", 0) == 0) Release(Clamp(pw > 0 ? pw : 0.6f, 0.25f, 1)); }
-  void Knock(Pin& pn) { if (pn.down) return; bool first = true; for (auto& q : pins) if (q.down && !q.gone) first = false; if (first) Sfx("strike"); pn.down = true; pn.dir = atan2f(pn.vx, pn.vz); Sfx("bonk"); fx.Burst({ pn.x, 0.25f, pn.z }, 8, WHITE, 2.5f, 0.4f, 0.03f, 3); }
+  void Knock(Pin& pn) { if (pn.down) return; bool first = true; for (auto& q : pins) if (q.down && !q.gone) first = false; if (first) Sfx("strike"); pn.down = true; pn.dir = atan2f(pn.vx, pn.vz); Sfx("bonk"); fx.Burst({ pn.x, 0.25f, pn.z }, 8, WHITE, 2.5f, 0.4f, 0.03f, 3);
+    if (!shot) { int up = 0; for (auto& q : pins) if (!q.gone && !q.down) up++;
+      if (up == 0) { shot = true; StrikeShot(roll == 0); } } }
+  // the pin deck from the side, low, as the pins explode in slow motion
+  void StrikeShot(bool st) { cine::Shot s; s.kind = cine::STRIKE; s.at = { 0, 0.25f, 19.0f }; s.size = 0.55f; s.c = st ? Hex(0xffd43b) : Hex(0x51cf66); s.caption = st ? "STRIKE!" : "SPARE!"; s.sub = P(cur).name; s.floorY = 0; s.face = { 0, 0, 1 }; s.elev = 0.2f; cine::Play(s); }
+  void DebugShot(int k) override {   // debug: a real strike (the ball arrives at the head pin and every pin goes flying)
+    if (k != cine::STRIKE) return;
+    phase = "roll"; roll = 0; shot = false; rollT = 0; ball = { 0, 18.2f, 0, 9, 0.11f, 0, true };
+    for (auto& pn : pins) { pn.vx = pn.x * 9 + frand(-1.2f, 1.2f); pn.vz = frand(2.5f, 5); }
+    for (auto& pn : pins) Knock(pn);
+  }
   void Score() {
     ts = 1; int newly = 0; for (auto& p : pins) newly += p.down && !p.gone;
     int before = roll == 0 ? 0 : firstDown, down = before + newly, gain = newly; again = false;
-    if (roll == 0 && down == 10) { gain = 20; Pop("💥 STRIKE!! 💥", Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120, 1.5f, 4); Shake(10); }
-    else if (roll == 1 && down == 10) { gain = 15 - before; Pop("✨ SPARE! ✨", Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
+    if (roll == 0 && down == 10) { gain = 20; Pop("STRIKE  +20", Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120, 1.5f, 4); Shake(10); }
+    else if (roll == 1 && down == 10) { gain = 15 - before; Pop("SPARE  +" + I(gain), Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
     else { Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } Sfx("ding"); }
     pts[cur] += gain;
     if (again) { for (auto& p : pins) { if (p.down) p.gone = true; p.vx = p.vz = 0; } roll = 1; }

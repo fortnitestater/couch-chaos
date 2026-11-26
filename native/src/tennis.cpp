@@ -87,6 +87,10 @@ struct Tennis : Classic {
     for (size_t i = 0; i < on.size(); i++) if (on[i].team == team) { float d = hypotf(on[i].pos.x - hitPt.x, on[i].pos.z - hitPt.z); if (d < bd) { bd = d; best = (int)i; } }
     return best;
   }
+  // bullet time on the smash: low, close, from the net side of the hitter
+  void SmashShot(const Pl& p) { cine::Shot s; s.kind = cine::SMASH; s.at = Vector3Lerp(bp, { p.pos.x, 1.15f, p.pos.z }, 0.55f); s.size = 1.05f; s.c = Hex(0xff922b); s.caption = "SMASH!"; s.sub = radar; s.floorY = 0; s.face = { 0, 0, -Side(p.team) }; s.yaw = -0.35f; cine::Play(s); }
+  void WinShot(int team) { for (auto& q : on) if (q.team == team) { cine::Shot s; s.kind = cine::WIN; s.at = Vector3Add(q.pos, { 0, 1.0f, 0 }); s.size = 1.0f; s.c = q.pid >= 0 ? P(q.pid).color : WHITE; s.face = { 0, 0, -Side(team) }; s.floorY = 0; s.hero = q.pid >= 0; cine::Play(s); break; } }
+  void DebugShot(int k) override { if (on.empty()) return; if (k == cine::SMASH) { Vector3 sv = bp; bp = Vector3Add(RacketPt(on[0]), { 0, 1.3f, 0 }); radar = "131 km/h"; SmashShot(on[0]); bp = sv; } else if (k == cine::WIN) WinShot(on[0].team); }
   void Hit(int i, float power, float aim, bool good) {
     Pl& p = on[i]; lastHitTeam = p.team; rally++; if (p.pid >= 0) hits[p.pid]++;
     float tz = -Side(p.team) * (HL - 2.2f - frand(0, 2.5f) * (good ? 0.6f : 1)), tx = Clamp(aim, -1, 1) * (Doubles() ? DW : HW) * 0.78f + frand(-0.4f, 0.4f);
@@ -95,7 +99,7 @@ struct Tennis : Classic {
     Launch(bp, { tx, 0, tz }, spd);
     int kmh = (int)(spd * 3.6f * 1.1f); radar = I(kmh) + " km/h"; radarT = 1.6f;
     Sfx(smash ? "smash" : "pok"); Shake(smash ? 10 : 2); fx.Burst(bp, smash ? 40 : 12, smash ? Hex(0xff922b) : WHITE, smash ? 6 : 3, 0.5f, 0.05f, 2);
-    if (smash) { call = "🔥 SMASH!"; callT = 1.2f; } else if (good && power > 0.8f) { call = "💥 POWER SHOT!"; callT = 1; }
+    if (smash) SmashShot(p); else if (good && power > 0.8f) { call = "💥 POWER SHOT!"; callT = 1; }
     p.sw = 1; p.swDir = bp.x > p.pos.x ? 1.f : -1.f;
     if (rally == 8) Sfx("cheer");
     Predict(); recv = Receiver();
@@ -121,7 +125,9 @@ struct Tennis : Classic {
     if (a >= 4 && a - b >= 2) {
       games[team]++; pts[0] = pts[1] = 0; call = (team ? TeamName(1) : TeamName(0)) + " WIN THE GAME!"; callT = 2.4f; Sfx("cheer");
       serveTeam = 1 - serveTeam;
-      if (games[team] >= GAMES) { phase = "end"; t = 4; conf.Spawn({ 0, 4, Side(team) * 6 }, 160, 5, 6); Sfx("win"); Banner(TeamName(team) + " WIN THE MATCH!", 2600, team ? "#4dabff" : "#ff6b6b"); return; }
+      if (games[team] >= GAMES) { phase = "end"; t = 4; conf.Spawn({ 0, 4, Side(team) * 6 }, 160, 5, 6); Sfx("win"); Banner(TeamName(team) + " WIN THE MATCH!", 2600, team ? "#4dabff" : "#ff6b6b");
+        WinShot(team);
+        return; }
     }
     // rotate players in for big groups
     for (int tm = 0; tm < 2; tm++) if ((int)teamQ[tm].size() > (Doubles() ? 2 : 1)) { int f = teamQ[tm][0]; teamQ[tm].erase(teamQ[tm].begin()); teamQ[tm].push_back(f); }

@@ -77,6 +77,7 @@ static Vector3 Ik(Vector3 sh, Vector3 target, float l1, float l2, Vector3 pole) 
 void DrawToon(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc) {
   // a friendly, polished person: natural body, slightly larger head, big bright eyes, smile, smooth tapered limbs
   unsigned hsh = (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29;
+  if (cine::Hero(c)) { cheer = fmaxf(cheer, 1); hop = 0; }   // the winner's shot: they celebrate
   if (!g_hold.on && DrawPerson(pos, yaw, c, t, hop, cheer, sc, g_toonK, hsh)) return;   // real rigged people when loaded
   sc *= g_toonK;
   bool moving = hop > 0.02f, flash = c.r == 255 && c.g == 255 && c.b == 255;

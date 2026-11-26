@@ -268,7 +268,13 @@ struct Table : Game {
   void Title(const std::string& s, Color c = WHITE) { float w = Measure(s, 40, TS_DISPLAY) + 70; hud::Panel(20, 14, w, 68, 34); Text(20 + w / 2, 50, 40, c, s, 0, TS_DISPLAY | TS_SHADOW); }
   std::vector<int> Sorted(std::function<float(int)> key) { std::vector<int> o; for (int i = 0; i < N(); i++) o.push_back(i); std::stable_sort(o.begin(), o.end(), [&](int a, int b) { return key(a) > key(b); }); return o; }
   void FinishOrder(const std::vector<int>& o, std::function<std::string(int)> stat) { std::string r; for (int i : o) r += std::to_string(i) + ":" + stat(i) + ";"; Finish(r); }
-  void Celebrate(int pid) { conf.Spawn({ 0, 4, 0 }, 140, 6, 6); Sfx("win"); if (pid >= 0) Banner(P(pid).name + " WINS!", 2600, Hx(P(pid).color).c_str()); }
+  void Celebrate(int pid) { conf.Spawn({ 0, 4, 0 }, 140, 6, 6); Sfx("win"); if (pid >= 0) Banner(P(pid).name + " WINS!", 2600, Hx(P(pid).color).c_str()); WinShot(pid); }
+  void WinShot(int pid) {
+    if (pid < 0) return; Vector3 s = Seat(pid); bool real = HaveFile("p0.glb");
+    cine::Shot sh; sh.kind = cine::WIN; sh.at = { s.x, real ? 0.9f : 0.5f, s.z }; sh.size = real ? 2.3f : 1.6f; sh.c = P(pid).color;
+    sh.face = { -s.x, 0, -s.z }; sh.elev = 0.3f; sh.floorY = real ? -3.2f : -1.6f; sh.hero = true; cine::Play(sh);
+  }
+  void DebugShot(int k) override { if (k == cine::WIN) WinShot(0); }
   void Tick(float dt) { time += dt; fx.Update(dt); conf.Update(dt); }
   void End3D() { fx.Draw(); conf.Draw(); EndMode3D(); FlushText(); }
 };

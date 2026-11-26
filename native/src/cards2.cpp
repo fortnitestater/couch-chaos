@@ -97,7 +97,7 @@ struct Storm : GameNight {
     if (hand[p].size() == 1) { lcP = p; lcSafe = false; lcT = 4.5f; lcTried = false; }
     if (hand[p].empty()) { Win(p); return; }
     if (c.v == "+2") pending += 2;
-    if (c.v == "BLIZZARD") { pending += 4; Shake(10); }
+    if (c.v == "BLIZZARD") { pending += 4; Shake(10); cine::Shot s; s.kind = cine::SMASH; s.at = { 1.0f, 0.3f, 0.4f }; s.size = 1.2f; s.c = Hex(0x74c0fc); s.caption = "BLIZZARD +4"; s.sub = P(p).name; s.elev = 0.6f; s.floorY = 0.02f; cine::Play(s); }
     if (c.v == "REV") { dir = -dir; if (N() == 2) turn = Idx(1); }
     if (c.v == "SWAP") { int ld = -1; for (int q = 0; q < N(); q++) if (q != p && (ld < 0 || hand[q].size() < hand[ld].size())) ld = q; if (ld >= 0) { std::swap(hand[p], hand[ld]); log = P(p).name + " SWAPPED hands with " + P(ld).name + "! ⇄"; Shake(8); if (hand[p].empty()) { Win(p); return; } } }
     if (c.c < 0) { needColor = true; Sync(); return; }
@@ -161,6 +161,7 @@ const char* AVN[] = { "AVALANCHE", "SHOVEL", "PEEK", "SKIP", "DOUBLE", "SHUFFLE"
 const unsigned AVC[] = { 0xff4d6d, 0x51cf66, 0x4dabff, 0xffd43b, 0xff922b, 0xcc5de8, 0x22d3ee, 0xf783ac, 0x868e96, 0x868e96, 0x868e96 };
 bool IsPair(int k) { return k >= AV_SCARF; }
 struct Aval : GameNight {
+  void DebugShot(int k) override { if (k == cine::SNOW) cine::Moment(cine::SNOW, { 0, 0.8f, 0 }, 2.2f, Hex(0xd0ebff), "AVALANCHE!", P(0).name, 0.f); else GameNight::DebugShot(k); }
   std::vector<int> deck, discard, outOrder; std::vector<std::vector<int>> hand; std::vector<bool> alive; std::vector<int> knows;
   int owed = 1, peekFor = -1, winner = -1; std::string state = "play"; float timer = 30, botT = 1.5f, peekT = 0, buryT = 0, flash = 0;
   struct PA { int by = -1, card = 0; bool pair = false; float t = 0; int blockedBy = -1; } pa; std::vector<int> peekCards;
@@ -227,7 +228,8 @@ struct Aval : GameNight {
     if (deck.empty()) { EndTurn(); return; }
     int k = deck.back(); deck.pop_back(); knows[p] = -1;
     if (k != AV_AVAL) { hand[p].push_back(k); log = P(p).name + " drew a card… phew 😮‍💨"; Sfx("card"); EndTurn(); return; }
-    flash = 1; Shake(24); Sfx("boom"); Sfx("alarm"); fx.Burst({ 0, 1, 0 }, 120, WHITE, 9, 1.6f, 0.3f, 4);
+    flash = 1; Shake(24); Sfx("boom"); Sfx("alarm");
+    cine::Moment(cine::SNOW, { 0, 0.8f, 0 }, 2.2f, Hex(0xd0ebff), "AVALANCHE!", P(p).name, 0.f);
     int si = Find(p, AV_SHOVEL);
     if (si >= 0) { hand[p].erase(hand[p].begin() + si); log = "💥 AVALANCHE! " + P(p).name + " dug out with a SHOVEL 🛡️"; state = "bury"; buryT = 14; Banner("🛡️ " + P(p).name + " DUG OUT!", 1600, "#51cf66"); Sync(); return; }
     alive[p] = false; outOrder.push_back(p); log = "💥 AVALANCHE! " + P(p).name + " is buried ❄️"; Banner("❄️ " + P(p).name + " IS OUT!", 2000, "#ff4d6d"); Buzz(p, 600);
@@ -368,10 +370,10 @@ struct Tycoon : GameNight {
       if (c.kind == 0) { if (c.v > 0) s.cash += c.v; else { Pay(p, -1, -c.v); pot += -c.v; } }
       if (c.kind == 1) { s.pos = 0; s.cash += 200; }
       if (c.kind == 2) { s.pos = (s.pos + NB - c.v) % NB; Land(p); return; }
-      if (c.kind == 3) { s.pos = 6; s.skip = 1; Shake(14); Sfx("boom"); }
+      if (c.kind == 3) { cine::Moment(cine::SNOW, Cell3(s.pos, 0.6f), 1.3f, Hex(0xd0ebff), "AVALANCHE!", P(p).name, 0.f); s.pos = 6; s.skip = 1; Shake(14); Sfx("boom"); }
       if (c.kind == 4) for (int q = 0; q < N(); q++) if (q != p && !st[q].out) { if (c.v > 0) Pay(q, p, c.v); else Pay(p, q, -c.v); }
       if (c.kind == 5) for (int i = 0; i < NB; i++) if (std::string(TB[i].k) == "prop" && own[i] == p && HasSet(p, TB[i].g) && cab[i] < 3) { cab[i]++; break; }
-    } else if (k == "aval") { s.pos = 6; s.skip = 1; log = "💥 AVALANCHE! " + P(p).name + " is stuck in the Hot Tub (miss a turn)"; Shake(16); Sfx("boom"); fx.Burst(Cell3(18, 1), 60, WHITE, 6, 1.2f, 0.2f, 3); }
+    } else if (k == "aval") { cine::Moment(cine::SNOW, Cell3(s.pos, 0.6f), 1.3f, Hex(0xd0ebff), "AVALANCHE!", P(p).name, 0.f); s.pos = 6; s.skip = 1; log = "💥 AVALANCHE! " + P(p).name + " is stuck in the Hot Tub (miss a turn)"; Shake(16); Sfx("boom"); fx.Burst(Cell3(18, 1), 60, WHITE, 6, 1.2f, 0.2f, 3); }
     else if (k == "pot") { if (pot) { s.cash += pot; log = "🛷 " + P(p).name + " grabs the Sleigh Ride pot: $" + std::to_string(pot) + "!"; Sfx("win"); conf.Spawn(Cell3(12, 1), 60, 2, 4); pot = 0; } else log = "🛷 " + P(p).name + " enjoys a sleigh ride"; }
     else log = P(p).name + " is at " + b.n;
     EndTurn();
@@ -384,7 +386,8 @@ struct Tycoon : GameNight {
     if (st[turn].skip) { st[turn].skip = 0; log = "♨️ " + P(turn).name + " is relaxing in the Hot Tub…"; state = "skip"; skipT = 1.6f; Sync(); return; }
     timer = 25; botT = frand(1, 1.6f); Sync();
   }
-  void Finish2() { if (over) return; over = true; endT = 3.5f; int b = Sorted([&](int i) { return (float)Worth(i); })[0]; conf.Spawn({ 0, 3, 0 }, 160, 6, 6); Sfx("win"); Banner("🏆 " + P(b).name + " is the SNOW TYCOON!", 2600, Hx(P(b).color).c_str()); Sync(); }
+  void Finish2() { if (over) return; over = true; endT = 3.5f; int b = Sorted([&](int i) { return (float)Worth(i); })[0]; conf.Spawn({ 0, 3, 0 }, 160, 6, 6); Sfx("win"); Banner("🏆 " + P(b).name + " is the SNOW TYCOON!", 2600, Hx(P(b).color).c_str()); Sync();
+    cine::Shot sh; sh.kind = cine::WIN; sh.at = { 0, 0.6f, 0 }; sh.size = 2.4f; sh.c = P(b).color; sh.floorY = 0; sh.elev = 0.5f; cine::Play(sh); }
   void BotMove(int p) {
     St& s = st[p];
     if (state == "roll") { auto b = Buildable(p); if (!b.empty() && s.cash - TB[b[0]].p / 2 > 150) { Act(p, "btn:build_" + std::to_string(b[0]), 0, 0); return; } Act(p, "btn:roll", 0, 0); return; }

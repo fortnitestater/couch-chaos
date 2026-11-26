@@ -26,7 +26,8 @@ EM_JS(void, js_rr, (float x, float y, float w, float h, float r, int f1, int f2,
 });
 EM_JS(void, js_finish, (const char* s), { if (Module.game) Module.game.finish(UTF8ToString(s)); });
 
-void Text(float x, float y, float size, Color c, const std::string& s, int align, int style, float w) { if (c.a == 0 || s.empty()) return; js_text(x, y, size, (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a), s.c_str(), align, style, w); }
+static inline Color HudA(Color c) { if (g_hudA < 0.999f) c.a = (unsigned char)(c.a * g_hudA); return c; }
+void Text(float x, float y, float size, Color c, const std::string& s, int align, int style, float w) { c = HudA(c); if (c.a == 0 || s.empty()) return; js_text(x, y, size, (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a), s.c_str(), align, style, w); }
 float Measure(const std::string& s, float size, int style) { return js_measure(s.c_str(), size, style); }
 void TextClip(float x, float y, float w, float h) { js_clip(x, y, w, h); }
 void TextUnclip() { js_clip(-1, -1, -1, -1); }
@@ -38,8 +39,8 @@ void Banner(const std::string& s, int ms, const char* c) { js_banner(s.c_str(), 
 void Buzz(int pid, int ms) { js_buzz(pid, ms); }
 void Send(int pid, const std::string& json) { js_send(pid, json.c_str()); }
 static int RGBA(Color c) { return (int)(((unsigned)c.r << 24) | ((unsigned)c.g << 16) | ((unsigned)c.b << 8) | c.a); }
-void Img(const std::string& k, float x, float y, float w, float h, float r, float a, float pan, float zoom) { if (a > 0.005f) js_img(k.c_str(), x, y, w, h, r, a, pan, zoom); }
-void RRect(float x, float y, float w, float h, float r, Color f1, Color f2, Color st, float lw, bool grad, bool gold) { js_rr(x, y, w, h, r, RGBA(f1), RGBA(f2), RGBA(st), lw, grad, gold); }
+void Img(const std::string& k, float x, float y, float w, float h, float r, float a, float pan, float zoom) { a *= g_hudA; if (a > 0.005f) js_img(k.c_str(), x, y, w, h, r, a, pan, zoom); }
+void RRect(float x, float y, float w, float h, float r, Color f1, Color f2, Color st, float lw, bool grad, bool gold) { f1 = HudA(f1); f2 = HudA(f2); st = HudA(st); if (!f1.a && !f2.a && !st.a) return; js_rr(x, y, w, h, r, RGBA(f1), RGBA(f2), RGBA(st), lw, grad, gold); }
 
 Color ParseColor(const std::string& hex) { unsigned v = 0x888888; if (hex.size() >= 7 && hex[0] == '#') v = (unsigned)strtoul(hex.substr(1, 6).c_str(), nullptr, 16); return Hex(v); }
 
@@ -58,7 +59,7 @@ precision mediump float;
 varying vec3 vN; varying vec3 vW; varying vec2 vUV; varying vec4 vC;
 uniform vec4 colDiffuse; uniform vec3 lightDir; uniform vec3 camPos; uniform vec3 fogColor; uniform float fogDensity; uniform float ambient;
 uniform float pattern; uniform vec4 casters[24]; uniform float nCast; uniform float time; uniform vec3 sunCol; uniform vec3 skyCol;
-uniform sampler2D shadowMap; uniform mat4 lightVP; uniform float shOn; uniform float shTex;
+uniform sampler2D shadowMap; uniform mat4 lightVP; uniform float shOn; uniform float shTex; uniform vec4 flashP; uniform vec3 flashC;
 float unpackD(vec4 c) { return dot(c, vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0)); }
 float sunShadow(vec3 p, vec3 n, float nd) {
   if (shOn < 0.5) return 1.0;
@@ -160,6 +161,8 @@ void main() {
   vec3 shadeTint = mix(vec3(0.62, 0.74, 1.08), vec3(1.0), sh);   // shadows go cool, never grey
   float rimW = pow(1.0 - max(dot(n, V), 0.0), 2.6) * (1.0 - abs(n.y)) * smoothstep(-0.3, 0.4, dot(normalize(vec3(L.x, 0.0, L.z) * -1.0 + V * 0.2), n) + 0.5);
   vec3 col = base * (hemi * mix(0.7, 1.0, sh) * shadeTint + sunCol * 1.35 * diff * sh + vec3(camFill)) + sunCol * s * sh * ssh + skyCol * fres * 0.22 + vec3(1.0, 0.82, 0.62) * rimW * 0.42;
+  // an explosion / goal / strike flash lights up everything around it
+  if (flashC.r + flashC.g + flashC.b > 0.001) { vec3 fl = flashP.xyz - vW; float fd = length(fl); col += base * flashC * (max(dot(n, fl / max(fd, 0.001)), 0.0) * 0.75 + 0.25) / (1.0 + fd * fd / (flashP.w * flashP.w)); }
   // ACES filmic curve: bright surfaces roll off instead of clipping to pure white
   col *= 0.6;
   col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
@@ -179,7 +182,7 @@ precision mediump float;
 varying float vD;
 void main() { float d = clamp(vD, 0.0, 0.99999); vec4 e = fract(d * vec4(1.0, 255.0, 65025.0, 16581375.0)); e -= e.yzww * vec4(1.0 / 255.0, 1.0 / 255.0, 1.0 / 255.0, 0.0); gl_FragColor = e; })";
 static const int SHADOW_RES = 2048;
-Lit lit; Prims prim;
+Lit lit; Prims prim; static int locFlP = -1, locFlC = -1;
 void Lit::Init() {
   shader = LoadShaderFromMemory(VS, FS);
   shader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(shader, "matModel");
@@ -187,6 +190,7 @@ void Lit::Init() {
   locPat = GetShaderLocation(shader, "pattern"); locCast = GetShaderLocation(shader, "casters"); locNCast = GetShaderLocation(shader, "nCast"); locTime = GetShaderLocation(shader, "time");
   locSun = GetShaderLocation(shader, "sunCol"); locSky = GetShaderLocation(shader, "skyCol");
   mat = LoadMaterialDefault(); mat.shader = shader;
+  locFlP = GetShaderLocation(shader, "flashP"); locFlC = GetShaderLocation(shader, "flashC");
   locLVP = GetShaderLocation(shader, "lightVP"); locShOn = GetShaderLocation(shader, "shOn"); locShTex = GetShaderLocation(shader, "shTex");
   shSh = LoadShaderFromMemory(SH_VS, SH_FS); shMat = LoadMaterialDefault(); shMat.shader = shSh;
   shRT = LoadRenderTexture(SHADOW_RES, SHADOW_RES);
@@ -225,7 +229,9 @@ void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
   Vector3 sky = Vector3Lerp({ 0.75f, 0.82f, 1.0f }, fogColor, 0.35f);
   if (lum < 0.3f) sky = Vector3Lerp({ 0.78f, 0.8f, 0.95f }, fogColor, 0.15f);  // indoor / night scenes still get a bright fill
   Vector3 sun = { 1.0f, 0.92f, 0.78f };
-  SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCam, &cam.position, SHADER_UNIFORM_VEC3);
+  Vector3 eye = CineCam(cam).position;   // the real (cinematic) eye, for highlights and fog
+  SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCam, &eye, SHADER_UNIFORM_VEC3);
+  { Vector4 fp; Vector3 fc; cine::Light(fp, fc); SetShaderValue(shader, locFlP, &fp, SHADER_UNIFORM_VEC4); SetShaderValue(shader, locFlC, &fc, SHADER_UNIFORM_VEC3); }
   SetShaderValue(shader, locFog, &fogColor, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locFogD, &fogDensity, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locAmb, &amb, SHADER_UNIFORM_FLOAT);
   SetShaderValue(shader, locSun, &sun, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locSky, &sky, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locTime, &time, SHADER_UNIFORM_FLOAT);
   float nc = (float)castPrev.size(); SetShaderValue(shader, locNCast, &nc, SHADER_UNIFORM_FLOAT);
@@ -290,6 +296,7 @@ precision mediump float;
 #endif
 varying vec2 uv; uniform sampler2D texture0; uniform sampler2D bloom; uniform sampler2D dofTex; uniform sampler2D depthTex;
 uniform vec2 px; uniform float time; uniform float focus; uniform float dofOn; uniform float dofAmt;
+uniform vec4 fxA; uniform vec4 fxB; uniform vec3 fxC;   // flash, colour split, zoom blur, speed lines | letterbox, impact frame, centre
 vec3 S(vec2 p) { return texture2D(texture0, p).rgb; }
 float linZ(float d) { float n = 0.3, f = 600.0; float z = d * 2.0 - 1.0; return 2.0 * n * f / (f + n - z * (f - n)); }
 void main() {
@@ -314,7 +321,21 @@ void main() {
     if (d > 0.00002) { float z = linZ(d); coc = clamp((abs(z - focus) - focus * 0.22) / (focus * 0.75), 0.0, 1.0); }
     c = mix(c, texture2D(dofTex, uv).rgb, coc * dofAmt);
   }
-  c += texture2D(bloom, uv).rgb * 0.5;
+  // cinematic moment: radial zoom blur with a colour split, out from what just happened
+  vec2 ctr = fxB.zw;
+  if (fxA.z > 0.001 || fxA.y > 0.001) {
+    vec2 dv = (uv - ctr) * fxA.z * 0.16, ab = (uv - ctr) * fxA.y * 0.022; vec3 acc = vec3(0.0);
+    for (int i = 0; i < 8; i++) { vec2 p = uv - dv * (float(i) / 7.0); acc += vec3(S(p + ab).r, S(p).g, S(p - ab).b); }
+    c = mix(c, acc / 8.0, clamp(fxA.z * 2.0 + fxA.y, 0.0, 1.0));
+  }
+  c += texture2D(bloom, uv).rgb * (0.5 + fxA.x * 0.8);
+  if (fxA.w > 0.001) {   // anime speed lines rushing out of the centre
+    vec2 d = (uv - ctr) * vec2(px.y / px.x, 1.0); float r = length(d), a = atan(d.y, d.x);
+    float s = (a + 3.14159) / 6.28318 * 110.0, k = floor(s), f = fract(s);
+    float h = fract(sin((k + floor(time * 18.0) * 17.0) * 91.73) * 43758.55);
+    float ln = step(0.6, h) * (1.0 - smoothstep(0.0, 0.08 + 0.3 * h, abs(f - 0.5))) * smoothstep(0.28 + 0.3 * h, 0.95, r);
+    c = mix(c, vec3(1.0), ln * fxA.w * 0.75);
+  }
   // film grade: gentle S-curve, rich colour, teal shadows / warm highlights
   c = mix(c, c * c * (3.0 - 2.0 * c), 0.42);
   float l = dot(c, lw); c = mix(vec3(l), c, 1.18);
@@ -322,8 +343,15 @@ void main() {
   c *= 1.0 - dot(dc, dc) * 0.55;   // vignette
   float g = fract(sin(dot(floor(uv / px) + floor(time * 24.0) * 17.0, vec2(12.9898, 78.233))) * 43758.5453);
   c += (g - 0.5) * 0.04 * (1.0 - l * 0.6);   // film grain
+  c = 1.0 - (1.0 - clamp(c, 0.0, 1.0)) * (1.0 - fxC * fxA.x * 0.7);   // flash
+  if (fxB.y > 0.001) {   // impact frame: two frames of stark black / hot colour
+    float l2 = dot(c, lw); vec3 imp = mix(fxC * 1.15, vec3(0.03, 0.0, 0.05), smoothstep(0.3, 0.52, l2));
+    c = mix(c, imp, fxB.y);
+  }
+  float bh = fxB.x * 0.118; c *= smoothstep(bh, bh + 0.004, uv.y) * smoothstep(bh, bh + 0.004, 1.0 - uv.y);   // letterbox
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 })";
+static int lFxA = -1, lFxB = -1, lFxC = -1;
 static RenderTexture2D rtMain, rtA, rtB, rtC, rtD, rtE; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom, lFinalDof, lFinalDepth, lFinalTime, lFinalFocus, lFinalDofOn; static bool postOk = false, dofOk = false;
 float g_cineT = 0, g_focus = 15, g_dofAmt = 0.9f; bool g_cineOn = false; static int lFinalDofAmt;
 // the main scene target keeps its depth in a texture, so the final pass can focus by distance
@@ -352,6 +380,7 @@ static void LoadPostShaders() {
   shBright = LoadShaderFromMemory(PVS, BRIGHT_FS); shBlur = LoadShaderFromMemory(PVS, BLUR_FS); shFinal = LoadShaderFromMemory(PVS, FINAL_FS);
   lBrightPx = GetShaderLocation(shBright, "px"); lBlurDir = GetShaderLocation(shBlur, "dir"); lFinalPx = GetShaderLocation(shFinal, "px"); lFinalBloom = GetShaderLocation(shFinal, "bloom");
   lFinalDof = GetShaderLocation(shFinal, "dofTex"); lFinalDepth = GetShaderLocation(shFinal, "depthTex"); lFinalTime = GetShaderLocation(shFinal, "time"); lFinalFocus = GetShaderLocation(shFinal, "focus"); lFinalDofOn = GetShaderLocation(shFinal, "dofOn"); lFinalDofAmt = GetShaderLocation(shFinal, "dofAmt");
+  lFxA = GetShaderLocation(shFinal, "fxA"); lFxB = GetShaderLocation(shFinal, "fxB"); lFxC = GetShaderLocation(shFinal, "fxC");
 }
 // draw in logical 1600x900 coordinates whatever the real framebuffer size is
 static void LogicalOrtho() { rlDrawRenderBatchActive(); rlMatrixMode(RL_PROJECTION); rlLoadIdentity(); rlOrtho(0, W, H, 0, 0.0, 1.0); rlMatrixMode(RL_MODELVIEW); rlLoadIdentity(); }
@@ -375,13 +404,14 @@ Camera3D CineCam(Camera3D c) {
   Vector3 drift = { sinf(t * 0.37f) * a + sinf(t * 0.91f) * a * 0.3f, sinf(t * 0.29f + 1) * a * 0.6f, cosf(t * 0.33f) * a * 0.5f };
   c.position = Vector3Add(Vector3Add(c.target, dr), drift);
   c.target = Vector3Add(c.target, Vector3Scale(drift, 0.35f));
-  return c;
+  return cine::Apply(c);
 }
 #undef BeginMode3D
 #undef EndMode3D
-void CC_BeginMode3D(Camera3D c) { rlDrawRenderBatchActive(); glDepthFunc(GL_LEQUAL); glDepthRangef(0, 1); c = CineCam(c); g_focus = Vector3Length(Vector3Subtract(c.position, c.target)); BeginMode3D(c); }
+Camera3D g_finalCam{}; static bool g_fxDrawn = false;
+void CC_BeginMode3D(Camera3D c) { rlDrawRenderBatchActive(); glDepthFunc(GL_LEQUAL); glDepthRangef(0, 1); c = CineCam(c); g_finalCam = c; g_focus = Vector3Length(Vector3Subtract(c.position, c.target)); BeginMode3D(c); }
 // flat drawing after the 3D scene writes depth 0, which the focus pass reads as "never blur"
-void CC_EndMode3D() { EndMode3D(); if (dofOk && g_cineOn) { rlDrawRenderBatchActive(); rlEnableDepthTest(); glDepthFunc(GL_ALWAYS); glDepthRangef(0, 0); rlEnableDepthMask(); } }
+void CC_EndMode3D() { if (g_cineOn && !g_fxDrawn) { g_fxDrawn = true; cine::Draw3D(); } EndMode3D(); if (dofOk && g_cineOn) { rlDrawRenderBatchActive(); rlEnableDepthTest(); glDepthFunc(GL_ALWAYS); glDepthRangef(0, 0); rlEnableDepthMask(); } }
 void PostEnd() {
   rlDrawRenderBatchActive(); glDepthFunc(GL_LEQUAL); glDepthRangef(0, 1); rlDisableDepthTest();
   if (!postOk || !g_post) { EndDrawing(); return; }
@@ -402,7 +432,10 @@ void PostEnd() {
   BeginShaderMode(shFinal);
   SetShaderValue(shFinal, lFinalPx, &px, SHADER_UNIFORM_VEC2);
   SetShaderValueTexture(shFinal, lFinalBloom, rtA.texture);
-  float tm = (float)GetTime(), don = dof ? 1.f : 0.f; SetShaderValue(shFinal, lFinalTime, &tm, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalFocus, &g_focus, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalDofOn, &don, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalDofAmt, &g_dofAmt, SHADER_UNIFORM_FLOAT);
+  float tm = (float)GetTime(), don = dof ? 1.f : 0.f, da = cine::Busy() ? fmaxf(g_dofAmt, 0.85f) : g_dofAmt;
+  SetShaderValue(shFinal, lFinalTime, &tm, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalFocus, &g_focus, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalDofOn, &don, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalDofAmt, &da, SHADER_UNIFORM_FLOAT);
+  { cine::PostFx p = g_cineOn ? cine::Post() : cine::PostFx{}; Vector4 a = { p.flash, p.aber, p.zoom, p.speed }, b = { p.bars, p.impact, g_cineOn ? p.ctr.x : 0.5f, g_cineOn ? p.ctr.y : 0.5f }; Vector3 c = { p.fc.r / 255.f, p.fc.g / 255.f, p.fc.b / 255.f };
+    SetShaderValue(shFinal, lFxA, &a, SHADER_UNIFORM_VEC4); SetShaderValue(shFinal, lFxB, &b, SHADER_UNIFORM_VEC4); SetShaderValue(shFinal, lFxC, &c, SHADER_UNIFORM_VEC3); }
   SetShaderValueTexture(shFinal, lFinalDof, dof ? rtD.texture : rtA.texture);
   if (dof) SetShaderValueTexture(shFinal, lFinalDepth, rtMain.depth);
   DrawTexturePro(rtMain.texture, { 0, 0, (float)FW, (float)-FH }, { 0, 0, (float)FW, (float)FH }, { 0, 0 }, 0, WHITE);
@@ -440,7 +473,13 @@ static std::unique_ptr<Game> game;
 
 int g_dbg = 0; int g_post = 1;
 extern "C" {
-EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) { if (m >= 100) g_post = m - 100; else g_dbg = m; }
+EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) {
+  if (m >= 40 && m < 50) {   // debug: play a test moment on whatever the camera looks at
+    Camera3D c = g_finalCam; cine::Shot s; s.kind = m - 40; s.at = c.target; s.size = Vector3Distance(c.position, c.target) * 0.1f;
+    s.c = Hex(0xffd43b); s.caption = "TEST"; s.sub = "debug"; s.floorY = c.target.y - s.size; s.hero = false; cine::Play(s); return;
+  }
+  if (m >= 50 && m < 60) { if (game) game->DebugShot(m - 50); return; }
+  if (m >= 100) g_post = m - 100; else g_dbg = m; }
 static float ClampRS(float rs) { return rs < 1 ? 1 : rs > 2 ? 2 : rs; }
 // change the render resolution on the fly (the website lowers it on slow TVs)
 EMSCRIPTEN_KEEPALIVE void cc_set_scale(float rs) {
@@ -466,7 +505,7 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
     players.push_back({ i++, name, ParseColor(col), bot == "1" });
   }
   std::string g = id;
-  game.reset(); lit.Reset(); hud::SetTheme(g); g_cineT = 0; g_cineOn = true;
+  game.reset(); lit.Reset(); hud::SetTheme(g); g_cineT = 0; g_cineOn = true; cine::Reset();
   // how much each game blurs what is out of focus (game content on the back wall stays sharp)
   g_dofAmt = g == "bomb" || g == "count" || g == "copycat" ? 0.f : (g == "trivia" || g == "likely" || g == "elf" || g == "doodle" || g == "lowest" || g == "reflex" || g == "meter" || g == "colors" || g == "math" || g == "rps") ? 0.55f : g == "airhockey" ? 0.6f : 0.9f;
   if (g == "skybrawl") game = MakeSkyBrawl();
@@ -507,17 +546,20 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   if (!game) return;
   dt = fminf(dt, 0.05f);
   g_cineT += dt;
-  game->Update(dt);
+  cine::Update(dt);
+  float gdt = dt * cine::TimeScale();   // hit-stop and slow motion during a big moment
+  game->Update(gdt);
   for (auto& p : players) { p.pa = p.a; p.pb = p.b; p.ptouch = p.touch; }
   lit.ShadowPass();
   PostBegin();
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)
-  hud::TagReset();
+  hud::TagReset(); g_fxDrawn = false;
   game->Draw();
+  cine::Draw2D();
   PostEnd();
-  lit.EndFrame(dt);
+  lit.EndFrame(gdt);
 }
-EMSCRIPTEN_KEEPALIVE void cc_stop() { game.reset(); lit.Reset(); g_cineOn = false; }
+EMSCRIPTEN_KEEPALIVE void cc_stop() { game.reset(); lit.Reset(); g_cineOn = false; cine::Reset(); }
 }
 
 int main() { return 0; }

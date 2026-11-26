@@ -450,7 +450,7 @@ struct Tug : Classic {
 // =====================================================================================
 struct Hockey : Classic {
   struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; };
-  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0; int score[2] = { 0, 0 }, last = -1; bool over = false;
+  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0; int score[2] = { 0, 0 }, last = -1; bool over = false;
   const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 125, MR = 46, PR = 26;
   void Start() override {
     InitCam(40); sc.Init(26, 17, true);
@@ -476,13 +476,24 @@ struct Hockey : Classic {
     }
   }
   int Closest(int tm) { int b = -1; float bd = 1e9f; for (int i = 0; i < N(); i++) if (m[i].team == tm) { float d = hypotf(m[i].x - px, m[i].y - py); if (d < bd) { bd = d; b = i; } } return b; }
+  // the goal light: slow motion into the net, from over the table
+  void GoalShot(int tm) {
+    float gx = tm == 0 ? R : L; cine::Shot s; s.kind = cine::GOAL; s.at = W3(gx, CY, 1.3f); s.size = 2.5f; s.elev = 0.24f; s.c = tm == 0 ? Hex(0xff6b6b) : Hex(0x4dabf7); s.caption = "GOAL!";
+    s.sub = last >= 0 && m[last].team == tm ? P(last).name : std::string(tm == 0 ? "RED SCORES" : "BLUE SCORES"); s.floorY = 0; s.face = { gx > 800 ? -1.f : 1.f, 0, 0.35f }; cine::Play(s);
+  }
+  void WinShotH() {
+    int w = score[0] == score[1] ? -1 : score[0] > score[1] ? 0 : 1, bi = -1;
+    for (int i = 0; i < N(); i++) if (m[i].team == w && (bi < 0 || m[i].goals > m[bi].goals)) bi = i;
+    if (bi >= 0) { cine::Shot s; s.kind = cine::WIN; s.at = W3(m[bi].x, m[bi].y, 0.4f); s.size = 2.2f; s.c = P(bi).color; s.floorY = 0; s.hero = true; cine::Play(s); Sfx("win"); }
+  }
+  void DebugShot(int k) override { if (k == cine::GOAL) GoalShot(0); else if (k == cine::WIN) { score[0]++; WinShotH(); score[0]--; } }
   void Goal(int tm) {
     score[tm]++; if (last >= 0 && m[last].team == tm) m[last].goals++;
     Sfx("boom"); Sfx("cheer"); Shake(10);
     float gx = tm == 0 ? R : L; conf.Spawn(W3(gx, CY, 2), 100, 2, 4); fx.Burst(W3(gx, CY, 0.5f), 30, tm == 0 ? Hex(0xff6b6b) : Hex(0x4dabf7), 8, 0.7f, 0.2f);
-    Banner(last >= 0 && m[last].team == tm ? "GOAL! " + P(last).name : std::string(tm == 0 ? "RED SCORES!" : "BLUE SCORES!"), 1500, tm == 0 ? "#ff6b6b" : "#4dabf7");
+    GoalShot(tm);
     px = tm == 0 ? 800 + 160 : 800 - 160; py = CY; pvx = pvy = 0; pause = 1.3f; last = -1;
-    if (score[tm] >= 7) End();
+    if (score[tm] >= 7) endIn = 2.6f;
   }
   void End() {
     over = true; int w = score[0] == score[1] ? -1 : score[0] > score[1] ? 0 : 1;
@@ -493,9 +504,10 @@ struct Hockey : Classic {
     time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
     if (Counting(dt, "FACE OFF!")) return;
     if (over) return;
+    if (endIn > 0) { endIn -= dt; if (endIn <= 0) End(); return; }
     T -= dt; pause -= dt; sndT -= dt;
     stuckT = hypotf(pvx, pvy) < 140 ? stuckT + dt : 0; if (stuckT > 2.2f) stuckT = 0;
-    if (T <= 0) { End(); return; }
+    if (T <= 0) { WinShotH(); endIn = 3.4f; return; }
     for (int i = 0; i < N(); i++) {
       M& q = m[i]; Vector2 in;
       if (P(i).bot) {

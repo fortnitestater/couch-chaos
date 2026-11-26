@@ -23,7 +23,11 @@ struct Show : Game {
     for (int i = 0; i < N(); i++) { shown[i].To((float)pts[i], dt, 60, 15.5f); pop[i] = fmaxf(0, pop[i] - dt); cheer[i] = fmaxf(0, cheer[i] - dt * 0.7f); }
   }
   std::vector<int> Order() { std::vector<int> o; for (int i = 0; i < N(); i++) o.push_back(i); std::stable_sort(o.begin(), o.end(), [&](int a, int b) { return pts[a] > pts[b]; }); return o; }
-  void Win() { auto o = Order(); conf.Spawn({ PodX(o[0]), 3, 2 }, 160, 4, 7); Sfx("win"); Banner(P(o[0]).name + " WINS!", 2600, kit::Hx(P(o[0]).color).c_str()); cheer[o[0]] = 4; endT = 4.2f; }
+  void Win() { auto o = Order(); conf.Spawn({ PodX(o[0]), 3, 2 }, 160, 4, 7); Sfx("win"); Banner(P(o[0]).name + " WINS!", 2600, kit::Hx(P(o[0]).color).c_str()); cheer[o[0]] = 4; endT = 4.2f; WinShot(o[0]); }
+  // the winner gets a slow orbit at their podium; a big answer pushes in on whoever scored most
+  void WinShot(int i) { cine::Shot sh; sh.kind = cine::WIN; sh.at = { PodX(i), 2.0f, 1.6f }; sh.size = 1.2f; sh.c = P(i).color; sh.floorY = 0.1f; sh.hero = true; cine::Play(sh); }
+  void RevealShot(int i) { cine::Shot s; s.kind = cine::REVEAL; s.at = { PodX(i), 2.2f, 1.6f }; s.size = 1.1f; s.c = P(i).color; s.floorY = 0.1f; cine::Play(s); }
+  void DebugShot(int k) override { if (k == cine::WIN) WinShot(0); else if (k == cine::REVEAL) RevealShot(0); }
   // call from Update: true once the game is over and finished
   bool Ending(float dt) { if (endT < 0) return false; endT -= dt; if (endT <= 0 && !fin) { fin = true; auto o = Order(); std::string r; for (int i : o) r += kit::I(i) + ":" + kit::I(pts[i]) + " pts;"; Finish(r); } return true; }
 
