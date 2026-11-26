@@ -138,6 +138,10 @@ void Reset(); void Update(float realDt); float TimeScale(); Camera3D Apply(Camer
 void Light(Vector4& pos, Vector3& col); PostFx Post(); void Draw3D(); void Draw2D();
 }
 extern float g_hudA;
+extern float g_cineK;                                  // 0 = no opening glide / drift (first-person cameras stay perfectly steady)
+// phone emotes: the player's character waves and an emoji pops up over their head (set with cc_emote)
+extern float g_emoteT[8]; extern Vector3 g_emotePos[8]; extern bool g_emoteVis[8];
+int PidOfColor(Color c);
 
 // ---------- UI kit (art.cpp) ----------
 namespace UI {

@@ -41,32 +41,37 @@ struct Table : Game {
   void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; master = cam; }
   // what the camera should favour right now (default: the player whose turn it is); w = how strongly
   virtual bool Focus(Vector3& p, float& w) { if (over || turn < 0 || turn >= N()) return false; p = Seat(turn, 5.6f); p.y = 0.4f; w = 1; return true; }
-  // ---- the player's-eye camera: on your turn the TV looks over YOUR shoulder, across the table ----
-  int povWho = -1; float povHold = 0;                    // a game can lend the camera to someone for a moment (Blackjack: whoever just acted)
-  virtual int ViewSeat() { return povHold > 0 ? povWho : -1; }   // whose view to show (-1: the film angle on the whole table)
-  virtual float PovAngle(int who) { return SeatA(who) + 0.21f; }   // where around the table that view sits
-  virtual float PovMix() { return 1.f; }                 // 1 = fully from their seat, less = keep more of the overview (boards you must read)
-  virtual Vector3 PovTarget(int who) { float a = SeatA(who); return { -cosf(a) * 1.4f, 0.0f, -sinf(a) * 1.4f }; }
-  float povR = 13.8f, povH = 6.8f, povF = 44.f;
+  // ---- first person: on your turn the TV IS your eyes, from your seat, at eye level. Every seat gets the identical shot. ----
+  int povWho = -1, povHide = -1; float povHold = 0;      // a game can lend the camera to someone for a moment
+  virtual int ViewSeat() { return povHold > 0 ? povWho : -1; }   // whose eyes (-1: the film angle on the whole table)
+  // where the eyes are: angle round the table, distance from its middle, height, field of view, and what they look at
+  virtual void PovPose(int who, float& ang, float& rad, float& h, float& fov, Vector3& tgt) {
+    float a = SeatA(who); ang = atan2f(sinf(a) * 0.78f, cosf(a)); rad = 8.7f; h = 2.7f; fov = 56; tgt = { 0, 0.15f, 0 };
+  }
   void LendCamera(int who, float secs = 2.4f) { povWho = who; povHold = secs; }
   float cA = 0, cAv = 0, cR = 14, cRv = 0, cH = 7, cHv = 0, cF = 40, cFv = 0; Vector3 cT{}, cTv{}; bool cOn = false;
   static void Spr(float& x, float& v, float want, float k, float dt) { float a = (want - x) * k * k - v * 2 * k; v += a * dt; x += v * dt; }
   void UpdateCam() {
+    g_cineK = 0;   // no opening glide and no drift: a first-person camera must not wander
     float dt = fminf(g_frameDt, 0.05f); povHold -= dt;
-    Vector3 m = master.position; float mA = atan2f(m.z / 0.78f, m.x), mR = hypotf(m.x, m.z / 0.78f), mH = m.y;
-    int who = ViewSeat(); float k = who >= 0 ? PovMix() : 0;
+    Vector3 m = master.position; float mA = atan2f(m.z, m.x), mR = hypotf(m.x, m.z), mH = m.y;
+    int who = ViewSeat(); povHide = who;
     float wA = mA, wR = mR, wH = mH, wF = master.fovy; Vector3 wT = master.target;
-    if (who >= 0) {
-      wA = mA + angDiff(mA, PovAngle(who)) * k; wR = Lerp(mR, povR, k); wH = Lerp(mH, povH, k); wF = Lerp(master.fovy, povF, k);
-      wT = Vector3Lerp(master.target, PovTarget(who), k);
-    }
-    // the slow crane drift stays on top; when something is happening (Focus) the target leans toward it
-    Vector3 fp{}; float fw = 0; if (Focus(fp, fw)) wT = Vector3Lerp(wT, fp, 0.22f * fw);
-    wA += 0.05f * sinf(time * 0.1f) + 0.018f * sinf(time * 0.29f); wH += 0.3f * sinf(time * 0.12f + 1); wR *= 1 + 0.025f * sinf(time * 0.16f);
+    if (who >= 0) PovPose(who, wA, wR, wH, wF, wT);
+    else { Vector3 fp{}; float fw = 0; if (Focus(fp, fw)) wT = Vector3Lerp(wT, fp, 0.2f * fw); }
     if (!cOn) { cOn = true; cA = wA; cR = wR; cH = wH; cF = wF; cT = wT; cAv = cRv = cHv = cFv = 0; cTv = {}; }
-    float dA = angDiff(cA, wA); Spr(cA, cAv, cA + dA, 1.35f, dt); Spr(cR, cRv, wR, 1.6f, dt); Spr(cH, cHv, wH, 1.6f, dt); Spr(cF, cFv, wF, 1.8f, dt);
-    for (int i = 0; i < 3; i++) { float* x = (&cT.x) + i; float* v = (&cTv.x) + i; Spr(*x, *v, (&wT.x)[i], 1.8f, dt); }
-    cam.position = { cosf(cA) * cR, cH, sinf(cA) * cR * 0.78f }; cam.target = cT; cam.fovy = cF; cam.up = { 0, 1, 0 };
+    float dA = angDiff(cA, wA); Spr(cA, cAv, cA + dA, 1.7f, dt); Spr(cR, cRv, wR, 1.9f, dt); Spr(cH, cHv, wH, 1.9f, dt); Spr(cF, cFv, wF, 2.0f, dt);
+    for (int i = 0; i < 3; i++) { float* x = (&cT.x) + i; float* v = (&cTv.x) + i; Spr(*x, *v, (&wT.x)[i], 2.0f, dt); }
+    cam.position = { cosf(cA) * cR, cH, sinf(cA) * cR }; cam.target = cT; cam.fovy = cF; cam.up = { 0, 1, 0 };
+  }
+  // "MAYA'S TURN": whose eyes these are
+  virtual bool PovHudOn() { return true; }
+  void PovHud() {
+    if (!PovHudOn() || povHide < 0 || povHide >= N() || over) return;
+    const Player& p = P(povHide); std::string s = p.name + (p.bot ? "" : "'s turn"); float w = Measure(s, 30, TS_DISPLAY) + 96;
+    RRect(800 - w / 2, 70, w, 50, 25, Color{ 10, 14, 36, 215 }, Color{ 10, 14, 36, 215 }, Fade(p.color, 0.95f), 3);
+    RRect(800 - w / 2 + 12, 82, 26, 26, 13, p.color, p.color, BLANK, 0);
+    Text(800 + 18, 96, 30, WHITE, s, 0, TS_DISPLAY | TS_PLAIN);
   }
   void TableCam() { InitCam({ 2.4f, 7.4f, 13.4f }, { 0.3f, 0.1f, -2.6f }, 40); }   // low, a little off-centre: a film angle on the table
   // seats run around the far half of the table so nobody blocks the view
@@ -267,15 +272,16 @@ struct Table : Game {
       if (HaveFile("p0.glb")) {
         Vector3 c = Seat(i, 9.4f);
         DrawModel("chair.glb", { c.x, -3.2f, c.z }, yaw, 3.4f);   // their chair, pushed back from the table
-        DrawToon({ s.x, -3.2f, s.z }, yaw, P(i).color, time + i, h ? 0.01f : 0, cheer ? cheer(i) : 0, 2.05f);
+        if (i != povHide) DrawToon({ s.x, -3.2f, s.z }, yaw, P(i).color, time + i, h ? 0.01f : 0, cheer ? cheer(i) : 0, 2.05f);
       } else {
         lit.Draw(prim.cube, TRS({ s.x * 1.08f, -1.3f, s.z * 1.08f }, { 0, yaw, 0 }, { 1.7f, 2.6f, 0.35f }), Hex(0x5c2f1a));  // chair back
-        DrawToon({ s.x, -0.55f, s.z }, yaw, P(i).color, time + i, h ? fabsf(sinf(time * 5)) * 0.18f : 0, cheer ? cheer(i) : 0, 1.3f);
+        if (i != povHide) DrawToon({ s.x, -0.55f, s.z }, yaw, P(i).color, time + i, h ? fabsf(sinf(time * 5)) * 0.18f : 0, cheer ? cheer(i) : 0, 1.3f);
       }
     }
   }
   void SeatNames(std::function<std::string(int)> extra = nullptr) {
     for (int i = 0; i < N(); i++) {
+      if (i == povHide) continue;   // that's whose eyes we are looking through
       Vector3 s = Seat(i); Vector2 p = GetWorldToScreen({ s.x, HaveFile("p0.glb") ? 3.3f : 2.2f, s.z }, cam);
       hud::Tag(p.x, p.y - 26, P(i).color, P(i).name, 28);
       if (i == turn) Text(p.x, p.y - 62, 30, Hex(0xffd43b), "▼", 0, TS_HEAVY | TS_SHADOW);
@@ -338,6 +344,6 @@ struct Table : Game {
   void DebugShot(int k) override { if (k >= 7) { turn = (k - 7) % N(); LendCamera(turn, 5); } else if (k == cine::WIN) WinShot(0); }   // 7, 8, 9: hand the turn (and the camera) to player 0, 1, 2
   void Tick(float dt) { time += dt; fx.Update(dt); conf.Update(dt); }
 
-  void End3D() { fx.Draw(); conf.Draw(); EndMode3D(); FlushText(); }
+  void End3D() { fx.Draw(); conf.Draw(); EndMode3D(); FlushText(); PovHud(); }
 };
 }  // namespace

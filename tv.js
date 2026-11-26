@@ -256,9 +256,12 @@
     b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
   }
   // a phone reaction floats up the side of the screen with the player's name
-  const REACT_OK = ['🔥', '👏', '😂', '😱', '😭', '🤯'];
+  const REACT_OK = ['🔥', '👏', '😂', '😱', '😭', '🤯', '😎', '🎉'];
   function reactFx(p, e) {
-    if (!REACT_OK.includes(e) || !p) return; const box = $('#reacts'); if (!box) return;
+    if (!REACT_OK.includes(e) || !p) return;
+    // in a game the emote happens in the world: their character waves and the emoji pops up over their head
+    try { const g = S.game, i = g && g.ps ? g.ps.indexOf(p) : -1; if (S.state === 'game' && i >= 0 && NATIVE.mod && NATIVE.mod._cc_emote && g.ready) { NATIVE.mod._cc_emote(i, REACT_OK.indexOf(e)); return; } } catch (_) {}
+    const box = $('#reacts'); if (!box) return;
     if (box.children.length > 14) box.firstChild.remove();
     const el = document.createElement('div'); el.className = 'react'; el.style.setProperty('--x', (4 + Math.random() * 10) + 'vw'); el.style.setProperty('--dx', (Math.random() * 6 - 3) + 'vw');
     el.innerHTML = `<b>${e}</b><span style="background:${p.color || '#3b7bff'}">${String(p.name || '').replace(/[<>&]/g, '')}</span>`;

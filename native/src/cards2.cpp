@@ -312,13 +312,15 @@ const Chance TCH[] = { { "🏆 You won the ski race!", 0, 100 }, { "🛷 Your sl
   { "💥 Caught in an avalanche — to the Hot Tub!", 3, 0 }, { "🎂 Snow party! Every player pays you $20.", 4, 20 }, { "☕ You buy everyone cocoa: pay $20 each.", 4, -20 }, { "🔨 Free cabin on one of your sets!", 5, 0 },
   { "🎁 Holiday bonus!", 0, 150 }, { "🧊 You slipped on ice. Doctor bill:", 0, -40 } };
 struct Tycoon : GameNight {
-  float PovMix() override { return 1.f; }
+  void PovPose(int who, float& ang, float& rad, float& h, float& fov, Vector3& tgt) override {   // leaning over the board from your seat: still your eyes, only a little higher so the squares read
+    float a = SeatA(who); ang = atan2f(sinf(a) * 0.78f, cosf(a)); rad = 11.6f; h = 4.7f; fov = 58; tgt = { 0, -0.4f, 0 };
+  }
   // the camera follows the token of whoever is moving around the board
   bool Focus(Vector3& p, float& w) override { if (over || turn < 0 || turn >= N()) return false; p = Cell3(st[turn].pos, 0); w = 1.3f; return true; }
   struct St { int pos = 0, cash = 1500, skip = 0; bool out = false; float shown = 1500; };
   std::vector<St> st; int own[NB], cab[NB], pot = 0, round = 1, ROUNDS = 8, dice[2] = { 1, 1 }, steps = 0; std::string state = "roll"; float timer = 25, botT = 1.3f, rollAnim = 0, stepT = 0, skipT = 0; std::vector<int> outOrder; bool fin = false;
   void Start() override {
-    InitCam({ 1.8f, 10.6f, 14.2f }, { 0.1f, -0.8f, 0.2f }, 44); povR = 10.2f; povH = 9.6f; povF = 40;   // a board you have to read: from their seat, but high enough to see every square felt = Hex(0x1c3d7a);
+    InitCam({ 1.8f, 10.6f, 14.2f }, { 0.1f, -0.8f, 0.2f }, 44); felt = Hex(0x1c3d7a);
     st.assign(N(), St{}); for (int i = 0; i < NB; i++) { own[i] = -1; cab[i] = 0; }
     turn = 0; Layout(-1, "{\"name\":\"panel\"}"); Banner("🏔️ SNOW TYCOON!", 1600, "#ffd43b"); log = "Roll the dice, buy spots, collect rent!"; Sync();
   }

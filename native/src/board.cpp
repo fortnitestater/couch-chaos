@@ -156,9 +156,9 @@ static Mesh BuildFourDisc() {
 struct Four : Table {
   // everyone stands round the board: the TV looks at the grid from the active team's side, low, like a player leaning in
   int ViewSeat() override { return over || turn < 0 || turn >= N() ? -1 : turn; }
-  float PovAngle(int who) override { return PI / 2 + (side ? 0.62f : -0.62f); }
-  Vector3 PovTarget(int who) override { return { side ? -0.5f : 0.5f, 0.5f, 0 }; }
-  float PovMix() override { return 1.f; }
+  // you step up to the board from your team's side and look at the grid at eye level
+  bool PovHudOn() override { return false; }   // Four already shows whose turn it is
+  void PovPose(int who, float& ang, float& rad, float& h, float& fov, Vector3& tgt) override { float x = side ? 4.6f : -4.6f, z = 9.4f; ang = atan2f(z, x); rad = hypotf(x, z); h = 1.1f; fov = 50; tgt = { 0, 0.55f, 0 }; }
   bool Focus(Vector3& p, float& w) override { if (drop.c >= 0) { p = { (drop.c - 3) * 0.95f, 0.4f, 0 }; w = 0.7f; return true; } return false; }
   Mesh gridM{}, discM{}; const float Y0 = -2.55f, F = -3.2f;
   ~Four() { if (gridM.vertexCount) UnloadMesh(gridM); if (discM.vertexCount) UnloadMesh(discM); }
@@ -168,7 +168,7 @@ struct Four : Table {
   const Color TC[2] = { Hex(0xff4d6d), Hex(0xffd43b) };
   int Cur() { return T[side][team[side] % T[side].size()]; }
   void Start() override {
-    InitCam({ 2.6f, 1.8f, 14.6f }, { 0, 0.45f, 0 }, 40); povR = 13.6f; povH = 2.7f; povF = 42;   // low three-quarter view of the board
+    InitCam({ 2.6f, 1.8f, 14.6f }, { 0, 0.45f, 0 }, 40);   // low three-quarter view of the board
     for (int i = 0; i < N(); i++) T[i % 2].push_back(i);
     side = rand() % 2; turn = Cur(); Push();
     Banner("🔴 RED vs 🟡 YELLOW", 1800, "#ffd43b");
@@ -369,8 +369,8 @@ struct Snakes : Table {
 // BLACKJACK — everyone plays the dealer at once. Get closer to 21 than the dealer without going over.
 // =====================================================================================
 struct Blackjack : Table {
-  int ViewSeat() override { return povHold > 0 ? povWho : -1; }   // everyone plays at once: the camera visits whoever just hit or stood
-  // everyone plays at once, so the camera holds the table, then leans in on the dealer's cards
+  int cur = -1;   // one player at a time: whoever is deciding right now; the TV is their eyes
+  int ViewSeat() override { return phase == "play" && cur >= 0 ? cur : -1; }
   bool Focus(Vector3& p, float& w) override { if (phase == "dealer" || phase == "settle") { p = { 0, 0.3f, 2.9f }; w = 0.8f; return true; } return false; }
   std::vector<Card> deck; std::vector<std::vector<Card>> hand; std::vector<Card> dealer;
   std::vector<int> pts, state, delta;  // state: 0 playing, 1 stand, 2 bust, 3 blackjack
@@ -389,30 +389,34 @@ struct Blackjack : Table {
   }
   std::string Panel(int i) {
     std::string cs; for (size_t k = 0; k < hand[i].size(); k++) { Card c = hand[i][k]; cs += std::string(k ? "," : "") + "{\"label\":" + Q(RANK[c.r]) + ",\"icon\":" + Q(SUIT[c.s]) + ",\"color\":" + Q(Red(c) ? "#e03131" : "#343a40") + ",\"ok\":false}"; }
-    int v = Val(hand[i]); bool my = phase == "play" && state[i] == 0;
-    std::string sub = state[i] == 2 ? "💥 BUST! Over 21" : state[i] == 3 ? "⭐ BLACKJACK!" : state[i] == 1 ? "✋ Standing — waiting for the dealer" : phase == "play" ? "Get close to 21. HIT = another card · STAND = keep it" : "";
+    int v = Val(hand[i]); bool my = phase == "play" && state[i] == 0 && i == cur;
+    std::string sub = state[i] == 2 ? "💥 BUST! Over 21" : state[i] == 3 ? "⭐ BLACKJACK!" : state[i] == 1 ? "✋ Standing — waiting for the dealer" : phase == "play" ? (my ? "Your turn! HIT = another card · STAND = keep it" : (cur >= 0 ? P(cur).name + " is playing…" : "")) : "";
     if (phase == "settle") sub = delta[i] > 0 ? "🎉 You beat the dealer! +" + std::to_string(delta[i]) : delta[i] < 0 ? "😬 Dealer wins this one" : "🤝 Push — tie";
     std::string btn = my ? "{\"id\":\"hit\",\"label\":\"👆 HIT\",\"color\":\"#2f9e44\",\"big\":true},{\"id\":\"stand\",\"label\":\"✋ STAND\",\"color\":\"#e03131\",\"big\":true}" : "";
     return "{\"t\":\"panel\",\"title\":" + Q("Hand " + std::to_string(hno) + " / " + std::to_string(HANDS) + "  ·  " + std::to_string(pts[i]) + " pts") + ",\"info\":" + Q("Total: " + std::to_string(v)) + ",\"sub\":" + Q(sub) + ",\"myTurn\":" + B(my) + ",\"cards\":[" + cs + "],\"buttons\":[" + btn + "]}";
   }
   void SyncAll() { for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, Panel(i)); }
+  // the next player who still has a decision to make (a natural 21 or a bust is already decided); nobody left = the dealer plays
+  void NextActor() {
+    int from = cur < 0 ? 0 : cur + 1; cur = -1;
+    for (int k = from; k < N(); k++) if (state[k] == 0) { cur = k; break; }
+    if (cur < 0) { phase = "dealer"; t = 1.0f; holeUp = true; Sfx("card"); SyncAll(); return; }
+    t = 15; botT = frand(1.0f, 1.6f); Sfx("whoosh"); if (!P(cur).bot) Buzz(cur, 200); SyncAll();
+  }
   void Act(int p, const std::string& k, int, float) override {
-    if (phase != "play" || state[p] != 0) return;
-    if (k == "btn:hit" || k == "btn:stand") LendCamera(p, 2.2f);
-    if (k == "btn:hit") { hand[p].push_back(Pull()); Sfx("card"); int v = Val(hand[p]); if (v > 21) { state[p] = 2; Sfx("buzz"); Buzz(p, 300); } else if (v == 21) state[p] = 1; }
+    if (phase != "play" || p != cur || state[p] != 0) return;
+    if (k == "btn:hit") { hand[p].push_back(Pull()); Sfx("card"); t = 15; int v = Val(hand[p]); if (v > 21) { state[p] = 2; Sfx("buzz"); Buzz(p, 300); } else if (v == 21) state[p] = 1; }
     else if (k == "btn:stand") state[p] = 1;
-    if (!P(p).bot) Send(p, Panel(p));
+    else return;
+    if (state[p] != 0) NextActor(); else SyncAll();
   }
   void Update(float dt) override {
     Tick(dt); t -= dt;
     if (over) { endT -= dt; if (endT <= 0 && !fin) { fin = true; FinishOrder(Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return std::to_string(pts[i]) + " pts"; }); } return; }
-    if (phase == "deal" && t <= 0) { phase = "play"; t = 20; botT = 1; SyncAll(); }
+    if (phase == "deal" && t <= 0) { phase = "play"; NextActor(); }
     else if (phase == "play") {
-      botT -= dt;
-      if (botT <= 0) { botT = frand(0.5f, 1.1f); for (int i = 0; i < N(); i++) if (P(i).bot && state[i] == 0) { int v = Val(hand[i]), up = dealer[0].r + 1; bool weak = up >= 2 && up <= 6; Act(i, (v < 12 || (v < 17 && !weak) || (v < 13 && weak)) ? "btn:hit" : "btn:stand", 0, 0); break; } }
-      bool all = true; for (int s : state) all &= s != 0;
-      if (t <= 0) for (int i = 0; i < N(); i++) if (state[i] == 0) state[i] = 1;
-      if (all || t <= 0) { phase = "dealer"; t = 1.0f; holeUp = true; Sfx("card"); SyncAll(); }
+      if (cur >= 0 && P(cur).bot) { botT -= dt; if (botT <= 0) { botT = frand(0.9f, 1.5f); int v = Val(hand[cur]), up = dealer[0].r + 1; bool weak = up >= 2 && up <= 6; Act(cur, (v < 12 || (v < 17 && !weak) || (v < 13 && weak)) ? "btn:hit" : "btn:stand", 0, 0); } }
+      else if (cur >= 0 && t <= 0) { state[cur] = 1; Send(cur, Panel(cur)); NextActor(); }   // out of time: stand
     } else if (phase == "dealer" && t <= 0) {
       bool anyAlive = false; for (int s : state) anyAlive |= s == 1;
       if (anyAlive && Val(dealer) < 17) { dealer.push_back(Pull()); Sfx("card"); t = 0.9f; }
@@ -432,7 +436,7 @@ struct Blackjack : Table {
   }
   bool fin = false;
   void Draw() override {
-    Room(); Seats([&](int i) { return phase == "play" && state[i] == 0; }, [&](int i) { return phase == "settle" && delta[i] > 0 ? fabsf(sinf(time * 6)) : 0.f; });
+    Room(); Seats([&](int i) { return phase == "play" && i == cur; }, [&](int i) { return phase == "settle" && delta[i] > 0 ? fabsf(sinf(time * 6)) : 0.f; });
     // dealer at the near side, facing everyone
     DrawToon({ 0, -1.9f, 7.6f }, PI, Hex(0x212529), time, 0, 0, 1.3f);
     for (size_t k = 0; k < dealer.size(); k++) CardAt({ (k - (dealer.size() - 1) / 2.f) * 1.05f, 0.05f, 2.9f }, 0, k != 1 || holeUp, dealer[k], 1.25f);
@@ -443,7 +447,7 @@ struct Blackjack : Table {
     Text(dp.x, dp.y + 10, 26, Hex(0xffd43b), holeUp ? "Dealer: " + std::to_string(Val(dealer)) : std::string("Dealer"), 0, TS_HEAVY);
     Board("🃏 POINTS", Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return std::to_string(pts[i]); });
     Title("Hand " + std::to_string(hno) + " of " + std::to_string(HANDS));
-    if (phase == "play") { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(fmaxf(0, t))); Text(1540, 50, 34, t < 6 ? Hex(0xff4d6d) : WHITE, b); Hint("HIT for another card · STAND to keep · over 21 = bust", Hex(0xffd43b)); }
+    if (phase == "play") { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(fmaxf(0, t))); Text(1540, 50, 34, t < 6 ? Hex(0xff4d6d) : WHITE, b); Hint(cur >= 0 ? P(cur).name + ": HIT for another card or STAND · over 21 is a bust" : "", Hex(0xffd43b)); }
     else Hint("Beat the dealer: +10 · Blackjack: +15 · lose: −10");
   }
 };

@@ -196,6 +196,7 @@ bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer
   if (!Load(v)) { bool any = false; for (int q = 0; q < 4 && !any; q++) if (Load(q)) { v = q; any = true; } if (!any) return false; }
   Person& p = P[v];
   bool flash = c.r == 255 && c.g == 255 && c.b == 255, sport = k <= 1.01f, moving = hop > 0.02f;
+  int epid = PidOfColor(c); if (epid >= 0 && epid < 8 && g_emoteT[epid] > 0) cheer = fmaxf(cheer, 1.f);   // an emote from their phone: they wave
   int a = p.idle; float tt = t + (float)(hsh % 97) * 0.13f;
   if (cheer > 0.3f && !sport && p.wave >= 0) a = p.wave;
   else if (sport && cheer > 0.04f && p.interact >= 0) { a = p.interact; tt = Clamp(cheer, 0, 1) * p.clips[a].len * 0.999f; }
@@ -203,6 +204,7 @@ bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer
   else if (p.idle2 >= 0 && ((hsh >> 3) & 1)) a = p.idle2;
   Pose(p, a, tt); Skin(p, true);
   float H = (sport ? 1.78f : 2.1f) * sc * k, s = H * p.unit;
+  if (epid >= 0 && epid < 8) { g_emotePos[epid] = { pos.x, pos.y + H * 1.06f, pos.z }; g_emoteVis[epid] = true; }
   float lift = cheer > 0.3f && !sport ? hop * 0.35f : 0;
   Matrix xf = MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -p.footY, 0), MatrixScale(s, s, s)), MatrixMultiply(MatrixRotateY(yaw), MatrixTranslate(pos.x, pos.y + lift, pos.z)));
   static const Color SK[5] = { Hex(0xf1c7a3), Hex(0xd9a47a), Hex(0xb57a52), Hex(0x7d4e33), Hex(0xf5d5bd) };

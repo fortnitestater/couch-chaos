@@ -318,7 +318,7 @@ void main() {
   // depth of field: in focus around what the camera looks at, soft in front and behind (flat UI is never blurred)
   if (dofOn > 0.5) {
     float d = texture2D(depthTex, uv).r, coc = 0.0;
-    if (d > 0.00002) { float z = linZ(d); coc = clamp((abs(z - focus) - focus * 0.22) / (focus * 0.75), 0.0, 1.0); }
+    if (d > 0.00002) { float z = linZ(d); coc = clamp((abs(z - focus) - focus * 0.55) / (focus * 1.8), 0.0, 1.0); }
     c = mix(c, texture2D(dofTex, uv).rgb, coc * dofAmt);
   }
   // cinematic moment: radial zoom blur with a colour split, out from what just happened
@@ -354,7 +354,8 @@ void main() {
 static int lFxA = -1, lFxB = -1, lFxC = -1;
 static RenderTexture2D rtMain, rtA, rtB, rtC, rtD, rtE; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom, lFinalDof, lFinalDepth, lFinalTime, lFinalFocus, lFinalDofOn; static bool postOk = false, dofOk = false;
 float g_frameDt = 1 / 60.f; int g_racketAxis = 5;   // the racket handle runs along the thumb side of the fist (picked from a debug comparison)
-float g_cineT = 0, g_focus = 15, g_dofAmt = 0.9f; bool g_cineOn = false; static int lFinalDofAmt;
+float g_cineK = 1; float g_emoteT[8] = {}; int g_emoteK[8] = {}; Vector3 g_emotePos[8] = {}; bool g_emoteVis[8] = {};
+float g_cineT = 0, g_focus = 15, g_dofAmt = 0.f; bool g_cineOn = false; static int lFinalDofAmt;
 // the main scene target keeps its depth in a texture, so the final pass can focus by distance
 static RenderTexture2D LoadSceneTarget(int w, int h) {
   RenderTexture2D t{}; t.id = rlLoadFramebuffer(); if (!t.id) return LoadRenderTexture(w, h);
@@ -397,11 +398,11 @@ Camera3D CineCam(Camera3D c) {
   if (!g_cineOn) return c;
   float t = g_cineT;
   Vector3 d = Vector3Subtract(c.position, c.target); float L = Vector3Length(d); if (L < 1e-3f) return c;
-  float k = Clamp(t / 7.0f, 0, 1); k = 1 - powf(1 - k, 2.2f); float in = 1 - k;
-  float ang = in * 0.34f;
+  float k = Clamp(t / 4.0f, 0, 1); k = 1 - powf(1 - k, 2.2f); float in = (1 - k) * g_cineK;
+  float ang = in * 0.18f;
   Vector3 dr = { d.x * cosf(ang) - d.z * sinf(ang), d.y, d.x * sinf(ang) + d.z * cosf(ang) };
-  dr = Vector3Scale(dr, 1 + in * 0.5f); dr.y += in * L * 0.14f;
-  float a = L * 0.0042f;
+  dr = Vector3Scale(dr, 1 + in * 0.28f); dr.y += in * L * 0.07f;
+  float a = L * 0.0016f * g_cineK;
   Vector3 drift = { sinf(t * 0.37f) * a + sinf(t * 0.91f) * a * 0.3f, sinf(t * 0.29f + 1) * a * 0.6f, cosf(t * 0.33f) * a * 0.5f };
   c.position = Vector3Add(Vector3Add(c.target, dr), drift);
   c.target = Vector3Add(c.target, Vector3Scale(drift, 0.35f));
@@ -427,13 +428,13 @@ void PostEnd() {
   DrawTexturePro(rtE.texture, { 0, 0, (float)rtE.texture.width, (float)-rtE.texture.height }, { 0, 0, (float)rtA.texture.width, (float)rtA.texture.height }, { 0, 0 }, 0, Color{ 70, 120, 255, 255 });
   EndBlendMode(); EndTextureMode();
   // depth-of-field source: a soft, quarter-size copy of the scene
-  bool dof = dofOk && g_cineOn;
+  bool dof = dofOk && g_cineOn && (cine::Busy() || g_dofAmt > 0.01f);
   if (dof) { Dir(3, 0); Blit(rtMain.texture, rtC, shBlur); Dir(0, 6); Blit(rtC.texture, rtD, shBlur); Dir(10, 0); Blit(rtD.texture, rtC, shBlur); Dir(0, 10); Blit(rtC.texture, rtD, shBlur); }
   BeginDrawing(); ClearBackground(BLACK);
   BeginShaderMode(shFinal);
   SetShaderValue(shFinal, lFinalPx, &px, SHADER_UNIFORM_VEC2);
   SetShaderValueTexture(shFinal, lFinalBloom, rtA.texture);
-  float tm = (float)GetTime(), don = dof ? 1.f : 0.f, da = cine::Busy() ? fmaxf(g_dofAmt, 0.85f) : g_dofAmt;
+  float tm = (float)GetTime(), don = dof ? 1.f : 0.f, da = cine::Busy() ? 0.3f : g_dofAmt;
   SetShaderValue(shFinal, lFinalTime, &tm, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalFocus, &g_focus, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalDofOn, &don, SHADER_UNIFORM_FLOAT); SetShaderValue(shFinal, lFinalDofAmt, &da, SHADER_UNIFORM_FLOAT);
   { cine::PostFx p = g_cineOn ? cine::Post() : cine::PostFx{}; Vector4 a = { p.flash, p.aber, p.zoom, p.speed }, b = { p.bars, p.impact, g_cineOn ? p.ctr.x : 0.5f, g_cineOn ? p.ctr.y : 0.5f }; Vector3 c = { p.fc.r / 255.f, p.fc.g / 255.f, p.fc.b / 255.f };
     SetShaderValue(shFinal, lFxA, &a, SHADER_UNIFORM_VEC4); SetShaderValue(shFinal, lFxB, &b, SHADER_UNIFORM_VEC4); SetShaderValue(shFinal, lFxC, &c, SHADER_UNIFORM_VEC3); }
@@ -470,6 +471,20 @@ static std::vector<std::pair<std::string, GameMaker>>& Registry() { static std::
 RegGame::RegGame(const char* id, GameMaker f) { Registry().push_back({ id, f }); }
 std::unique_ptr<Game> MakeRegistered(const std::string& id) { for (auto& r : Registry()) if (r.first == id) return r.second(); return nullptr; }
 static std::vector<Player> players;
+int PidOfColor(Color c) { for (auto& p : players) if (p.color.r == c.r && p.color.g == c.g && p.color.b == c.b) return p.id; return -1; }
+static const char* EMO[] = { "🔥", "👏", "😂", "😱", "😭", "🤯", "😎", "🎉" };
+static void DrawEmotes() {
+  for (int i = 0; i < 8; i++) {
+    if (g_emoteT[i] <= 0 || !g_emoteVis[i]) continue;
+    Camera3D c = g_finalCam; if (Vector3DotProduct(Vector3Subtract(g_emotePos[i], c.position), Vector3Subtract(c.target, c.position)) <= 0) continue;
+    Vector2 s = GetWorldToScreenEx(g_emotePos[i], c, W, H); float age = 3.2f - g_emoteT[i];
+    float sc = age < 0.28f ? EaseOutQ(age / 0.28f) * 1.18f : 1.f + 0.06f * sinf(age * 7), a = fminf(1.f, g_emoteT[i] * 2.4f), y = s.y - 34 - fminf(age, 0.5f) * 24;
+    if (s.x < 40 || s.x > 1560 || y < 50 || y > 860) continue;
+    float r = 50 * sc;
+    RRect(s.x - r, y - r, r * 2, r * 2, r, Color{ 255, 255, 255, (unsigned char)(245 * a) }, Color{ 225, 230, 242, (unsigned char)(245 * a) }, Color{ 20, 33, 61, (unsigned char)(80 * a) }, 2, true);
+    Text(s.x, y + 2, 62 * sc, Color{ 255, 255, 255, (unsigned char)(255 * a) }, EMO[g_emoteK[i] & 7], 0, TS_PLAIN);
+  }
+}
 static std::unique_ptr<Game> game;
 
 int g_dbg = 0; int g_post = 1;
@@ -509,7 +524,7 @@ EMSCRIPTEN_KEEPALIVE void cc_start(const char* id, const char* plist) {
   std::string g = id;
   game.reset(); lit.Reset(); hud::SetTheme(g); g_cineT = 0; g_cineOn = true; cine::Reset();
   // how much each game blurs what is out of focus (game content on the back wall stays sharp)
-  g_dofAmt = g == "bomb" || g == "count" || g == "copycat" ? 0.f : (g == "trivia" || g == "likely" || g == "elf" || g == "doodle" || g == "lowest" || g == "reflex" || g == "meter" || g == "colors" || g == "math" || g == "rps") ? 0.55f : g == "airhockey" ? 0.6f : 0.9f;
+  g_dofAmt = 0; g_cineK = 1; memset(g_emoteT, 0, sizeof g_emoteT);   // no blur while playing
   if (g == "skybrawl") game = MakeSkyBrawl();
   else if (g == "sumo") game = MakeSumo();
   else if (g == "snowball") game = MakeSnowball();
@@ -543,6 +558,7 @@ EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {
   if (pid < 0 || pid >= (int)players.size()) return;
   Player& p = players[pid]; p.stick = { x, y }; p.a = (a & 1) != 0; p.b = b; p.touch = (a & 2) != 0;
 }
+EMSCRIPTEN_KEEPALIVE void cc_emote(int pid, int k) { if (pid >= 0 && pid < 8) { g_emoteT[pid] = 3.2f; g_emoteK[pid] = k & 7; } }
 EMSCRIPTEN_KEEPALIVE void cc_act(int pid, const char* kind, int i, float pw) { if (game) game->Act(pid, kind, i, pw); }
 EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   if (!game) return;
@@ -557,7 +573,9 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   PostBegin();
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)
   hud::TagReset(); g_fxDrawn = false;
+  for (int i = 0; i < 8; i++) { g_emoteVis[i] = false; g_emoteT[i] -= dt; }
   game->Draw();
+  DrawEmotes();
   cine::Draw2D();
   PostEnd();
   lit.EndFrame(gdt);

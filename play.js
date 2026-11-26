@@ -667,7 +667,7 @@
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
-    updateTiltUI();
+    updateTiltUI(); updateIdleDock();
   }
   // the phone wears the colours and pattern of the game being played
   function applyCh(id) {
@@ -677,18 +677,31 @@
     b.style.setProperty('--ch1', ch.c1); b.style.setProperty('--ch2', ch.c2); b.style.setProperty('--chDeep', ch.deep); b.style.setProperty('--chAcc', ch.accent);
   }
   // ---------- 😀 reactions: something to do while you wait; they pop up over the TV with your name ----------
-  const REACTS = ['🔥', '👏', '😂', '😱', '😭', '🤯'];
+  const REACTS = ['🔥', '👏', '😂', '😱', '😭', '🤯', '😎', '🎉'];
   let lastReact = 0;
   function setupReacts() {
-    const row = $('#reactRow'), btn = $('#reactBtn'); if (!row || !btn || row.dataset.ready) return; row.dataset.ready = '1';
-    row.innerHTML = REACTS.map(e => `<button class="reactE" data-e="${e}">${e}</button>`).join('');
+    const row = $('#reactRow'), btn = $('#reactBtn'), dock = $('#emoteDock'); if (!row || !btn || row.dataset.ready) return; row.dataset.ready = '1';
+    const html = REACTS.map(e => `<button class="reactE" data-e="${e}">${e}</button>`).join('');
+    row.innerHTML = html; if (dock) { dock.innerHTML = '<div class="edLabel">While you wait, say something!</div><div class="edRow">' + html + '</div>'; dock.addEventListener('click', ev => sendReact(ev)); }
     btn.onclick = () => { row.classList.toggle('hidden'); btn.classList.toggle('on', !row.classList.contains('hidden')); };
-    row.addEventListener('click', ev => {
+    function sendReact(ev) {
       const b = ev.target.closest('.reactE'); if (!b) return;
       const now = Date.now(); if (now - lastReact < 700) return; lastReact = now;
       sendMsg({ t: 'react', e: b.dataset.e }); navigator.vibrate?.(12);
       b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
-    });
+    }
+    row.addEventListener('click', sendReact);
+  }
+  // while it isn't your turn (watching a bowler, someone else's move, a "look at the TV" screen) the emotes sit at the bottom, big, ready to tap
+  function updateIdleDock() {
+    const dock = $('#emoteDock'); if (!dock || !joined) return;
+    const n = layout && layout.name; let idle = false;
+    if (n === 'bowl') idle = !BW.mine;
+    else if (n === 'panel') idle = !!lastPanel && !lastPanel.myTurn;
+    else if (n === 'four') idle = !layout.my;
+    else if (n === 'tennis') idle = false;
+    else idle = n === 'msg' || (layout && !['lobby', 'intro', 'choice', 'pad', 'button', 'swing', 'shake', 'draw', 'bingo', 'dice', 'song', 'wires', 'curl', 'touch', 'cards'].includes(n));
+    dock.classList.toggle('hidden', !idle); document.body.classList.toggle('dockOn', idle);
   }
   // ---------- 🎳 bowling: slide the ball, FLICK it up, curve your flick for a hook, steer it while it rolls ----------
   // The lane is drawn on your phone; the TV streams the ball back so you can steer it. Lane units: x in metres (screen-right positive), z down the lane 0..20.
@@ -1277,7 +1290,7 @@
       if (!layout) renderMsg({ text: 'Connected!' });
     } else if (m.t === 'ch') applyCh(m.id);
     else if (m.t === 'layout') { if (m.layout && m.layout.name === 'intro') applyCh(m.layout.id); else if (m.layout && m.layout.name === 'lobby') applyCh(null); render(m.layout); }
-    else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') renderPanel(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
+    else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') { renderPanel(m); updateIdleDock(); } if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
