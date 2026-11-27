@@ -5,6 +5,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: 'Nunito', system-ui, sans-serif; font-weight: 800; }
 body { overflow: hidden; }
+html, body { overscroll-behavior: none; }
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
 button { font: inherit; cursor: pointer; border: 0; border-radius: 16px; color: inherit; }
@@ -379,6 +380,7 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .songStages span.cur{background:#cc5de8;color:#fff;box-shadow:0 0 0 2px #fff inset}
 .songStat{font-size:19px;font-weight:800;text-align:center;padding:12px;border-radius:16px;background:rgba(255,255,255,.06);line-height:1.35}
 .songStat.right{background:rgba(47,158,68,.35);font-size:24px}
+.sgHint{display:block;margin-top:5px;font:700 15px system-ui,sans-serif;color:#ffd43b}
 .songStat.wrong{background:rgba(224,49,49,.28)}
 .songStat.reveal{background:rgba(204,93,232,.22)}
 .songStat.reveal b{color:#ffd43b;font-size:22px}

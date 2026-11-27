@@ -32,6 +32,19 @@ float Measure(const std::string& s, float size, int style) { return js_measure(s
 void TextClip(float x, float y, float w, float h) { js_clip(x, y, w, h); }
 void TextUnclip() { js_clip(-1, -1, -1, -1); }
 void Layout(int pid, const std::string& json) { js_layout(pid, json.c_str()); }
+EM_JS(int, js_fresh, (const char* key, int n), {
+  var k = 'cc_seen_' + UTF8ToString(key), M = Module.seen || (Module.seen = {}), u = M[k];
+  if (!u) { u = []; try { var s = localStorage.getItem(k); if (s) u = s.split(',').map(Number).filter(function (v) { return v >= 0 && v < n; }); } catch (e) {} M[k] = u; }
+  var last = u.length ? u[u.length - 1] : -1;
+  if (u.length >= n) u.length = 0;
+  var left = [];
+  for (var i = 0; i < n; i++) if (u.indexOf(i) < 0 && (i !== last || n === 1)) left.push(i);
+  if (!left.length) left.push(Math.max(0, last));
+  var v = left[Math.floor(Math.random() * left.length)]; u.push(v);
+  try { localStorage.setItem(k, u.join(',')); } catch (e) {}
+  return v;
+});
+int Fresh(const char* key, int n) { return n > 0 ? js_fresh(key, n) : 0; }
 void Sfx(const char* name) { js_sfx(name); }
 void Shake(float a) { js_shake(a); }
 void Finish(const std::string& r) { js_finish(r.c_str()); }

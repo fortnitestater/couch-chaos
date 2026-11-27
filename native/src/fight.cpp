@@ -31,6 +31,7 @@ struct Fi {
   float downT = 0, tap = 0, tapNeed = 8; int knockdowns = 0;
   float bleed = 0, dripT = 0, flash = 0, blkFlash = 0, stride = 0, gassedT = 0;
   float dealt = 0, dealtRound = 0; int kds = 0;
+  int thrown = 0, land = 0, thrownR = 0, landR = 0, kdsR = 0;   // strikes thrown and landed (whole fight / this round), knockdowns scored this round
   std::string call; float callT = 0; Color callC = WHITE;
   // the bot's head
   float think = 0, aggro = 0.6f, react = 0.45f, blkHold = 0, circ = 1, circT = 0;
@@ -43,7 +44,9 @@ struct Fight : Classic {
   const float RT = 55.f; Vector3 camDir{ 0, 0, 1 }; float roar = 0;   // roar: the crowd jumps when something big happens
   struct Pop { Vector3 p; std::string s; Color c; float t; float big; }; std::vector<Pop> pops;
   struct Blood { Vector3 p; float r, a; }; std::vector<Blood> pools;
-  Mesh octa{}; Mesh crowdMesh{}; std::vector<Vector4> crowd; int judgeA = 0, judgeB = 0;
+  Mesh octa{}; Mesh crowdMesh{}; std::vector<Vector4> crowd;
+  int card[3][2] = {}; std::string decKind;   // three judges, each with a scorecard: the decision is exactly what the cards say
+  struct RS { int land[2], thrown[2], kd[2]; float dmg[2]; } lastRound{};   // the round that has just ended, for the stat card
   ~Fight() { if (octa.vertexCount) UnloadMesh(octa); if (crowdMesh.vertexCount) UnloadMesh(crowdMesh); }
 
   void Start() override {
@@ -63,7 +66,7 @@ struct Fight : Classic {
   }
   void StartBout() {
     bout++; if (bout > BOUTS) { Finish2(); return; }
-    int a = q[0], b = q[1]; Reset(f[0], a, -1); Reset(f[1], b, 1); rd = 1; method = ""; verdict = ""; winner = -1; pools.clear(); pops.clear();
+    int a = q[0], b = q[1]; Reset(f[0], a, -1); Reset(f[1], b, 1); rd = 1; method = ""; verdict = ""; winner = -1; pools.clear(); pops.clear(); decKind = ""; for (auto& c : card) c[0] = c[1] = 0;
     BeginRound(true);
     for (int i = 0; i < N(); i++) if (!P(i).bot) {
       if (i == a || i == b) Layout(i, "{\"name\":\"fight\"}");
@@ -75,7 +78,7 @@ struct Fight : Classic {
   void Say(const std::string& s) { Sfx(("say:" + s).c_str()); }
   void BeginRound(bool first) {
     phase = "bell"; bellT = 3.0f; clock = RT;
-    for (auto& x : f) { x.st = Fi::IDLE; x.stun = 0; x.inv = 0; x.dealtRound = 0; x.mv = {}; x.blk = false; x.want = -1; x.atk = -1; x.vel = {};
+    for (auto& x : f) { x.st = Fi::IDLE; x.stun = 0; x.inv = 0; x.dealtRound = 0; x.thrownR = x.landR = x.kdsR = 0; x.mv = {}; x.blk = false; x.want = -1; x.atk = -1; x.vel = {};
       x.pos = { (&x == &f[0] ? -1.5f : 1.5f), 0.12f, 0 }; x.callT = 0; }
     Banner(std::string("ROUND ") + I(rd), 1600, "#ffd43b"); Sfx(first ? "crowdOn" : "ding");
   }
@@ -101,7 +104,7 @@ struct Fight : Classic {
       d.vel = Vector3Add(d.vel, Vector3Scale(fw, A.push * 3)); if (d.sta <= 0) { d.sta = 0; d.st = Fi::HIT; d.t = 0; d.stun = d.stunMax = 0.9f; d.hitHeavy = true; Call(d, "GUARD BROKEN!", Hex(0xff922b), 1.2f); BZ(d.pid, 200); }
       return;
     }
-    float hpK = A.zone == 0 ? 1.f : A.zone == 1 ? 0.85f : 0.75f; d.hp -= dmg * hpK; a.dealt += dmg; a.dealtRound += dmg;
+    float hpK = A.zone == 0 ? 1.f : A.zone == 1 ? 0.85f : 0.75f; d.hp -= dmg * hpK; a.dealt += dmg; a.dealtRound += dmg; a.land++; a.landR++;
     if (A.zone == 0) d.dH = fminf(100.f, d.dH + dmg * (A.heavy ? 1.7f : 1.15f));
     else if (A.zone == 1) { d.dB = fminf(100.f, d.dB + dmg * 1.4f); d.sta = fmaxf(0.f, d.sta - dmg * 1.1f); }
     else d.dL = fminf(100.f, d.dL + dmg * 1.5f);
@@ -125,7 +128,7 @@ struct Fight : Classic {
     if (!rocked) { d.st = Fi::HIT; d.t = 0; d.stun = d.stunMax = A.stun * (counter ? 1.4f : 1.f); d.hitHeavy = A.heavy; d.atk = -1; }
   }
   void Knockdown(Fi& a, Fi& d) {
-    d.st = Fi::DOWN; d.downT = 0; d.tap = 0; d.tapNeed = 7 + 2.f * d.knockdowns + d.dH / 28.f; d.knockdowns++; a.kds++; d.atk = -1; d.blk = false; d.vel = {};
+    d.st = Fi::DOWN; d.downT = 0; d.tap = 0; d.tapNeed = 7 + 2.f * d.knockdowns + d.dH / 28.f; d.knockdowns++; a.kds++; a.kdsR++; d.atk = -1; d.blk = false; d.vel = {};
     hitstop = 0.14f; Shake(14); roar = 1.f; Sfx("fKO"); Sfx("ooh"); Sfx("cheer"); BZ(d.pid, 400);
     fx.Burst(HeadPos(d), 30, Hex(0x9e1019), 4.5f, 1.0f, 0.034f, 8);
     Banner("KNOCKDOWN!", 1500, kit::Hx(a.col).c_str());
@@ -143,22 +146,29 @@ struct Fight : Classic {
     phase = "result"; t = 7.5f; winner = w; method = how; conf.Spawn({ 0, 4, 0 }, 120, 5, 6); Sfx("win");
     for (auto& x : f) { x.blk = false; x.mv = {}; x.want = -1; }
     Fi* W = w >= 0 ? &f[w] : nullptr; Fi* L = w >= 0 ? &f[1 - w] : nullptr;
-    if (W) { bool fin = how == "KO" || how == "TKO"; pts[W->pid] += fin ? 100 : 70; wins[W->pid]++; pts[L->pid] += 20 + (int)(L->dealt / 4); verdict = W->name + " WINS BY " + how + "!"; }
-    else { for (auto& x : f) pts[x.pid] += 40 + (int)(x.dealt / 4); verdict = "A DRAW!"; }
+    if (W) { bool fin = how == "KO" || how == "TKO"; pts[W->pid] += fin ? 100 : 70; wins[W->pid]++; pts[L->pid] += 20 + (int)(L->dealt / 4); verdict = W->name + " WINS BY " + (how == "DECISION" && !decKind.empty() ? decKind : how) + "!"; }
+    else { for (auto& x : f) pts[x.pid] += 40 + (int)(x.dealt / 4); verdict = "THE JUDGES CALL IT A DRAW!"; }
     // the next fight: the loser goes to the back of the queue, the winner stays on (a draw: the one who fought longest steps out)
     int a = f[0].pid, b = f[1].pid; q.erase(std::remove(q.begin(), q.end(), a), q.end()); q.erase(std::remove(q.begin(), q.end(), b), q.end());
     int stay = W ? W->pid : a, out = W ? L->pid : b; q.insert(q.begin(), stay); q.push_back(out);
-    for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, kit::Msg("🥊", verdict, "Next fight coming up…"));
+    for (int i = 0; i < N(); i++) if (!P(i).bot) { Fi* me = Mine(i);   // the two fighters get their own numbers on the phone
+      Layout(i, kit::Msg(me && W == me ? "🏆" : "🥊", verdict, me ? "You landed " + I(me->land) + " of " + I(me->thrown) + " strikes · " + I((int)me->dealt) + " damage" : std::string("Next fight coming up…"))); }
   }
   void EndRound() {
-    float a = f[0].dealtRound + f[0].kds * 6.f, b = f[1].dealtRound + f[1].kds * 6.f;   // the judges score the damage and the knockdowns
-    int s0 = a > b + 0.5f ? 10 : 9, s1 = b > a + 0.5f ? 10 : 9; if (fabsf(a - b) <= 0.5f) s0 = s1 = 10; if (a > b + 25) s1 = 8; if (b > a + 25) s0 = 8;
-    judgeA += s0; judgeB += s1;
-    if (rd >= ROUNDS) {   // the decision
-      Sfx("ding"); float da = f[0].dealt + f[0].kds * 6.f, db = f[1].dealt + f[1].kds * 6.f; int w = da > db + 1 ? 0 : db > da + 1 ? 1 : (f[0].hp > f[1].hp + 2 ? 0 : f[1].hp > f[0].hp + 2 ? 1 : -1);
+    for (int k = 0; k < 2; k++) { lastRound.land[k] = f[k].landR; lastRound.thrown[k] = f[k].thrownR; lastRound.kd[k] = f[k].kdsR; lastRound.dmg[k] = f[k].dealtRound; }
+    static const float WD[3] = { 1.0f, 0.5f, 1.0f }, WL[3] = { 0.8f, 4.0f, 0.0f }, WK[3] = { 10.f, 10.f, 20.f };   // judge 1 likes damage, judge 2 likes a busy fighter, judge 3 likes power
+    for (int j = 0; j < 3; j++) {
+      float a = WD[j] * f[0].dealtRound + WL[j] * f[0].landR + WK[j] * f[0].kdsR, b = WD[j] * f[1].dealtRound + WL[j] * f[1].landR + WK[j] * f[1].kdsR;
+      int s0 = 10, s1 = 10; if (a > b + 2) s1 = (f[0].kdsR > f[1].kdsR || a > b + 30) ? 8 : 9; else if (b > a + 2) s0 = (f[1].kdsR > f[0].kdsR || b > a + 30) ? 8 : 9;
+      card[j][0] += s0; card[j][1] += s1;
+    }
+    if (rd >= ROUNDS) {   // the decision: whoever has more of the three cards
+      Sfx("ding"); int n0 = 0, n1 = 0; for (auto& c : card) { n0 += c[0] > c[1]; n1 += c[1] > c[0]; }
+      int w = n0 >= 2 && n0 > n1 ? 0 : n1 >= 2 && n1 > n0 ? 1 : -1;
+      decKind = w < 0 ? "DRAW" : std::max(n0, n1) == 3 ? "UNANIMOUS DECISION" : std::min(n0, n1) == 1 ? "SPLIT DECISION" : "MAJORITY DECISION";
       EndBout(w, "DECISION"); return;
     }
-    phase = "rest"; restT = 5.0f; Sfx("ding"); Banner(std::string("END OF ROUND ") + I(rd), 1600, "#ffd43b");
+    phase = "rest"; restT = 6.5f; Sfx("ding"); Banner(std::string("END OF ROUND ") + I(rd), 1600, "#ffd43b");
     for (auto& x : f) { x.sta = fminf(100.f, x.sta + 45); x.hp = fminf(100.f, x.hp + (100 - x.hp) * 0.2f); x.dH *= 0.8f; x.bleed *= 0.5f; x.blk = false; x.mv = {}; x.st = Fi::IDLE; x.atk = -1; x.stun = 0; }   // the corner patches him up
   }
   // ----------------------------------------------------------------------------------------------- phones and bots
@@ -217,7 +227,7 @@ struct Fight : Classic {
         if (live) {
           bool blocking = a.blk; float sp = (blocking ? 0.45f : 1.f) * legK * staK;
           target = Vector3Add(Vector3Scale(fw, a.mv.y * (a.mv.y > 0 ? 2.3f : 1.7f) * sp), Vector3Scale(rt, a.mv.x * 2.0f * sp));
-          if (a.want >= 0) { int k = a.want; a.want = -1; a.blk = false; a.st = Fi::ATTACK; a.atk = k; a.t = 0; a.landed = false; float cost = ATK[k].sta; if (a.sta < cost) { a.sta = 0; Call(a, "GASSED!", Hex(0xadb5bd), 0.9f); } else a.sta -= cost; Sfx("fSwing"); }
+          if (a.want >= 0) { int k = a.want; a.want = -1; a.blk = false; a.st = Fi::ATTACK; a.atk = k; a.t = 0; a.landed = false; a.thrown++; a.thrownR++; float cost = ATK[k].sta; if (a.sta < cost) { a.sta = 0; Call(a, "GASSED!", Hex(0xadb5bd), 0.9f); } else a.sta -= cost; Sfx("fSwing"); }
           else if (a.dodgeReq && a.dodgeCd <= 0 && a.sta >= 10) { a.st = Fi::DODGE; a.t = 0; a.inv = 0.3f; a.dodgeCd = 0.7f; a.sta -= 12; a.dodgeDir = a.mv.x > 0.2f ? 1 : a.mv.x < -0.2f ? -1 : 0; Sfx("whoosh"); }
         }
         a.dodgeReq = false; break; }
@@ -370,6 +380,20 @@ struct Fight : Classic {
     EndMode3D();
     DrawHud();
   }
+  // the numbers of the round (or of the whole fight) side by side: the better one of each row is bright
+  void StatCard(float y, const std::string& title, bool whole) {
+    RRect(460, y, 680, 214, 28, Color{ 8, 10, 26, 215 }, Color{ 8, 10, 26, 215 }, Color{ 255, 255, 255, 80 }, 2);
+    Text(800, y + 30, 20, Hex(0xffd43b), title, 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
+    for (int k = 0; k < 2; k++) Text(k ? 1010.f : 590.f, y + 66, 26, f[k].col, f[k].name, 0, TS_DISPLAY | TS_SHADOW);
+    int la[2], th[2], kd[2]; float dm[2];
+    for (int k = 0; k < 2; k++) { la[k] = whole ? f[k].land : lastRound.land[k]; th[k] = whole ? f[k].thrown : lastRound.thrown[k]; kd[k] = whole ? f[k].kds : lastRound.kd[k]; dm[k] = whole ? f[k].dealt : lastRound.dmg[k]; }
+    const char* LB[3] = { "STRIKES LANDED", "DAMAGE", "KNOCKDOWNS" };
+    for (int r = 0; r < 3; r++) { float ry = y + 106 + r * 38;
+      Text(800, ry, 20, Hex(0xc9d3f2), LB[r], 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
+      for (int k = 0; k < 2; k++) { float v = r == 0 ? (float)la[k] : r == 1 ? dm[k] : (float)kd[k], o = r == 0 ? (float)la[1 - k] : r == 1 ? dm[1 - k] : (float)kd[1 - k];
+        std::string s = r == 0 ? I(la[k]) + " / " + I(th[k]) : r == 1 ? I((int)dm[k]) : I(kd[k]);
+        Text(k ? 1010.f : 590.f, ry, 30, v > o ? WHITE : v == o ? Hex(0xdfe4f2) : Hex(0x8d97b8), s, 0, TS_DISPLAY | TS_SHADOW); } }
+  }
   void Bar(float x, float y, float w, float h, float v, Color c1, Color c2, bool flip) {
     Color bg = Color{ 10, 12, 28, 210 }; RRect(x, y, w, h, h / 2, bg, bg, Color{ 255, 255, 255, 90 }, 1.5f);
     float fw = fmaxf(0.f, (w - 6) * Clamp(v, 0.f, 1.f)); if (fw > 2) RRect(flip ? x + 3 + (w - 6) - fw : x + 3, y + 3, fw, h - 6, (h - 6) / 2, c1, c2, BLANK, 0);
@@ -403,8 +427,16 @@ struct Fight : Classic {
       Text(800, 470, 30, WHITE, x.name + " is down — tap to get up!", 0, TS_HEAVY | TS_SHADOW | TS_PLAIN); Bar(560, 500, 480, 22, x.tap / x.tapNeed, Hex(0xff922b), Hex(0xf08c00), false); }
     if (phase == "bell") { float b = bellT; Text(800, 330, 70, WHITE, b > 1.6f ? std::string("ROUND ") + I(rd) : "READY…", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD); }
     if (phase == "intro") { RRect(380, 230, 840, 280, 36, Color{ 8, 10, 26, 200 }, Color{ 8, 10, 26, 200 }, Color{ 255, 255, 255, 80 }, 2); Text(800, 290, 20, Hex(0xc9d3f2), "FIGHT NIGHT", 0, TS_PLAIN | TS_HEAVY | TS_SPACED); Text(800, 370, 90, WHITE, "CAGE FIGHT", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD); Text(800, 450, 26, Hex(0xdfe6ff), "Punches, kicks, blocks, blood — win by KO or by the judges", 0, TS_HEAVY | TS_PLAIN, 780); }
-    if (phase == "result") { RRect(430, 180, 740, 190, 30, Color{ 8, 10, 26, 205 }, Color{ 8, 10, 26, 205 }, Color{ 255, 255, 255, 90 }, 2); Text(800, 250, 56, winner >= 0 ? f[winner].col : WHITE, verdict, 0, TS_DISPLAY | TS_SHADOW, 700);
-      char sb[64]; snprintf(sb, sizeof sb, "Judges: %d – %d", judgeA, judgeB); if (method == "DECISION") Text(800, 320, 26, Hex(0xc9d3f2), sb, 0, TS_HEAVY | TS_PLAIN); }
+    if (phase == "rest") StatCard(628, std::string("ROUND ") + I(rd) + " IN NUMBERS", false);
+    if (phase == "result") { bool dec = method == "DECISION"; float vs = dec ? 44 : 56;
+      RRect(400, 170, 800, dec ? 250 : 190, 30, Color{ 8, 10, 26, 205 }, Color{ 8, 10, 26, 205 }, Color{ 255, 255, 255, 90 }, 2); Text(800, dec ? 232 : 250, vs, winner >= 0 ? f[winner].col : WHITE, verdict, 0, TS_DISPLAY | TS_SHADOW, 740);
+      if (dec) {   // the three scorecards, each in the colour of the fighter that judge picked
+        Text(800, 326, 20, Hex(0xc9d3f2), "THE JUDGES' SCORECARDS", 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
+        for (int j = 0; j < 3; j++) { char sb[32]; snprintf(sb, sizeof sb, "%d – %d", card[j][0], card[j][1]); float cx = 580 + j * 220.f;
+          Color cc = card[j][0] > card[j][1] ? f[0].col : card[j][1] > card[j][0] ? f[1].col : Hex(0xdfe4f2);
+          RRect(cx - 92, 346, 184, 56, 18, Color{ 255, 255, 255, 18 }, Color{ 255, 255, 255, 18 }, cc, 2.5f); Text(cx, 375, 32, cc, sb, 0, TS_DISPLAY | TS_SHADOW); }
+      }
+      StatCard(628, "THE FIGHT IN NUMBERS", true); }
     if (phase == "fight" && time < 12) Text(800, 876, 21, Fade(WHITE, 0.92f), "BLOCK stops punches and high kicks  ·  DODGE slips a strike, then counter  ·  low kicks cannot be blocked", 0, TS_HEAVY | TS_PLAIN);
     Text(800, 142, 20, Hex(0xdfe4f2), std::string("FIGHT ") + I(bout) + " OF " + I(BOUTS), 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
   }

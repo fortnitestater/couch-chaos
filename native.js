@@ -27,7 +27,7 @@ function nativeLoad() {
     const s = document.createElement('script'); s.src = NATIVE.base + 'native-games.js?v=' + NATIVE.v;
     s.onload = () => CCNative({ canvas: cv, print() {}, printErr: e => console.warn('[native]', e), locateFile: f => NATIVE.base + f + '?v=' + NATIVE.v })
       .then(m => {
-        m.measure = (s, size, style) => { _mctx.font = nativeFont(size, style); return _mctx.measureText(s).width; };
+        m.measure = (s, size, style) => { _mctx.font = nativeFont(size, style); return _mctx.measureText(s).width + (style & 64 ? String(s).length * size * 0.14 : 0); };
         NATIVE.mod = m; NATIVE.rs = nativeScale(); m._cc_init(NATIVE.rs); ok(m);
         // rigged character models: fetched in the background, handed to the engine as they arrive
         ['p0.glb', 'p1.glb', 'p2.glb', 'p3.glb', 'sofa.glb', 'armchair.glb', 'loveseat.glb', 'fireplace.glb', 'snakeplant.glb', 'monstera.glb', 'floorlamp.glb', 'sidetable.glb', 'chair.glb', 'ads.png', 'screen.png', 'banner.png', 'carpet.png', 'neon.png', 'pizza.glb', 'pizzabox.glb', 'burger.glb', 'fries.glb', 'cake.glb'].forEach(f => fetch(NATIVE.base + 'models/' + f + '?v=' + NATIVE.v).then(r => r.ok ? r.arrayBuffer() : null).then(b => {

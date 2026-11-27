@@ -230,10 +230,13 @@ struct Bowling : Classic {
     }
     cur = order[ti]; roll = 0; Mine().pins.Reset(); frameNo = ti / N() + 1; AimPhase();
   }
+  std::vector<int> away;   // a bowler who let the clock throw for them: their next balls go after 6 s, not 20, until they touch the phone again
+  bool Away(int p) { return p >= 0 && p < (int)away.size() && away[p]; }
+  void Back(int p) { if (Away(p)) { away[p] = 0; Banner("👋 " + P(p).name + " is back!", 1400, "#8ce99a"); } }
   void AimPhase() {
     bool cut = phase == "show";   // back to your own eyes: a straight cut, through a quick dip to black
     if (roll == 0 && phase != "intro") { rackT = 0; rkPlayed = false; }   // a new frame: the machine sets down a fresh rack
-    phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : 20; Mine().ball.on = false; camZ = -3.4f; shot = false; crash = false; startMask = Mine().pins.Mask();
+    phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : Away(cur) ? 6 : 20; Mine().ball.on = false; camZ = -3.4f; shot = false; crash = false; startMask = Mine().pins.Mask();
     if (cut) { rig.Cut(); fadeA = 0.8f; fadeSpd = 1.f / 0.4f; }
     bxn = bxs = baimN = bhookN = 0; bpowN = 0.7f; aimLive = false; aim = 0;
     for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, BowlL(i == cur));
@@ -273,6 +276,7 @@ struct Bowling : Classic {
   bool cheatStrike = false; int cheatPid = -1;
   void Cheat(int pid, const std::string& n) override { if (n == "strike") { cheatStrike = true; cheatPid = pid; } }   // the owner's next ball takes every pin
   void Act(int p, const std::string& k, int n, float pw) override {
+    Back(p);
     if (p != cur) return;
     if (k == "bumpers") { if (phase == "aim") { bumpers = n != 0; SendBowl("aim"); Sfx("tink"); } return; }
     float a = 0, b = 0, c = 0;
@@ -315,8 +319,8 @@ struct Bowling : Classic {
       if (P(cur).bot) bxn += (sinf(time * 1.3f) * 0.5f - bxn) * fminf(1.f, dt * 3);
       else if (!aimLive) { aim += (Clamp(P(cur).stick.x, -1.f, 1.f) - aim) * fminf(1.f, dt * 12); bxn = aim; }
       bxs += (bxn - bxs) * fminf(1.f, dt * 14);
-      if (!P(cur).bot && P(cur).a && !P(cur).pa) Release(0.6f);
-      wait -= dt; if (wait <= 0) { if (P(cur).bot) BotThrow(); else Throw(bxn, baimN, bhookN, 0.55f); }
+      if (!P(cur).bot && P(cur).a && !P(cur).pa) { Back(cur); Release(0.6f); }
+      wait -= dt; if (wait <= 0) { if (P(cur).bot) BotThrow(); else { if ((int)away.size() < N()) away.resize(N(), 0); if (!away[cur]) { away[cur] = 1; Banner("💤 " + P(cur).name + " is away — the ball goes by itself", 2200, "#adb5bd"); } Throw(bxn, baimN, bhookN, 0.55f); } }
       return;
     }
     if (phase == "windup") { windT += dt; if (windT >= W_REL) LetGo(); return; }

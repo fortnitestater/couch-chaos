@@ -58,6 +58,9 @@ const SONG_PTS = [1000, 800, 650, 500, 380, 260, 150];
 const SONG_WAIT = 10; // seconds to guess after each clip
 const songNorm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const songLabel = s => `${s[0]} — ${s[1]}`;
+// songs this TV has already played (tonight and on earlier evenings): they go to the back of the queue, so a new game brings new songs
+const SONG_SEEN = (() => { try { return new Set(JSON.parse(localStorage.getItem('cc_seen_songs') || '[]')); } catch (e) { return new Set(); } })();
+function songSeen(s) { SONG_SEEN.add(songLabel(s)); try { localStorage.setItem('cc_seen_songs', JSON.stringify([...SONG_SEEN])); } catch (e) {} }
 const SONG_LIST = SONGS.map(songLabel);
 
 /* finds + decodes the iTunes preview for a song */
@@ -123,7 +126,8 @@ class SongGuess {
   }
   begin() {
     const pool = SONGS.filter(s => this.era === 0 || (this.era === 1 ? s[2] >= 2010 : s[2] < 2010));
-    this.order = shuffle(pool.slice()); this.oi = 0; this.lookup = songLookup(this.order);
+    if (pool.filter(x => !SONG_SEEN.has(songLabel(x))).length < 12) for (const x of pool) SONG_SEEN.delete(songLabel(x));   // nearly everything has been heard: start over
+    this.order = shuffle(pool.filter(x => !SONG_SEEN.has(songLabel(x)))).concat(shuffle(pool.filter(x => SONG_SEEN.has(songLabel(x))))); this.oi = 0; this.lookup = songLookup(this.order);
     this.phase = 'load'; this.loadT = 0;
     this.prefetch(); this.prefetch();
     this.c.banner('🎵 SONG GUESS', 1600, '#cc5de8');
@@ -138,7 +142,7 @@ class SongGuess {
   nextSong() {
     this.n++;
     this.cur = this.queue.shift().ready; this.prefetch();
-    this.idx = SONGS.indexOf(this.cur.song);
+    this.idx = SONGS.indexOf(this.cur.song); songSeen(this.cur.song);
     this.got = new Map(); // p -> {stage, pts}
     this.tried = new Map(); // p -> the wrong guesses of this song
     this.stage = -1; this.replays = 0; this.grace = false;
@@ -170,6 +174,11 @@ class SongGuess {
   }
   stopAudio() { if (this.src) { try { this.src.stop(); } catch (e) {} this.src = null; } this.playing = null; }
   isPlaying() { return !!this.playing && performance.now() - this.playing.t0 < this.playing.sec * 1000 + 60; }
+  hint() {
+    if (!this.cur || this.stage < 3 || this.phase === 'reveal') return '';
+    const [, artist, year] = this.cur.song, a = String(artist).replace(/^the /i, '');
+    return this.stage >= 5 ? `${year} · the artist starts with “${a[0].toUpperCase()}”` : `It came out in ${year}`;
+  }
   guessersLeft() { return this.ps.filter(p => !this.got.has(p) && !this.st.has(p)); }
   stillIn() { return this.ps.filter(p => !this.got.has(p)); }
   open() { return this.phase === 'listen' || this.phase === 'guess' || (this.phase === 'gap' && this.grace); }   // grace: the clock has just run out, a tap that is already on its way still counts
@@ -216,7 +225,7 @@ class SongGuess {
   // ---------- phones ----------
   layoutFor(p) {
     const left = this.phase === 'listen' || this.phase === 'guess' ? Math.max(0, this.clipEnd + SONG_WAIT - this.stageT) : 0;
-    const base = { name: 'song', round: this.n, total: this.total, stage: this.stage, stages: SONG_STAGES, pts: this.score.get(p), list: SONG_LIST, tried: (this.tried && this.tried.get(p)) || [], left: +left.toFixed(1), wait: SONG_WAIT };
+    const base = { name: 'song', round: this.n, total: this.total, stage: this.stage, stages: SONG_STAGES, pts: this.score.get(p), list: SONG_LIST, tried: (this.tried && this.tried.get(p)) || [], left: +left.toFixed(1), wait: SONG_WAIT, hint: this.hint() };
     if (this.phase === 'load' || this.phase === 'setup') return { ...base, state: 'load' };
     if (this.phase === 'reveal') {
       const g = this.got.get(p);
@@ -343,6 +352,8 @@ class SongGuess {
       txt(g, `${Math.ceil(left)}`, 1400, 678, 30, f < 0.3 ? '#ff4d6d' : '#ffd43b', 'left');
       txt(g, this.stage < SONG_STAGES.length - 1 ? `Stuck? Skip on your phone → next: ${SONG_STAGES[this.stage + 1]}s` : 'Last chance!', 1080, 720, 22, '#b197fc', 'center', 'Nunito');
     } else if (this.phase === 'gap') txt(g, 'More music coming…', 1080, 640, 40, '#ffd43b');
+    const hint = this.hint();
+    if (hint) { g.font = '700 26px Nunito, Inter, sans-serif'; const hw = g.measureText('💡 Hint: ' + hint).width + 44; g.fillStyle = 'rgba(255,212,59,.16)'; rr(g, 1080 - hw / 2, 752, hw, 46, 23); g.fill(); g.lineWidth = 2; g.strokeStyle = 'rgba(255,212,59,.7)'; g.stroke(); txt(g, '💡 Hint: ' + hint, 1080, 776, 26, '#ffe066', 'center', 'Nunito'); }
     if (this.got.size && this.phase !== 'reveal') txt(g, `✅ ${this.got.size} got it!`, 470, 760, 28, '#8ce99a');
     void t;
   }

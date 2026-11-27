@@ -8,7 +8,7 @@ using namespace kit;
 namespace {
 
 struct Round {
-  std::string text, phone, reveal; std::vector<std::string> opts; std::vector<Color> colors;
+  std::string text, phone, reveal, tag; std::vector<std::string> opts; std::vector<Color> colors;
   int correct = -1; float time = 16; int cols = 0; bool big = false, hideOpts = false; std::vector<bool> good;
 };
 
@@ -16,6 +16,8 @@ struct QuizShow : Show {
   std::string title, kicker; int R = 8, round = 0; std::string phase = "intro"; float t = 3.0f, tMax = 1, phaseT = 0;
   Round q; std::vector<int> ans, gain; std::vector<float> at, botAt; float botSkill = 0.62f;
   std::vector<Spring> tileIn;
+  bool streaks = false, finalDouble = false; std::vector<int> streak;   // a run of right answers pays a bonus; the last round counts double, so nobody is out of it before the end
+  bool Final() { return finalDouble && round == R; }
   virtual Round Make(int n) = 0;
   virtual int BotAnswer(int p) { if (q.correct >= 0 && frand(0, 1) < botSkill) return q.correct; return rand() % (int)q.opts.size(); }
   virtual void Resolve() {
@@ -46,6 +48,7 @@ struct QuizShow : Show {
       else botAt[i] = frand(1.6f, fmaxf(2.0f, fminf(8.0f, tMax - 2)));
     }
     Sfx("whoosh");
+    if (Final()) { Banner("FINAL ROUND · DOUBLE POINTS!", 2000, "#ffd43b"); Sfx("ding"); }
   }
   void Act(int p, const std::string& k, int i, float) override {
     if (phase != "ask" || k != "choice" || p < 0 || p >= N() || ans[p] >= 0 || i < 0 || i >= (int)q.opts.size()) return;
@@ -58,9 +61,13 @@ struct QuizShow : Show {
     phase = "reveal"; t = 4.2f; phaseT = 0;
     Resolve();
     bool any = false;
+    if (streak.size() != (size_t)N()) streak.assign(N(), 0);
     for (int i = 0; i < N(); i++) {
+      if (streaks) { if (gain[i] > 0) { streak[i]++; if (streak[i] >= 3) gain[i] += std::min(300, (streak[i] - 2) * 100); } else streak[i] = 0; }
+      if (Final()) gain[i] *= 2;
       Gain(i, gain[i]); if (gain[i] > 0) any = true;
-      if (!P(i).bot) Layout(i, Msg(ans[i] < 0 ? "⏰" : gain[i] > 0 ? "✅" : "❌", ans[i] < 0 ? "Too slow!" : gain[i] > 0 ? "+" + I(gain[i]) + " points!" : "Not this time", q.reveal));
+      bool hot = streaks && streak[i] >= 3;
+      if (!P(i).bot) Layout(i, Msg(ans[i] < 0 ? "⏰" : gain[i] > 0 ? (hot ? "🔥" : "✅") : "❌", ans[i] < 0 ? "Too slow!" : gain[i] > 0 ? (hot ? I(streak[i]) + " in a row! +" + I(gain[i]) : "+" + I(gain[i]) + " points!") : "Not this time", q.reveal));
     }
     Sfx(any ? "ding" : "buzz");
 
@@ -108,7 +115,7 @@ struct QuizShow : Show {
   void Draw() override {
     Stage([&](int i) { return phase == "ask" && ans.size() == (size_t)N() && ans[i] >= 0; });
     // header
-    std::string kick = phase == "intro" || round == 0 ? kicker : "ROUND " + I(std::min(round, R)) + " OF " + I(R);
+    std::string kick = phase == "intro" || round == 0 ? kicker : (Final() ? std::string("FINAL ROUND · DOUBLE POINTS") : "ROUND " + I(std::min(round, R)) + " OF " + I(R)) + (q.tag.empty() ? "" : "  ·  " + q.tag);
     if (phase == "intro") {
       float k = EaseBack(fminf(1, phaseT * 1.6f));
       Glass(400, 230 - 20 * (1 - k), 800, 260, 34);
@@ -141,17 +148,16 @@ struct QuizShow : Show {
       int n = 0; for (int v : ans) n += v >= 0;
       Text(1370, 60, 28, Hex(0xdfe6ff), I(n) + " / " + I(N()) + " answered", 1, TS_HEAVY | TS_PLAIN | TS_SHADOW);
     }
-    PodiumLabels([&](int i) { return phase == "ask" && ans[i] >= 0 ? std::string("🔒") : std::string(); });
+    PodiumLabels([&](int i) { return phase == "ask" && ans[i] >= 0 ? std::string("🔒") : phase == "reveal" && streaks && i < (int)streak.size() && streak[i] >= 3 ? "🔥 " + I(streak[i]) : std::string(); });
   }
 };
 
 // ---------------- TRIVIA BLITZ ----------------
 struct Trivia : QuizShow {
-  std::vector<int> bank;
-  Trivia() { title = "TRIVIA BLITZ"; kicker = "FAMILY QUIZ"; R = 8; for (size_t i = 0; i < data::TRIVIA.size(); i++) bank.push_back((int)i); Shuffle(bank); tint = Hex(0x4d7cff); }
+  Trivia() { title = "TRIVIA BLITZ"; kicker = "FAMILY QUIZ"; R = 8; tint = Hex(0x4d7cff); streaks = true; finalDouble = true; }
   Round Make(int) override {
-    auto& row = data::TRIVIA[bank.back()]; bank.pop_back();
-    Round r; r.text = row[0]; r.time = 18;
+    auto& row = data::TRIVIA[Fresh("trivia", (int)data::TRIVIA.size())];   // a question this TV has not asked yet
+    Round r; r.text = row[0]; r.time = 18; if (row.size() > 5) r.tag = row[5];
     std::vector<int> o = { 1, 2, 3, 4 }; Shuffle(o);
     for (int k : o) r.opts.push_back(row[k]);
     for (int k = 0; k < 4; k++) if (o[k] == 1) r.correct = k;
@@ -236,10 +242,9 @@ struct Maths : QuizShow {
 
 // ---------------- MOST LIKELY TO ----------------
 struct Likely : QuizShow {
-  std::vector<std::string> bank;
-  Likely() { title = "MOST LIKELY TO"; kicker = "VOTE FOR YOUR FAMILY"; R = 7; bank = data::LIKELY; Shuffle(bank); tint = Hex(0xf06595); }
+  Likely() { title = "MOST LIKELY TO"; kicker = "VOTE FOR YOUR FAMILY"; R = 7; tint = Hex(0xf06595); }
   Round Make(int) override {
-    Round r; std::string pr = bank.back(); bank.pop_back();
+    Round r; std::string pr = data::LIKELY[Fresh("likely", (int)data::LIKELY.size())];
     r.text = "Who is most likely to " + pr; r.time = 18;
     for (int i = 0; i < N(); i++) { r.opts.push_back(P(i).name); r.colors.push_back(P(i).color); }
     r.cols = N() > 4 ? 3 : 2;

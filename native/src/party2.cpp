@@ -22,9 +22,8 @@ struct Elf : Show {   // (the game id stays "elf")
   void Next() {
     round++;
     if (round > R) { phase = "end"; Win(); return; }
-    const data::Impo* e = &data::IMPO[0];
-    for (int tries = 0; tries < 40; tries++) { e = &data::IMPO[rand() % data::IMPO.size()]; if (std::find(usedWords.begin(), usedWords.end(), std::string(e->word)) == usedWords.end()) break; }
-    cat = e->cat; word = e->word; clue = e->clue; usedWords.push_back(word);
+    const data::Impo* e = &data::IMPO[Fresh("impo", (int)data::IMPO.size())];   // a word this TV has not used yet, tonight or on an earlier evening
+    cat = e->cat; word = e->word; clue = e->clue;
     std::vector<int> humans; for (int i = 0; i < N(); i++) if (!P(i).bot) humans.push_back(i);
     elf = humans.size() >= 3 ? Pick(humans) : rand() % N();
     order.clear(); for (int i = 0; i < N(); i++) order.push_back(i); Shuffle(order);
@@ -216,7 +215,7 @@ struct Doodle : Show {
   int R = 0, round = 0, drawer = -1; float t = 3, tMax = 1; std::vector<int> guess; std::vector<float> botAt;
   const float CX = 470, CY = 100, CW = 660, CH = 660 * 690.f / 1100;   // small enough that the players on their podiums stay in view under it
   void Start() override {
-    InitStage(); tint = Hex(0xff8f3c); words = data::DOODLE; Shuffle(words);
+    InitStage(); tint = Hex(0xff8f3c); words = data::DOODLE;
     for (int i = 0; i < N(); i++) if (!P(i).bot) drawers.push_back(i);
     Shuffle(drawers); if (drawers.size() > 5) drawers.resize(5); if (drawers.size() == 1) drawers.push_back(drawers[0]);
     R = (int)drawers.size();
@@ -224,8 +223,8 @@ struct Doodle : Show {
   }
   void Next() {
     round++; if (round > R) { phase = "end"; Win(); return; }
-    drawer = drawers[round - 1]; word = words.back(); words.pop_back();
-    opts = { word }; std::vector<std::string> rest(words.begin(), words.end()); Shuffle(rest); for (int i = 0; i < 3; i++) opts.push_back(rest[i]); Shuffle(opts);
+    drawer = drawers[round - 1]; word = words[Fresh("doodle", (int)words.size())];   // a word this TV has not drawn yet
+    opts = { word }; std::vector<std::string> rest; for (auto& w : words) if (w != word) rest.push_back(w); Shuffle(rest); for (int i = 0; i < 3; i++) opts.push_back(rest[i]); Shuffle(opts);
     strokes.clear(); guess.assign(N(), -1); botAt.assign(N(), frand(12, 30)); phase = "draw"; t = tMax = 60;
     for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == drawer ? "{\"name\":\"draw\",\"word\":" + Q(word) + "}" : Choice("What is " + P(drawer).name + " drawing?", opts, 2));
     Banner("✏️ " + P(drawer).name + " is drawing!", 1500, Hx(P(drawer).color).c_str());

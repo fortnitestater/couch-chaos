@@ -1007,6 +1007,19 @@
     if (!b) { b = document.createElement('button'); b.id = 'quitBtn'; b.className = 'chip quitBtn noRb'; b.setAttribute('aria-label', 'End game'); b.textContent = '✕'; const tb = document.querySelector('#ctrlScr .topbar'); if (tb) tb.appendChild(b); b.addEventListener('click', quitAsk); }
     b.classList.toggle('hidden', !on); if (!on) { const s = $('#quitSheet'); if (s) s.remove(); }
   }
+  // The back gesture (iPhone edge swipe, Android back) would drop you out of the party without a word. Once you have joined,
+  // the page keeps one extra history step: going back lands on it and asks first.
+  let backGuard = false;
+  function guardBack() { if (backGuard) return; backGuard = true; try { history.pushState({ cc: 1 }, ''); } catch (e) {} }
+  addEventListener('popstate', () => {
+    if (!backGuard || !joined) return;
+    backGuard = false; guardBack();
+    if ($('#leaveSheet')) return; const d = document.createElement('div'); d.id = 'leaveSheet'; d.className = 'sheetBg';
+    d.innerHTML = '<div class="sheet"><h3>Leave the party?</h3><p>You will drop out of the game on the TV.</p><button id="lvNo" class="sheetMain">Stay</button><button id="lvYes" class="sheetDanger">Leave</button></div>';
+    document.body.appendChild(d); const close = () => d.remove();
+    d.addEventListener('click', e => { if (e.target === d) close(); }); $('#lvNo').onclick = close;
+    $('#lvYes').onclick = () => { close(); backGuard = false; try { if (conn) conn.close(); } catch (e) {} history.go(-2); };
+  });
   function quitAsk() {
     if ($('#quitSheet')) return; const d = document.createElement('div'); d.id = 'quitSheet'; d.className = 'sheetBg';
     d.innerHTML = '<div class="sheet"><h3>End this game?</h3><p>It ends for everyone and goes back to the menu.</p><button id="qsNo" class="sheetMain">Keep playing</button><button id="qsYes" class="sheetDanger">End game</button></div>';
@@ -1345,7 +1358,7 @@
       sent: songPending ? `📨 Checking “${songPending.title}”…` : '📨 Checking…', wrong: '❌ Not that one! More music is coming…', skip: '⏭ Skipped — listen to the next bit',
       right: `✅ YOU GOT IT! ${L.mine || ''}`, reveal: `It was <b>${esc(L.answer || '')}</b><br>${esc(L.mine || '')}`,
     }[st] || '';
-    const sEl = $('#sgStat'); sEl.innerHTML = st === 'reveal' ? msg : esc(msg); sEl.className = 'songStat ' + st;
+    const sEl = $('#sgStat'); sEl.innerHTML = st === 'reveal' ? msg : esc(msg) + (L.hint && st !== 'right' && st !== 'load' ? `<i class="sgHint">💡 ${esc(L.hint)}</i>` : ''); sEl.className = 'songStat ' + st;
     const inp = $('#sgIn'); inp.disabled = !live; if (!live) { inp.value = ''; $('#sgSug').innerHTML = ''; $('#sgSug')._list = []; }
     $('#sgBox').style.display = st === 'right' || st === 'reveal' || st === 'load' ? 'none' : '';
     $('#sgBtns').style.display = st === 'load' || st === 'reveal' ? 'none' : '';
@@ -1453,7 +1466,7 @@
     if (m.t === 'welcome') {
       setupReacts(); ownerAuto();
       joined = true; me = m; document.body.style.setProperty('--me', m.color || '#3b7bff'); document.body.classList.add('inGame'); tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
-      $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
+      $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden'); guardBack();
       $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });

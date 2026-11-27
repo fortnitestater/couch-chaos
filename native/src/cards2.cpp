@@ -42,7 +42,8 @@ std::string SSym(const SCard& c) { return c.v == "REV" ? "↺" : c.v == "STOP" ?
 bool IsNum(const std::string& v) { return v.size() == 1 && v[0] >= '1' && v[0] <= '9'; }
 struct Storm : GameNight {
   std::vector<SCard> deck, pile; std::vector<std::vector<SCard>> hand; int color = 0, dir = 1, pending = 0, lcP = -1, winner = -1; bool drew = false, needColor = false, twin = false, lcSafe = false, lcTried = false;
-  float timer = 30, botT = 1.5f, lcT = 0; struct Fly { SCard c; Vector3 from; float t = 1; } fly;
+  float timer = 30, botT = 1.5f, lcT = 0, playT = 0; bool lastMin = false; struct Fly { SCard c; Vector3 from; float t = 1; } fly;
+  const float STORM_MAX = 600;   // ten minutes, then the fewest cards wins: a game that never ends would hold up the whole evening
   void Start() override {
     TableCam(); felt = Hex(0x0f6a7a);
     for (int c = 0; c < 4; c++) { for (int v = 1; v <= 9; v++) for (int k = 0; k < 2; k++) deck.push_back({ c, std::to_string(v) }); for (const char* v : { "+2", "STOP", "REV", "TWIN" }) for (int k = 0; k < 2; k++) deck.push_back({ c, v }); }
@@ -73,6 +74,7 @@ struct Storm : GameNight {
   void Win(int p) { over = true; winner = p; endT = 3; Celebrate(p); Sync(); }
   void Act(int p, const std::string& k, int i, float) override {
     if (over || p < 0 || p >= N()) return;
+    SetAway(p, false);
     if (k == "btn:last" && lcP == p) { lcSafe = true; Banner("☝ " + P(p).name + ": LAST CARD!", 1300, Hx(P(p).color).c_str()); Sfx("ding"); Sync(); return; }
     if (k == "btn:catch" && lcP >= 0 && !lcSafe && lcP != p) { int v = lcP; lcP = -1; Give(v, 2); Banner("🚨 " + P(p).name + " caught " + P(v).name + "! +2", 1600, "#ff4d6d"); Sfx("buzz"); Sync(); return; }
     if (p != turn) return;
@@ -119,6 +121,8 @@ struct Storm : GameNight {
   bool fin = false;
   void Update(float dt) override {
     Tick(dt); fly.t = fminf(1, fly.t + dt * 2.6f);
+    if (!over && (playT += dt) > STORM_MAX - 60 && !lastMin) { lastMin = true; Banner("⏰ LAST MINUTE! Then the fewest cards wins", 2600, "#ffd43b"); Sfx("alarm"); log = "⏰ One minute left — get rid of your cards!"; Sync(); }
+    if (!over && playT > STORM_MAX) { int b = 0; for (int q = 1; q < N(); q++) if (hand[q].size() < hand[b].size()) b = q; log = "⏰ Time! " + P(b).name + " has the fewest cards"; Win(b); return; }
     if (over) { endT -= dt; if (endT <= 0 && !fin) { fin = true; auto o = Sorted([&](int i) { return (i == winner ? 1000.f : 0) - hand[i].size(); }); FinishOrder(o, [&](int i) { return std::to_string(hand[i].size()) + " cards left"; }); } return; }
     if (lcP >= 0) {
       lcT -= dt;
@@ -127,7 +131,7 @@ struct Storm : GameNight {
       if (lcP >= 0 && (lcT <= 0 || (lcSafe && lcT < 2.5f))) { lcP = -1; Sync(); }
     }
     if (P(turn).bot) { botT -= dt; if (botT <= 0) { botT = frand(0.9f, 1.6f); BotTurn(turn); } return; }
-    timer -= dt; if (timer <= 0) { timer = 30; if (needColor) Act(turn, "btn:col0", 0, 0); else BotTurn(turn); }
+    timer = TurnClock(turn, timer) - dt; if (timer <= 0) { int who = turn; timer = 30; autoMove = true; if (needColor) Act(turn, "btn:col0", 0, 0); else BotTurn(turn); autoMove = false; SetAway(who, true); }
   }
   void Draw() override {
     Room(); Seats([&](int i) { return i == turn && !over; }, [&](int i) { return over && i == winner ? 1.f : 0.f; });
@@ -159,6 +163,7 @@ struct Storm : GameNight {
       Text(cx, cy + h / 2 + 22, 22, cc, SC_N[color], 0, TS_HEAVY | TS_SHADOW);
     }
     LogBar();
+    if (lastMin && !over) { std::string s = "⏰ " + std::to_string((int)ceilf(fmaxf(0.f, STORM_MAX - playT))) + " s left — then the fewest cards wins"; float w = Measure(s, 24, TS_HEAVY) + 60; RRect(800 - w / 2, 190, w, 44, 22, Hex(0x3b2a00, 220), Hex(0x3b2a00, 220), Hex(0xffd43b), 2); Text(800, 212, 24, Hex(0xffe066), s, 0, TS_HEAVY | TS_PLAIN); }
     if (!over && !P(turn).bot) { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(fmaxf(0, timer))); Text(1540, 50, 34, timer < 8 ? Hex(0xff4d6d) : WHITE, b, 0, TS_DISPLAY | TS_SHADOW); }
     Hint(std::string("Colour now: ") + SC_N[color] + "  ·  match colour or symbol  ·  +2 stacks  ·  ⛔ skip  ·  ↺ reverse", cc);
   }
@@ -204,6 +209,7 @@ struct Aval : GameNight {
   void Sync() { for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, PanelFor(i)); }
   void Act(int p, const std::string& k, int i, float) override {
     if (over || p < 0 || p >= N() || !alive[p]) return;
+    SetAway(p, false);
     if (k == "btn:block" && pa.by >= 0 && pa.by != p && pa.blockedBy < 0) { int bi = Find(p, AV_BLOCK); if (bi < 0) return; hand[p].erase(hand[p].begin() + bi); pa.blockedBy = p; log = "✋ " + P(p).name + " BLOCKED " + AVN[pa.card] + "!"; Sfx("zap"); Shake(5); Sync(); return; }
     if (p != turn) return;
     if (state == "bury" && k.rfind("btn:put_", 0) == 0) { Bury(k.substr(8)); return; }
@@ -274,7 +280,7 @@ struct Aval : GameNight {
     int p = turn;
     if (state == "bury") { buryT -= dt; if (buryT <= 0 || (P(p).bot && buryT < 12.5f)) { const char* W[] = { "random", "top", "middle", "bottom", "2nd" }; Bury(P(p).bot ? W[rand() % 5] : "random"); } return; }
     if (P(p).bot) { botT -= dt; if (botT <= 0) { botT = frand(1, 1.8f); if (state == "target") { state = "play"; for (int q = 0; q < N(); q++) if (q != p && alive[q] && !hand[q].empty()) { Steal(p, q); break; } } else BotMove(p); } return; }
-    timer -= dt; if (timer <= 0) { timer = 30; if (state == "target") { state = "play"; Sync(); } else DrawCard(p); }
+    timer = TurnClock(p, timer) - dt; if (timer <= 0) { timer = 30; autoMove = true; if (state == "target") { state = "play"; Sync(); } else DrawCard(p); autoMove = false; SetAway(p, true); }
   }
   void Draw() override {
     Room(); Seats([&](int i) { return i == turn && alive[i] && !over; }, [&](int i) { return over && i == winner ? 1.f : 0.f; });
@@ -354,6 +360,7 @@ struct Tycoon : GameNight {
   void Sync() { for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, PanelFor(i)); }
   void Act(int p, const std::string& k, int, float) override {
     if (over || p != turn || k.rfind("btn:", 0) != 0) return;
+    SetAway(p, false);
     std::string id = k.substr(4); St& s = st[p];
     if (state == "roll" && id == "roll") { dice[0] = irand(1, 6); dice[1] = irand(1, 6); state = "moving"; rollAnim = 0.9f; steps = dice[0] + dice[1]; stepT = 0.25f; log = "🎲 " + P(p).name + " rolled " + std::to_string(steps) + "!"; Sfx("dice"); Sync(); return; }
     if (state == "roll" && id.rfind("build_", 0) == 0) { int i = atoi(id.c_str() + 6); auto b = Buildable(p); if (std::find(b.begin(), b.end(), i) == b.end()) return; s.cash -= TB[i].p / 2; cab[i]++; log = std::string("🏠 ") + P(p).name + " built a cabin on " + TB[i].n + "!"; Sfx("pickup"); Sync(); return; }
@@ -420,7 +427,7 @@ struct Tycoon : GameNight {
       return;
     }
     if (P(turn).bot) { botT -= dt; if (botT <= 0) { botT = frand(1, 1.6f); BotMove(turn); } return; }
-    timer -= dt; if (timer <= 0) { timer = 25; Act(turn, state == "buy" ? "btn:pass" : "btn:roll", 0, 0); }
+    timer = TurnClock(turn, timer) - dt; if (timer <= 0) { int who = turn; timer = 25; autoMove = true; Act(turn, state == "buy" ? "btn:pass" : "btn:roll", 0, 0); autoMove = false; SetAway(who, true); }
   }
   // board: 24 squares around a square, 7 per side (corners shared)
   const float BS = 11.2f;

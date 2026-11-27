@@ -66,6 +66,8 @@ void RRect(float x, float y, float w, float h, float radius, Color fill, Color f
 struct Player { int id; std::string name; Color color; bool bot; Vector2 stick{}; bool a = false, b = false, pa = false, pb = false, touch = false, ptouch = false; };
 
 // ---------- small helpers ----------
+// one item out of n that this TV has not shown yet (remembered between games and between evenings): nothing repeats until everything has been seen
+int Fresh(const char* key, int n);
 inline float frand(float a, float b) { return a + (b - a) * (float)rand() / (float)RAND_MAX; }
 inline float angDiff(float a, float b) { float d = fmodf(b - a + PI * 3, PI * 2) - PI; return d; }
 inline Color Hex(unsigned v, unsigned char a = 255) { return Color{ (unsigned char)(v >> 16), (unsigned char)(v >> 8), (unsigned char)v, a }; }

@@ -451,7 +451,7 @@ struct Tug : Classic {
 // =====================================================================================
 struct Hockey : Classic {
   struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; };
-  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0, pspin = 0, pang = 0, flash = 0; int score[2] = { 0, 0 }, last = -1, flashSide = 1; bool over = false, sudden = false; Color flashCol = WHITE; Texture2D tabTex{};
+  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0, pspin = 0, pang = 0, flash = 0; int score[2] = { 0, 0 }, last = -1, flashSide = 1; bool over = false, sudden = false; float suddenT = 0; Color flashCol = WHITE; Texture2D tabTex{};
   ~Hockey() { if (tabTex.id) UnloadTexture(tabTex); }
   const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 125, MR = 46, PR = 26;
   void Start() override {
@@ -526,6 +526,7 @@ struct Hockey : Classic {
     if (over) return;
     if (endIn > 0) { endIn -= dt; if (endIn <= 0) End(); return; }
     if (!sudden) T -= dt; pause -= dt; sndT -= dt;
+    if (sudden && (suddenT += dt) > 60) { Banner("Nobody scores… it's a draw!", 2200, "#ffd43b"); Sfx("ding"); endIn = 2.4f; return; }   // a golden goal that never comes (everybody left the room) must not hold the evening up
     stuckT = hypotf(pvx, pvy) < 140 ? stuckT + dt : 0; if (stuckT > 2.2f) stuckT = 0;
     if (g_dbg == 91 && !sudden && T > 2) T = 2;                                       // debug: jump to the end of the clock
     if (g_dbg == 92 && sudden && pause <= 0 && endIn <= 0) Goal(0);                  // debug: score the golden goal

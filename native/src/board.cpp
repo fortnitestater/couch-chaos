@@ -200,7 +200,7 @@ struct Four : Table {
     return false;
   }
   void DropIn(int c) { int r = RowFor(c); if (r < 0 || drop.c >= 0 || win >= 0) return; drop = { c, r, side + 1, 7.4f, 0 }; Sfx("whoosh"); Push(); }
-  void Act(int p, const std::string& k, int i, float) override { if (p == turn && k == "choice") DropIn(i); }
+  void Act(int p, const std::string& k, int i, float) override { SetAway(p, false); if (p == turn && k == "choice") DropIn(i); }
   int BotCol() {
     int me = side + 1, them = 2 - side;
     for (int who : { me, them }) for (int c = 0; c < 7; c++) { int r = RowFor(c); if (r < 0) continue; g[c][r] = who; bool w = Wins(who); g[c][r] = 0; if (w) return c; }
@@ -226,7 +226,7 @@ struct Four : Table {
       return;
     }
     if (P(turn).bot) { botT -= dt; if (botT <= 0) DropIn(BotCol()); }
-    else { timer -= dt; if (timer <= 0) DropIn(BotCol()); }
+    else { timer = TurnClock(turn, timer) - dt; if (timer <= 0) { int who = turn; autoMove = true; DropIn(BotCol()); autoMove = false; SetAway(who, true); } }
   }
   bool fin = false;
   void Draw() override {
@@ -401,9 +401,10 @@ struct Blackjack : Table {
     int from = cur < 0 ? 0 : cur + 1; cur = -1;
     for (int k = from; k < N(); k++) if (state[k] == 0) { cur = k; break; }
     if (cur < 0) { phase = "dealer"; t = 1.0f; holeUp = true; Sfx("card"); SyncAll(); return; }
-    t = 15; botT = frand(1.0f, 1.6f); Sfx("whoosh"); if (!P(cur).bot) Buzz(cur, 200); SyncAll();
+    t = IsAway(cur) ? 4 : 15; botT = frand(1.0f, 1.6f); Sfx("whoosh"); if (!P(cur).bot) Buzz(cur, 200); SyncAll();
   }
   void Act(int p, const std::string& k, int, float) override {
+    SetAway(p, false);
     if (phase != "play" || p != cur || state[p] != 0) return;
     if (k == "btn:hit") { hand[p].push_back(Pull()); Sfx("card"); t = 15; int v = Val(hand[p]); if (v > 21) { state[p] = 2; Sfx("buzz"); Buzz(p, 300); } else if (v == 21) state[p] = 1; }
     else if (k == "btn:stand") state[p] = 1;
@@ -421,7 +422,7 @@ struct Blackjack : Table {
     if (phase == "deal" && t <= 0) { phase = "play"; NextActor(); }
     else if (phase == "play") {
       if (cur >= 0 && P(cur).bot) { botT -= dt; if (botT <= 0) { botT = frand(0.9f, 1.5f); int v = Val(hand[cur]), up = dealer[0].r + 1; bool weak = up >= 2 && up <= 6; if (hand[cur].size() == 2 && (v == 11 || (v == 10 && up < 10)) && frand(0, 1) < 0.7f) { Act(cur, "btn:double", 0, 0); return; } Act(cur, (v < 12 || (v < 17 && !weak) || (v < 13 && weak)) ? "btn:hit" : "btn:stand", 0, 0); } }
-      else if (cur >= 0 && t <= 0) { state[cur] = 1; Send(cur, Panel(cur)); NextActor(); }   // out of time: stand
+      else if (cur >= 0 && t <= 0) { state[cur] = 1; Send(cur, Panel(cur)); SetAway(cur, true); NextActor(); }   // out of time: stand (and from now on the clock is short for them)
     } else if (phase == "dealer" && t <= 0) {
       bool anyAlive = false; for (int s : state) anyAlive |= s == 1;
       if (anyAlive && Val(dealer) < 17) { dealer.push_back(Pull()); Sfx("card"); t = 0.9f; }

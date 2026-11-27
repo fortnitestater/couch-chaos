@@ -38,6 +38,17 @@ struct Table : Game {
   Color felt = Hex(0x2b8a3e), wood = Hex(0x8a5a35);
   Player& P(int i) { return (*ps)[i]; }
   int N() { return (int)ps->size(); }
+  // Someone who lets a whole turn run out is "away" (in the kitchen, on the phone): from then on their turns wait
+  // only a few seconds before the game plays for them, so one missing player never stalls the table. Touching the phone brings them back.
+  std::vector<int> away; bool autoMove = false;   // autoMove: the game itself is making the move, that must not count as the player coming back
+  bool IsAway(int p) { return p >= 0 && p < (int)away.size() && away[p] > 0; }
+  void SetAway(int p, bool v) {
+    if ((int)away.size() < N()) away.resize(N(), 0);
+    if (p < 0 || p >= N() || P(p).bot || (!v && autoMove)) return;
+    if (v) { if (!away[p]) Banner("💤 " + P(p).name + " is away — the game plays for them", 2200, "#adb5bd"); away[p]++; Buzz(p, 350); }
+    else if (away[p]) { away[p] = 0; Banner("👋 " + P(p).name + " is back!", 1400, "#8ce99a"); }
+  }
+  float TurnClock(int p, float timer) { return IsAway(p) ? fminf(timer, 5.f) : timer; }
   void InitCam(Vector3 pos, Vector3 target, float fov = 45) { cam.position = pos; cam.target = target; cam.up = { 0, 1, 0 }; cam.fovy = fov; cam.projection = CAMERA_PERSPECTIVE; master = cam; }
   // what the camera should favour right now (default: the player whose turn it is); w = how strongly
   virtual bool Focus(Vector3& p, float& w) { if (over || turn < 0 || turn >= N()) return false; p = Seat(turn, 5.6f); p.y = 0.4f; w = 1; return true; }

@@ -207,6 +207,12 @@ void PlayerBar(float a) {
     Text(x, cy + 1, 30, A(WHITE, pa), p["cam"].yes() ? "📷" : p["av"].str(), 0, TS_PLAIN);
     if (!away) { DrawCircleV({ x + 24, cy - 24 }, 7, A(Hex(0x0a1129), a)); DrawCircleV({ x + 24, cy - 24 }, 5, A(Hex(0x8ce99a), a)); }
     if (vip) Text(x, cy - 44, 16, A(WHITE, a), "👑", 0, TS_PLAIN);
+    if (int tr = (int)p["tr"].num(); tr > 0) {   // tonight's trophies: the evening has a score, and the leader's count is gold
+      bool lead = p["lead"].yes(); std::string ts = std::to_string(tr); float pw = 40 + Measure(ts, 17, TS_PLAIN | TS_HEAVY);
+      UI::Box({ x - 34 - pw / 2, cy + 8, pw, 26 }, 13, A(lead ? Hex(0xf7d98d) : Hex(0x1d2a52), pa), A(lead ? Hex(0xd9a441) : Hex(0x141e3e), pa), 90, A(lead ? Hex(0xfff3ce) : Hex(0xd9aa5a, 150), pa), 1.4f);
+      Text(x - 34 - pw / 2 + 15, cy + 22, 14, A(WHITE, pa), "🏆", 0, TS_PLAIN);
+      Text(x - 34 - pw / 2 + 27, cy + 22, 17, A(lead ? Hex(0x2b1a00) : Hex(0xf2e2b8), pa), ts, -1, TS_PLAIN | TS_HEAVY);
+    }
     Text(x, 802, 20, A(vip ? CREAM : Hex(0xdfe4f2), pa), p["n"].str(), 0, TS_PLAIN | (vip ? TS_HEAVY : 0));
     x += 112;
   }
@@ -286,8 +292,15 @@ void Cards(float a, float dt) {
     const J& it = items[fc]; std::string id = it["id"].str();
     if (id != lastDescId) { lastDescId = id; descIn.x = 0; descIn.v = 0; }
     descIn.To(1, dt, 120, 22); float k = Clamp(descIn.x, 0, 1);
-    std::string line = it["d"].str();
-    Text(120 + (1 - k) * 16, 684, 22, A(Hex(0xdfe4f2), a * k), line, -1, TS_PLAIN, 1100);
+    // exactly one line: a second line used to run into the player bar underneath. Long ones shrink a little, then end in "…" at a whole word
+    std::string line = it["d"].str(); float fs = 22; const float DW = 1150;
+    while (fs > 20 && Measure(line, fs, TS_PLAIN) > DW) fs -= 0.5f;
+    if (Measure(line, fs, TS_PLAIN) > DW) {
+      while (line.size() > 12 && Measure(line + "…", fs, TS_PLAIN) > DW) { size_t sp = line.find_last_of(' '); if (sp == std::string::npos) break; line.erase(sp); }
+      while (!line.empty() && (line.back() == ',' || line.back() == ';' || line.back() == ':' || line.back() == '.' || line.back() == ' ')) line.pop_back();
+      line += "…";
+    }
+    Text(120 + (1 - k) * 16, 684, fs, A(Hex(0xdfe4f2), a * k), line, -1, TS_PLAIN);
   }
 }
 void DrawHome(float a, float dt) {

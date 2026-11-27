@@ -171,7 +171,7 @@
 
   // ---------- home screen ----------
   const QUICK = [
-    { id: '_party', name: 'Party Mode', emoji: '🎉', art: ['#ffd43b', '#ff4d6d'], desc: '6 random games in a row, one from every category. Trophies decide the champion!', how: [], ctrl: 'tap', players: '1-8', mins: 15, cat: 'quick' },
+    { id: '_party', name: 'Party Mode', emoji: '🎉', art: ['#ffd43b', '#ff4d6d'], desc: 'Six different games in a row: quiz, cards and sports. Trophies decide the champion!', how: [], ctrl: 'tap', players: '1-8', mins: 25, cat: 'quick' },
     { id: '_random', name: 'Surprise Me', emoji: '🎲', art: ['#63e6be', '#7048e8'], desc: 'Let fate pick a game that fits how many of you are playing.', how: [], ctrl: 'tap', players: '1-8', mins: 3, cat: 'quick' },
   ];
   const colMemo = {};
@@ -191,9 +191,11 @@
   function recommended() {
     const n = Math.max(1, humans().length);
     const fits = GAMES.filter(gm => { const [a, b] = gm.players.split('-').map(Number); return n >= a && n <= b; });
-    const pref = n >= 3 ? ['elf', 'likely', 'bingo', 'snowball', 'cards', 'bomb'] : n === 2 ? ['four', 'hockey', 'dice', 'trails', 'curling', 'memory'] : ['ski', 'bingo', 'trivia', 'sky', 'copycat', 'bomb'];
-    return pref.map(id => fits.find(x => x.id === id)).filter(Boolean).slice(0, 4).map(gm => Object.assign({}, gm, { _rec: true }));
+    // the games that suit this many people best; the ones nobody has played tonight come first (the sort keeps the order otherwise)
+    const pref = n >= 3 ? ['song', 'elf', 'fight', 'storm', 'bowling', 'likely', 'trivia', 'avalanche', 'doodle'] : n === 2 ? ['tennis', 'fight', 'airhockey', 'four', 'bowling', 'song', 'blackjack'] : ['tennis', 'bowling', 'song', 'trivia', 'blackjack', 'reflex'];
+    return pref.map(id => fits.find(x => x.id === id)).filter(Boolean).sort((a, b) => playedN(a.id) - playedN(b.id)).slice(0, 4).map(gm => Object.assign({}, gm, { _rec: true }));
   }
+  const playedN = id => (S.played || []).filter(x => x === id).length;   // how often this game was played tonight
   const focusedDef = () => rowsData[focus.r] && rowsData[focus.r].items[focus.c];
   function applyFocus(noScroll) {
     $('#rows').querySelectorAll('.tile.focus').forEach(t => t.classList.remove('focus'));
@@ -228,11 +230,16 @@
   }
   function focusGame(id) { rowsData.forEach((row, r) => row.items.forEach((it, c) => { if (it.id === id && r > 0) focus = { r, c }; })); applyFocus(); }
   function fitting() { const n = Math.max(1, humans().length); return GAMES.filter(gm => { const [a, b] = gm.players.split('-').map(Number); return n >= (gm.ctrl === 'talk' ? 3 : a - 1) && n <= b; }); }
-  function surprise() { const d = pick(fitting()); focusGame(d.id); SFX.whoosh(); setTimeout(() => startIntro(d), 600); }
+  function surprise() {   // never the game that has just been played, and the least-played ones first
+    const last = (S.played || []).slice(-1)[0]; let f = fitting().filter(gm => gm.id !== last); if (!f.length) f = fitting();
+    const least = Math.min(...f.map(gm => playedN(gm.id))), d = pick(f.filter(gm => playedN(gm.id) === least));
+    focusGame(d.id); SFX.whoosh(); setTimeout(() => startIntro(d), 600);
+  }
   function startParty() {
     if (!humans().length) return banner('Join first! Scan the code 📱', 1600, '#ff4d6d');
-    const fit = fitting(), list = [];
-    for (const c of shuffle(CATEGORIES.slice())) { const opts = fit.filter(gm => gm.cat === c.id && !list.includes(gm)); if (opts.length) list.push(pick(opts)); }
+    // six different games, taking turns between the kinds of game (it used to stop after one per kind: three games, not the six it promises)
+    const fit = shuffle(fitting()).sort((a, b) => playedN(a.id) - playedN(b.id)), list = [], cats = shuffle(CATEGORIES.slice());
+    for (let k = 0; list.length < 6 && k < cats.length * 8; k++) { const gm = fit.find(x => x.cat === cats[k % cats.length].id && !list.includes(x)); if (gm) list.push(gm); }
     S.party = { list: list.slice(0, 6), i: 0, pts: new Map(humans().map(p => [p, 0])) };
     banner('🎉 PARTY MODE!', 1600); SFX.win();
     setTimeout(() => startIntro(S.party.list[0]), 1200);
@@ -329,7 +336,7 @@
     const TR = { show: 'party', cards: 'lounge' };
     const tr = S.def.id === 'song' || S.def.id === 'chairs' ? null : TR[S.def.cat];
     if (SFX.setTrack) { SFX.setTrack(tr || (S.def.id === 'chairs' ? 'party' : 'menu')); if (tr) setTimeout(() => S.state === 'game' && SFX.musicOn(), 900); }
-    S.state = 'game'; S.speed = 1; show('game');
+    S.state = 'game'; S.speed = 1; show('game'); (S.played = S.played || []).push(S.def.id);
     try { S.game = S.def.make(makeCtx()); S.game.start(); }
     catch (e) { console.error(e); banner('Oops — that game crashed', 2000, '#ff4d6d'); toHome(); }
   }
@@ -429,7 +436,8 @@
     const st = S.state === 'boot' ? 'boot' : S.state;
     const o = { st, code: S.code || '····', url: S.code ? joinUrl().replace(/^https?:\/\//, '') : '', net: ($('#netStatus') || {}).textContent || '', clock: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
     const v = vip();
-    o.players = S.players.filter(p => p.connected || !p.cam).map(p => ({ n: p.name, c: p.color, av: p.avatar, vip: p === v, away: !p.connected, cam: !!p.isCam }));
+    const top = Math.max(0, ...S.players.map(p => p.trophies || 0));   // tonight's standings: every trophy won since the TV was switched on
+    o.players = S.players.filter(p => p.connected || !p.cam).map(p => ({ n: p.name, c: p.color, av: p.avatar, vip: p === v, away: !p.connected, cam: !!p.isCam, tr: p.trophies || 0, lead: top > 0 && (p.trophies || 0) === top }));
     if (st === 'home') {
       o.qr = S.qr || null;
       const KW = { touch: 'TOUCH', move: 'JOYSTICK', tap: 'TAP', swing: 'SWING', type: 'TYPE', shake: 'SHAKE', tilt: 'TILT', draw: 'DRAW', vote: 'VOTE', camera: 'CAMERA' };
