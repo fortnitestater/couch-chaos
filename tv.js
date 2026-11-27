@@ -431,7 +431,8 @@
   }
 
   // ---------- native console shell (C++) ----------
-  nativeLoad().catch(e => console.warn('native shell unavailable, using the HTML menu', e));
+  nativeLoad().catch(e => { console.warn('native shell unavailable, using the HTML menu', e); document.body.classList.add('nativeFail'); });
+  setTimeout(() => { const s = $('#spText'); if (s && document.body.classList.contains('nativeWait')) s.textContent = 'Still loading… a slow connection can take a moment'; }, 12000);
   function shellSnap() {
     const st = S.state === 'boot' ? 'boot' : S.state;
     const o = { st, code: S.code || '····', url: S.code ? joinUrl().replace(/^https?:\/\//, '') : '', net: ($('#netStatus') || {}).textContent || '', clock: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
@@ -501,7 +502,7 @@
   const flakes = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() * 2.5 + 0.8, s: Math.random() * 0.04 + 0.02, w: Math.random() * 6 }));
   addEventListener('resize', fit); fit();
 
-  let lastT = performance.now();
+  let lastT = performance.now(), crashN = 0;
   function frame(t) {
     let dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     const film = window.CCFILM;   // debug recording only: the frame advances when asked, by a fixed step
@@ -524,12 +525,13 @@
     }
     const shellOn = NativeShell.ready() && (S.state === 'boot' || S.state === 'home' || S.state === 'intro' || (S.state === 'results' && S.res));
     document.body.classList.toggle('nativeOS', NativeShell.ready());
+    if (NativeShell.ready() || document.body.classList.contains('nativeFail')) document.body.classList.remove('nativeWait');
     if (shellOn) {
       try {
         g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
         g.setTransform(view.s, 0, 0, view.s, view.ox, view.oy);
-        NativeShell.frame(dt, shellSnap(), g);
-      } catch (err) { console.error(err); }
+        NativeShell.frame(dt, shellSnap(), g); crashN = 0;
+      } catch (err) { console.error(err); if (++crashN >= 3) { crashN = 0; nativeReset(); } }   // the menu itself keeps failing: restart the engine
     } else if (S.game && (S.state === 'game' || S.state === 'results')) {
       try {
         if (S.state === 'game') S.game.update(dt);
@@ -538,8 +540,12 @@
         g.setTransform(view.s, 0, 0, view.s, view.ox + sx * view.s, view.oy + sy * view.s);
         g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip(); if (S.game) S.game.draw(g); g.restore();
         g.font = '800 16px Nunito, sans-serif'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(255,255,255,.55)';
-        g.fillText(`Join: ${S.code}  ·  Esc = menu`, W - 12, H - 8);
-      } catch (err) { console.error(err); }
+        g.fillText(`Join: ${S.code}  ·  Esc = menu`, W - 12, H - 8); crashN = 0;
+      } catch (err) {
+        console.error(err);
+        // a game that fails frame after frame is broken, not slow: tell everyone, go back to the menu with a fresh engine (it used to freeze on its last picture)
+        if (++crashN >= 3) { crashN = 0; const native = S.game instanceof NativeGame; if (S.game) S.game.dead = true; banner('😵 That game crashed — back to the menu', 3000, '#ff4d6d'); toHome(); if (native) nativeReset(); }
+      }
     }
     requestAnimationFrame(frame);
   }

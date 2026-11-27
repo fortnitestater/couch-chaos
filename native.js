@@ -17,8 +17,17 @@ function nativeScale() {
   return Math.max(1, Math.min(2, Math.round(px / 1600 * 20) / 20));
 }
 function nativeSetScale(rs) { if (NATIVE.mod && NATIVE.mod._cc_set_scale && Math.abs(rs - NATIVE.rs) > 0.01) { NATIVE.rs = rs; NATIVE.mod._cc_set_scale(rs); } }
+// A crash inside the engine (C++) can leave its memory broken: every later frame fails too. Throw that engine away
+// and start a fresh one (the menu falls back to the HTML version for the few seconds that takes).
+function nativeReset() {
+  const old = NATIVE.mod; NATIVE.mod = null; NATIVE.loading = null; NativeShell.last = '';
+  if (old && old.game) { try { old.game.dead = true; } catch (e) {} }
+  if (NATIVE.cv) { try { NATIVE.cv.remove(); } catch (e) {} NATIVE.cv = null; }
+  return nativeLoad().catch(e => { console.warn('engine restart failed', e); document.body.classList.add('nativeFail'); });
+}
 function nativeLoad() {
   if (NATIVE.loading) return NATIVE.loading;
+  document.body.classList.add('nativeWait');
   const cv = NATIVE.cv = document.createElement('canvas');
   cv.id = 'ccNative'; cv.width = 1600; cv.height = 900;
   cv.style.cssText = 'position:fixed;left:-20000px;top:0;width:1600px;height:900px;pointer-events:none';
