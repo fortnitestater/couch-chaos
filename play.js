@@ -856,11 +856,10 @@
   function renderTennis(L) {
     TN.st = null; TN.trail = null; TN.serve = !!L.serve; TN.lv = L.lv | 0;
     stage.innerHTML = `<div class="tnPad"><div class="bwTop"><b>YOUR SHOT</b><button class="bwBump on" id="tnLvl">${TN_LV[TN.lv]}</button><span id="tnScore">${L.serve ? 'You serve' : 'Rally'}</span></div>
+      <div class="tnBars"><div class="tnBar"><i id="tnSt"></i><span>💨 STAMINA</span></div><div class="tnBar hv"><i id="tnHv"></i><span id="tnHvT">🔥 POWER</span></div></div>
       <div class="bwWrap" id="tnWrap"><canvas id="tnCv"></canvas><div class="bwPrompt" id="tnPrompt"></div></div>
-      <div class="tnShots">${[['d', 'DRIVE', 'fast · flat'], ['l', 'LOB', 'high · deep'], ['s', 'DROP', 'short · soft']].map(s => `<button data-s="${s[0]}" class="${TN.shot === s[0] ? 'on' : ''}"><b>${s[1]}</b><small>${s[2]}</small></button>`).join('')}</div>
       <div class="rhint" id="tnHint"></div></div>`;
     $('#tnLvl').addEventListener('click', () => { TN.lv = (TN.lv + 1) % 3; $('#tnLvl').textContent = TN_LV[TN.lv]; sendMsg({ t: 'act', a: 'tlevel', i: TN.lv }); navigator.vibrate?.(10); });   // easy → normal → hard
-    stage.querySelectorAll('.tnShots button').forEach(b => b.addEventListener('pointerdown', e => { e.stopPropagation(); TN.shot = b.dataset.s; stage.querySelectorAll('.tnShots button').forEach(x => x.classList.toggle('on', x === b)); navigator.vibrate?.(10); }));
     const wrap = $('#tnWrap'), cv = $('#tnCv'), g = cv.getContext('2d'); let cw = 0, ch = 0, d = 1;
     const fit = () => { const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return; d = Math.min(2, devicePixelRatio || 1); cw = W; ch = H; cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px'; cv.style.height = H + 'px'; };
     fit(); addEventListener('resize', fit);
@@ -887,6 +886,11 @@
       let prompt = '', hint = '';
       if (!st) { prompt = ''; hint = 'Get ready…'; }
       else {
+        if (st.tg && (st.ph === 'serve' || st.ph === 'rally')) st.tg.forEach((q, ti) => {   // the target rings: land the ball in the bright one for a BULLSEYE (2 points)
+          const x = Xd(q[0], q[1]), y = Yd(q[1]), r = Math.max(9, Sc(q[1]) * 24), pu = 0.5 + 0.5 * Math.sin(performance.now() / 160 + ti), mine = ti === 0;
+          g.save(); g.globalAlpha = mine ? 1 : 0.4; g.fillStyle = `rgba(255,212,59,${0.18 + 0.15 * pu})`; g.beginPath(); g.ellipse(x, y, r, r * 0.5, 0, 0, 7); g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff3bf'; g.stroke();
+          g.fillStyle = 'rgba(255,77,109,.75)'; g.beginPath(); g.ellipse(x, y, r * 0.42, r * 0.21, 0, 0, 7); g.fill();
+          if (mine) { g.fillStyle = '#fff'; g.font = '800 11px system-ui'; g.textAlign = 'center'; g.fillText('🎯 ×2', x, y - r * 0.62); } g.restore(); });
         const pls = st.pl || [];
         for (const q of pls.slice().sort((a, b) => b[1] - a[1])) { const mine = q[2] === 1, x = Xd(q[0], q[1]), y = Yd(q[1]), r = Math.max(7, Sc(q[1]) * 15);
           g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x, y + r * 0.7, r * 0.95, r * 0.38, 0, 0, 7); g.fill();
@@ -906,10 +910,12 @@
         else if (st.ph === 'point') { prompt = st.msg || ''; hint = ''; }
         else if (st.ph === 'var') { prompt = 'HAWK-EYE'; hint = 'Reviewing the line…'; }
         else if (st.ph === 'end') { prompt = st.msg || 'GAME OVER'; }
-        if (hint === '' && st.ph !== 'point' && st.ph !== 'end' && st.ph !== 'var') hint = 'Flick up to hit · aim with the flick direction';
+        if (hint === '' && st.ph !== 'point' && st.ph !== 'end' && st.ph !== 'var') hint = 'Fast flick = drive · slow long swipe = lob · tiny flick = drop shot';
       }
       // the finger's trail
       if (TN.trail) { const a = 1 - (performance.now() - TN.trail.t) / 450; if (a > 0) { g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 8; g.strokeStyle = `rgba(255,255,255,${a * 0.8})`; g.beginPath(); TN.trail.pts.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y))); g.stroke(); } else TN.trail = null; }
+      if (st) { const a = $('#tnSt'), h = $('#tnHv'); if (a) { a.style.width = Math.round((st.sa == null ? 1 : st.sa) * 100) + '%'; a.style.background = st.sa > 0.5 ? '#51cf66' : st.sa > 0.25 ? '#ffd43b' : '#ff4d6d'; }
+        if (h) { const full = (st.hv || 0) >= 1; h.style.width = Math.round((st.hv || 0) * 100) + '%'; h.parentNode.classList.toggle('full', full); const ht = $('#tnHvT'); if (ht) ht.textContent = full ? '🔥 FIREBALL READY!' : '🔥 POWER'; if (full && st.r) hint = 'POWER FULL — your next hit is an unstoppable FIREBALL!'; } }
       const sc = $('#tnScore'); if (sc) { const t = !st ? '' : st.ph === 'serve' ? (st.sv ? 'You serve' : 'Return') : st.ph === 'rally' ? (st.r ? 'Your shot' : 'Their ball') : st.ph === 'var' ? 'Review' : ''; if (sc.textContent !== t) sc.textContent = t; }
       const pe = $('#tnPrompt'); if (pe && pe.textContent !== prompt) { pe.textContent = prompt; pe.classList.toggle('bwBig', !!prompt && (st && (st.ph === 'point' || st.ph === 'end' || st.z === 2))); }
       const he = $('#tnHint'); if (he && he.textContent !== hint) he.textContent = hint;
@@ -924,11 +930,11 @@
     wrap.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; pts.push(pos(e)); if (pts.length > 60) pts.shift(); TN.trail = { pts: pts.slice(), t: performance.now() + 9999 }; });
     const end = e => {
       if (e.pointerId !== pid) return; pid = null;
-      const f = bwFit(pts); let aim = 0, pw = 0.62;
-      if (f && f.dy >= 50) { aim = clamp(f.aimN * 1.2); pw = clamp(0.3 + f.powN * 0.7, 0.3, 1); }
+      const f = bwFit(pts); let aim = 0, pw = 0.62, shot = 'd';
+      if (f && f.dy >= 50) { aim = clamp(f.aimN * 1.2); pw = clamp(0.3 + f.powN * 0.7, 0.3, 1); shot = f.dy >= 170 && f.v < 0.6 ? 'l' : f.dy < 90 ? 's' : 'd'; }   // the shot comes from the swing: a long slow swipe is a lob, a tiny flick a drop shot, anything else a drive
       else if (pts.length > 4 && Math.abs(pts[pts.length - 1].x - pts[0].x) > 30) return;   // a sideways scribble isn't a swing
       TN.trail = pts.length > 4 ? { pts: pts.slice(), t: performance.now() } : null;
-      sendMsg({ t: 'act', a: 'swing', id: aim.toFixed(2) + '|' + TN.shot, p: +pw.toFixed(2) }); navigator.vibrate?.([20, 15, 30]);
+      sendMsg({ t: 'act', a: 'swing', id: aim.toFixed(2) + '|' + shot, p: +pw.toFixed(2) }); navigator.vibrate?.([20, 15, 30]);
     };
     wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
   }

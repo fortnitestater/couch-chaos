@@ -1,4 +1,4 @@
-// More studio games: Odd Elf Out (talk & vote), Copy Cat (remember the colours) and Doodle Dash
+// More studio games: Imposter (talk & vote), Copy Cat (remember the colours) and Doodle Dash
 // (draw on your phone, everyone guesses). Same stage + podiums as the quiz shows.
 #include "show.h"
 #include "data.h"
@@ -7,99 +7,125 @@
 using namespace kit;
 namespace {
 
-// ===================================================================================== ODD ELF OUT
-struct Elf : Show {
-  int R = 3, round = 0, elf = -1; std::string cat, word, phase = "intro", result; float t = 3, tMax = 1, phaseT = 0;
-  std::vector<int> order, votes, cnt; std::vector<bool> ready; std::vector<std::string> guessOpts; std::vector<float> botT;
-  void Start() override { InitStage(); tint = Hex(0x34c77b); R = std::min(3, std::max(2, N() - 1)); Layout(-1, Msg("🧝", "Odd Elf Out", "Your secret word is coming…")); }
+// ===================================================================================== IMPOSTER
+// Everyone gets the secret word, except ONE player (the imposter) who only gets a CLUE: a word that connects to it. Everybody says one word that fits,
+// they talk it out, and vote. No timers: the round moves on when everybody is ready (the host can push it on).
+struct Elf : Show {   // (the game id stays "elf")
+  int R = 3, round = 0, elf = -1, host = -1; std::string cat, word, clue, phase = "intro", result; float t = 3, phaseT = 0, nxt = -1;
+  std::vector<int> order, votes, cnt; std::vector<bool> ready; std::vector<std::string> guessOpts, usedWords; std::vector<float> botT;
+  int Humans() { int h = 0; for (int i = 0; i < N(); i++) h += !P(i).bot; return h; }
+  void Start() override {
+    InitStage(); tint = Hex(0xd6336c); R = std::min(3, std::max(2, N() - 1));
+    for (int i = 0; i < N(); i++) if (!P(i).bot) { host = i; break; }
+    Layout(-1, Msg("🕵️", "Imposter", "Your secret word is coming…"));
+  }
   void Next() {
     round++;
     if (round > R) { phase = "end"; Win(); return; }
-    auto& c = data::ELF[rand() % data::ELF.size()]; cat = c.first; word = Pick(c.second);
+    const data::Impo* e = &data::IMPO[0];
+    for (int tries = 0; tries < 40; tries++) { e = &data::IMPO[rand() % data::IMPO.size()]; if (std::find(usedWords.begin(), usedWords.end(), std::string(e->word)) == usedWords.end()) break; }
+    cat = e->cat; word = e->word; clue = e->clue; usedWords.push_back(word);
     std::vector<int> humans; for (int i = 0; i < N(); i++) if (!P(i).bot) humans.push_back(i);
     elf = humans.size() >= 3 ? Pick(humans) : rand() % N();
     order.clear(); for (int i = 0; i < N(); i++) order.push_back(i); Shuffle(order);
-    phase = "clue"; t = tMax = 60; phaseT = 0; ready.assign(N(), false); votes.assign(N(), -1); cnt.assign(N(), 0);
+    phase = "talk"; phaseT = 0; nxt = -1; ready.assign(N(), false); votes.assign(N(), -1); cnt.assign(N(), 0);
     for (int i = 0; i < N(); i++) if (!P(i).bot)
-      Layout(i, Choice(i == elf ? "You are the\n🧝 ODD ELF\nCategory: " + cat + " — blend in, fake a clue!" : "Your secret word\n" + word + "\nCategory: " + cat, { "✅ Ready to vote" }, 1, true, { "#34c77b" }, {}, 0, true));
+      Layout(i, Choice(i == elf ? "You are the 🕵️ IMPOSTER\n" + clue + "\nYour CLUE: a word connected to the real secret word. Say ONE word that fits it — and blend in!"
+                                : "Your secret word\n" + word + "\nSay ONE word that fits it. One of you only has a clue: find the imposter!",
+                       { "✅ Ready to vote" }, 1, true, { i == elf ? "#e8590c" : "#34c77b" }, {}, 0, true));
     Sfx("whoosh");
   }
+  int Ready() { int r = 0; for (int q = 0; q < N(); q++) if (!P(q).bot) r += ready[q]; return r; }
+  int Voted() { int v = 0; for (int x : votes) v += x >= 0; return v; }
   void Act(int p, const std::string& k, int i, float) override {
     if (k != "choice" || p < 0 || p >= N()) return;
-    if (phase == "clue" && !ready[p]) {
+    if (phase == "talk") {
+      if (ready[p]) { if (p == host && i == 0) nxt = 0.2f; return; }   // the host's button once they are ready: "vote now"
       ready[p] = true; Sfx("tick");
-      if (!P(p).bot) Layout(p, Msg("⏳", "Waiting for the others…", p == elf ? "Shh… you are the elf 🧝" : "Word: " + word));
-      int hum = 0, rd = 0; for (int q = 0; q < N(); q++) if (!P(q).bot) { hum++; rd += ready[q]; }
-      if (hum && rd >= (hum * 6 + 9) / 10) t = fminf(t, 1);
-    } else if (phase == "vote" && votes[p] < 0) {
+      if (!P(p).bot) Layout(p, p == host ? Choice("Waiting for the others… (" + std::string(p == elf ? "your clue: " + clue : "the word: " + word) + ")", { "⏩ Everyone is done: vote now" }, 1, false, { "#f08c00" })
+                                          : Msg("⏳", "Waiting for the others…", p == elf ? "Shh… you are the imposter 🕵️ · your clue: " + clue : "The word: " + word));
+      if (Humans() && Ready() >= Humans()) nxt = 0.8f;
+    } else if (phase == "vote") {
+      if (votes[p] >= 0) { if (p == host && !P(p).bot && i == 0) nxt = 0.2f; return; }   // the host's button once they have voted: "count the votes now"
       if (i < 0 || i >= N() || i == p) return;
       votes[p] = i; cnt[i]++; Sfx("tick");
-      if (!P(p).bot) Layout(p, Msg("🗳️", "You voted " + P(i).name));
-      bool all = true; for (int v : votes) all &= v >= 0; if (all) t = fminf(t, 0.6f);
-    } else if (phase == "guess" && p == elf && i >= 0 && i < (int)guessOpts.size()) Guess(guessOpts[i]);
+      if (!P(p).bot) Layout(p, p == host ? Choice("You voted " + P(i).name + ". Waiting for the others…", { "⏩ Count the votes now" }, 1, false, { "#f08c00" }) : Msg("🗳️", "You voted " + P(i).name, "Waiting for the others…"));
+      if (Voted() >= N()) nxt = 0.7f;
+    } else if (phase == "guess") {
+      if (p == elf && i >= 0 && i < (int)guessOpts.size()) Guess(guessOpts[i]);
+      else if (p == host && p != elf && i == 0) Guess("");   // the host skips a guess that never comes
+    }
   }
   void StartVote() {
-    phase = "vote"; t = tMax = 25; phaseT = 0; Sfx("alarm"); Banner("🗳️ VOTE: WHO IS THE ODD ELF?", 1800, "#ffd43b");
+    phase = "vote"; phaseT = 0; nxt = -1; Sfx("alarm"); Banner("🗳️ VOTE: WHO IS THE IMPOSTER?", 1800, "#ffd43b");
     std::vector<std::string> names, cols; for (int i = 0; i < N(); i++) { names.push_back(P(i).name); cols.push_back(Hx(P(i).color)); }
     botT.assign(N(), 0);
-    for (int i = 0; i < N(); i++) { if (!P(i).bot) { std::vector<bool> off(N(), false); off[i] = true; Layout(i, Choice("Who is the Odd Elf?", names, 2, false, cols, off)); } else botT[i] = frand(1.5f, 7); }
+    for (int i = 0; i < N(); i++) { if (!P(i).bot) { std::vector<bool> off(N(), false); off[i] = true; Layout(i, Choice("Who is the imposter?", names, 2, false, cols, off)); } else botT[i] = frand(1.5f, 7); }
   }
   void Tally() {
+    nxt = -1;
     int mx = 0, top = -1, ties = 0; for (int i = 0; i < N(); i++) { if (cnt[i] > mx) { mx = cnt[i]; top = i; ties = 1; } else if (cnt[i] == mx && mx > 0) ties++; }
-    if (ties == 1 && top == elf) {
-      phase = "guess"; t = tMax = 15; phaseT = 0;
-      for (auto& c : data::ELF) if (c.first == cat) { guessOpts = c.second; }
-      Shuffle(guessOpts); guessOpts.resize(6); if (std::find(guessOpts.begin(), guessOpts.end(), word) == guessOpts.end()) guessOpts[rand() % 6] = word;
-      Banner("CAUGHT! " + P(elf).name + " WAS THE ELF!", 2200, Hx(P(elf).color).c_str()); Sfx("ding");
-      for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, i == elf ? Choice("Last chance! Guess the secret word to steal the win:", guessOpts, 2) : Msg("🧝", P(elf).name + " is guessing the word…"));
-      if (P(elf).bot) botT.assign(N(), 2.5f);
+    if (ties == 1 && top == elf) {   // caught: one last chance, name the secret word
+      phase = "guess"; phaseT = 0;
+      guessOpts.clear(); for (auto& e : data::IMPO) if (cat == e.cat) guessOpts.push_back(e.word);
+      Shuffle(guessOpts); if (guessOpts.size() > 6) guessOpts.resize(6); if (std::find(guessOpts.begin(), guessOpts.end(), word) == guessOpts.end()) guessOpts[rand() % guessOpts.size()] = word;
+      Banner("CAUGHT! " + P(elf).name + " WAS THE IMPOSTER!", 2200, Hx(P(elf).color).c_str()); Sfx("ding");
+      for (int i = 0; i < N(); i++) if (!P(i).bot)
+        Layout(i, i == elf ? Choice("Last chance! What was the secret word? (your clue was " + clue + ")", guessOpts, 2)
+                           : i == host ? Choice(P(elf).name + " is guessing the word…", { "⏩ Skip the guess" }, 1, false, { "#f08c00" }) : Msg("🕵️", P(elf).name + " is guessing the word…"));
     } else {
-      Gain(elf, 300); Banner("THE ELF ESCAPED! It was " + P(elf).name, 2600, Hx(P(elf).color).c_str()); Sfx("buzz");
+      Gain(elf, 300); Banner("THE IMPOSTER ESCAPED! It was " + P(elf).name, 2600, Hx(P(elf).color).c_str()); Sfx("buzz");
       Result(P(elf).name + " fooled everyone!");
     }
   }
   void Guess(const std::string& w) {
     if (phase != "guess") return;
-    if (w == word) { Gain(elf, 300); Result(P(elf).name + " guessed \"" + word + "\" and steals it!"); Sfx("win"); }
-    else { for (int i = 0; i < N(); i++) if (i != elf) Gain(i, votes[i] == elf ? 200 : 100); Result("The word was \"" + word + "\". Elf hunters win!"); conf.Spawn({ 0, 4, 0 }, 100, 6, 6); Sfx("win"); }
+    if (w == word) { Gain(elf, 300); Result(P(elf).name + " named the word and steals the win!"); Sfx("win"); }
+    else { for (int i = 0; i < N(); i++) if (i != elf) Gain(i, votes[i] == elf ? 200 : 100); Result("Wrong guess: the crew wins!"); conf.Spawn({ 0, 4, 0 }, 100, 6, 6); Sfx("win"); }
   }
-  void Result(const std::string& s) { phase = "result"; t = 5.5f; phaseT = 0; result = s; for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, Msg("🧝", s, "Secret word: " + word)); }
+  void Result(const std::string& s) { phase = "result"; t = 8; phaseT = 0; result = s; for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, Msg("🕵️", s, "Secret word: " + word + " · the imposter's clue: " + clue)); }
   void Update(float dt) override {
     Tick(dt); t -= dt; phaseT += dt;
+    if (nxt > 0) { nxt -= dt; if (nxt <= 0) { nxt = -1; if (phase == "talk") StartVote(); else if (phase == "vote") Tally(); } }
     if (Ending(dt)) return;
     if (phase == "intro") { if (t <= 0) Next(); }
-    else if (phase == "clue") { for (int i = 0; i < N(); i++) if (P(i).bot && !ready[i] && tMax - t > 4 + i) ready[i] = true; if (t <= 0) StartVote(); }
-    else if (phase == "vote") { for (int i = 0; i < N(); i++) if (P(i).bot && votes[i] < 0 && tMax - t > botT[i]) { int v; do v = (frand(0, 1) < 0.35f && i != elf) ? elf : rand() % N(); while (v == i); Act(i, "choice", v, 0); } if (t <= 0) Tally(); }
-    else if (phase == "guess") { if (P(elf).bot && tMax - t > 2.5f) Guess(frand(0, 1) < 0.3f ? word : Pick(guessOpts)); else if (t <= 0) Guess(""); }
+    else if (phase == "talk") { for (int i = 0; i < N(); i++) if (P(i).bot && !ready[i] && phaseT > 4 + i) ready[i] = true; }
+    else if (phase == "vote") { for (int i = 0; i < N(); i++) if (P(i).bot && votes[i] < 0 && phaseT > botT[i]) { int v; do v = (frand(0, 1) < 0.35f && i != elf) ? elf : rand() % N(); while (v == i); Act(i, "choice", v, 0); } }
+    else if (phase == "guess") { if (P(elf).bot && phaseT > 2.5f) Guess(frand(0, 1) < 0.35f ? word : Pick(guessOpts)); }
     else if (phase == "result" && t <= 0) Next();
   }
   void Draw() override {
-    Stage([&](int i) { return (phase == "clue" && ready[i]) || (phase == "vote" && votes[i] >= 0); });
+    Stage([&](int i) { return (phase == "talk" && ready[i]) || (phase == "vote" && votes[i] >= 0); });
     Glass(78, 14, 330, 76, 20);   // the heading sits on glass: the neon frame no longer cuts through it
     Text(110, 42, 17, Hex(0xc9d3f2), "ROUND " + I(std::min(round, R)) + " OF " + I(R), -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
-    Text(110, 70, 26, WHITE, "ODD ELF OUT", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
-    if (phase == "clue" || phase == "vote" || phase == "guess") Timer(t, tMax, 1490, 66);
-    if (phase == "intro") { Glass(400, 230, 800, 240, 34); Text(800, 300, 20, Hex(0xc9d3f2), "TALK · BLUFF · VOTE", 0, TS_PLAIN | TS_HEAVY | TS_SPACED); Text(800, 370, 80, WHITE, "ODD ELF OUT", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD); }
-    else if (phase == "clue") {
+    Text(110, 70, 26, WHITE, "IMPOSTER", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
+    if (phase == "intro") { Glass(400, 230, 800, 260, 34); Text(800, 295, 20, Hex(0xc9d3f2), "TALK · BLUFF · FIND THE IMPOSTER", 0, TS_PLAIN | TS_HEAVY | TS_SPACED); Text(800, 365, 80, WHITE, "IMPOSTER", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
+      Text(800, 440, 24, Hex(0xdfe6ff), "Everybody knows the word — except one of you, who only has a clue", 0, TS_HEAVY | TS_PLAIN, 740); }
+    else if (phase == "talk") {
       Glass(110, 108, 1380, 420, 30);
-      Text(800, 150, 20, Hex(0xc9d3f2), "CATEGORY", 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
-      Text(800, 205, 64, WHITE, cat, 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
-      Text(800, 290, 28, WHITE, "Everyone has the secret word on their phone — except ONE Odd Elf.", 0, TS_HEAVY | TS_PLAIN, 1200);
-      Text(800, 340, 28, Hex(0xffe9a8), "Go in order and say ONE word clue out loud. Then vote!", 0, TS_HEAVY | TS_PLAIN, 1200);
-      Text(800, 470, 22, Hex(0xc9d3f2), "Tap \"Ready to vote\" on your phone when you're done", 0, TS_HEAVY | TS_PLAIN);
+      Text(800, 148, 20, Hex(0xc9d3f2), "THE SECRET WORD IS ON YOUR PHONES", 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
+      Text(800, 210, 64, WHITE, "FIND THE IMPOSTER", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
+      Text(800, 285, 28, WHITE, "Everyone knows the word — except ONE imposter, who only got a clue that connects to it.", 0, TS_HEAVY | TS_PLAIN, 1250);
+      Text(800, 335, 28, Hex(0xffe9a8), "Go round the circle: say ONE word that fits the secret word. Talk, argue, accuse — no timer!", 0, TS_HEAVY | TS_PLAIN, 1250);
+      Text(800, 405, 30, Hex(0x8ce99a), "✅ " + I(Ready()) + " of " + I(Humans()) + " ready to vote", 0, TS_HEAVY | TS_SHADOW | TS_PLAIN);
+      Text(800, 468, 22, Hex(0xc9d3f2), "Tap \"Ready to vote\" on your phone when you are sure who it is", 0, TS_HEAVY | TS_PLAIN);
     } else if (phase == "vote") {
-      Glass(310, 150, 980, 200, 30);
-      Text(800, 230, 66, WHITE, "WHO IS THE ODD ELF?", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
-      Text(800, 300, 24, Hex(0xc9d3f2), "Vote on your phone", 0, TS_HEAVY | TS_PLAIN);
+      Glass(310, 150, 980, 220, 30);
+      Text(800, 230, 66, WHITE, "WHO IS THE IMPOSTER?", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
+      Text(800, 305, 26, Hex(0xc9d3f2), "Vote on your phone · " + I(Voted()) + " of " + I(N()) + " voted", 0, TS_HEAVY | TS_PLAIN);
     } else if (phase == "guess" || phase == "result") {
-      Glass(210, 140, 1180, 230, 30);
-      Text(800, 210, 40, WHITE, phase == "guess" ? P(elf).name + " is guessing the word…" : result, 0, TS_HEAVY | TS_SHADOW | TS_PLAIN, 1100);
-      if (phase == "result") Text(800, 300, 44, Hex(0xffe066), "The word was: " + word, 0, TS_DISPLAY | TS_SHADOW);
-    } else if (phase == "end") Heading("FINAL SCORES", "ODD ELF OUT", 70, 52);
+      bool res = phase == "result"; Glass(210, 110, 1180, res ? 400 : 230, 30);
+      Text(800, 175, 40, WHITE, phase == "guess" ? P(elf).name + " is guessing the word…" : result, 0, TS_HEAVY | TS_SHADOW | TS_PLAIN, 1100);
+      if (res) {
+        Text(800, 245, 46, Hex(0xffe066), "The word was: " + word, 0, TS_DISPLAY | TS_SHADOW);
+        Text(800, 295, 24, Hex(0xdfe6ff), "The imposter (" + P(elf).name + ") only had the clue: " + clue, 0, TS_HEAVY | TS_PLAIN, 1100);
+        for (int i = 0; i < N(); i++) Text(N() <= 4 ? 800 : 800 + (i % 2 ? 250 : -250), N() <= 4 ? 352 + i * 34 : 352 + (i / 2) * 34, 22, P(i).color, P(i).name + " → " + (votes[i] >= 0 ? P(votes[i]).name : std::string("—")), 0, TS_HEAVY | TS_PLAIN);   // who voted for whom
+      }
+    } else if (phase == "end") Heading("FINAL SCORES", "IMPOSTER", 70, 52);
     PodiumLabels([&](int i) -> std::string {
-      if (phase == "clue") { int k = (int)(std::find(order.begin(), order.end(), i) - order.begin()); return I(k + 1) + (ready[i] ? " ✅" : ""); }
+      if (phase == "talk") { int k = (int)(std::find(order.begin(), order.end(), i) - order.begin()); return I(k + 1) + (ready[i] ? " ✅" : ""); }
       if (phase == "vote") return votes[i] >= 0 ? "🗳️" : "";
-      if (phase == "guess" || phase == "result") return (i == elf ? "🧝 " : "") + I(cnt[i]) + (cnt[i] == 1 ? " vote" : " votes");
+      if (phase == "guess" || phase == "result") return (i == elf ? "🕵️ " : "") + I(cnt[i]) + (cnt[i] == 1 ? " vote" : " votes");
       return "";
     });
   }
