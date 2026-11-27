@@ -851,13 +851,15 @@
     wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
   }
   // ---------- 🎾 tennis: the court is on your phone. Watch the ring close, FLICK to hit, pick DRIVE / LOB / DROP ----------
-  const TN = { st: null, shot: 'd', raf: 0, trail: null, sw: 0 };
+  const TN = { st: null, shot: 'd', raf: 0, trail: null, sw: 0, lv: 0 };
+  const TN_LV = ['😊 Easy', '🎾 Normal', '🔥 Hard'];   // the difficulty, shown on the button
   function renderTennis(L) {
-    TN.st = null; TN.trail = null; TN.serve = !!L.serve;
-    stage.innerHTML = `<div class="tnPad"><div class="bwTop"><b>YOUR SHOT</b><span id="tnScore">${L.serve ? 'You serve' : 'Rally'}</span></div>
+    TN.st = null; TN.trail = null; TN.serve = !!L.serve; TN.lv = L.lv | 0;
+    stage.innerHTML = `<div class="tnPad"><div class="bwTop"><b>YOUR SHOT</b><button class="bwBump on" id="tnLvl">${TN_LV[TN.lv]}</button><span id="tnScore">${L.serve ? 'You serve' : 'Rally'}</span></div>
       <div class="bwWrap" id="tnWrap"><canvas id="tnCv"></canvas><div class="bwPrompt" id="tnPrompt"></div></div>
       <div class="tnShots">${[['d', 'DRIVE', 'fast · flat'], ['l', 'LOB', 'high · deep'], ['s', 'DROP', 'short · soft']].map(s => `<button data-s="${s[0]}" class="${TN.shot === s[0] ? 'on' : ''}"><b>${s[1]}</b><small>${s[2]}</small></button>`).join('')}</div>
       <div class="rhint" id="tnHint"></div></div>`;
+    $('#tnLvl').addEventListener('click', () => { TN.lv = (TN.lv + 1) % 3; $('#tnLvl').textContent = TN_LV[TN.lv]; sendMsg({ t: 'act', a: 'tlevel', i: TN.lv }); navigator.vibrate?.(10); });   // easy → normal → hard
     stage.querySelectorAll('.tnShots button').forEach(b => b.addEventListener('pointerdown', e => { e.stopPropagation(); TN.shot = b.dataset.s; stage.querySelectorAll('.tnShots button').forEach(x => x.classList.toggle('on', x === b)); navigator.vibrate?.(10); }));
     const wrap = $('#tnWrap'), cv = $('#tnCv'), g = cv.getContext('2d'); let cw = 0, ch = 0, d = 1;
     const fit = () => { const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return; d = Math.min(2, devicePixelRatio || 1); cw = W; ch = H; cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px'; cv.style.height = H + 'px'; };
@@ -1326,7 +1328,7 @@
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
-    else if (m.t === 'tn') { TN.st = m; }
+    else if (m.t === 'tn') { TN.st = m; if (m.lv != null && m.lv !== TN.lv) { TN.lv = m.lv; const lb = $('#tnLvl'); if (lb) lb.textContent = TN_LV[TN.lv]; } }
     else if (m.t === 'bowl') { const s = BW.st; s.ph = m.ph; if (m.x != null) { s.x = +m.x; s.z = +m.z; } if (m.pins != null) s.pins = m.pins | 0; if (m.bump != null) BW.bump = !!m.bump; s.msg = m.msg || ''; if (m.ph !== 'aim') BW.thrown = BW.thrown || 1; if (m.ph === 'aim') { BW.thrown = 0; BW.mode = null; } }
     else if (m.t === 'paint') { if (TM.on) TM.paint = m; }
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);

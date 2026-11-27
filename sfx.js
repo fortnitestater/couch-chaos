@@ -161,6 +161,8 @@ const SFX = (() => {
     bowlCrash(vm = 1) { if (!S.b_strike) { play('strike', 2, 1, true); return; } const a = Math.random() < 0.5; samp(a ? 'b_strike' : 'b_strike2', { vol: (a ? 2.1 : 2.6) * vm, off: a ? 0.5 : 0.8, dur: 2.7, fo: 0.5 }); },   // the pins go down
     bowlPin() { if (!ok('bp', 85) || !S.b_pin) return; if (Math.random() < 0.3 && S.b_pins) samp('b_pins', { vol: 1.1, off: 0.0, dur: 1.6, rate: 0.9 + Math.random() * 0.2, fo: 0.4 }); else samp('b_pin', { vol: 1.2, off: 0.05, dur: 0.9, rate: 0.88 + Math.random() * 0.3, fo: 0.3 }); },   // a pin knocking another
     bowlReturn() { samp('b_return', { vol: 0.9, off: 2.7, dur: 2.6, delay: 1.2, fo: 0.9 }); },                              // the ball comes back up the return
+    bowlSweep() { samp('b_pins', { vol: 1.3, off: 0.0, dur: 2.2, delay: 0.5, rate: 0.85, fo: 0.7 }); },                                   // the sweep clears the deck into the pit
+    bowlRack() { samp('b_pin', { vol: 1.1, off: 0.05, dur: 0.8, rate: 0.8, fo: 0.3 }); samp('b_pins', { vol: 0.5, off: 0.0, dur: 0.9, rate: 1.25, fo: 0.4 }); },   // a new rack of pins is set down
     bowlAmbienceOff() { SFX.bowlAmbience(false); },
     bowlAmbience(on = true) {   // the sound of the alley behind everything: far pins, voices, a bit of music
       if (!ac) return; if (!on) { loopStop(ambSrc, 1.0); ambSrc = null; return; }

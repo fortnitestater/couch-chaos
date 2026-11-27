@@ -165,6 +165,7 @@ struct Bowling : Classic {
   // the intro
   float introT = 0, fadeA = 0, fadeSpd = 1.1f, blackT = 0, impT = -1, camX = 0; int introWho = 0; bool introBlack = false, introFade = false, introThrown = false, introHit = false, introRose = false; int cues = 0;
   struct HeroPin { bool on = false; Vector3 p{}, q{}; float t = 0, ang = 0; } hero;
+  float showT = 0, sweepU = -1, rackT = 9; bool swPlayed = false, rkPlayed = true;   // the pinsetter: sweepU runs 0..1 through the sweep, rackT how long ago a new rack was set
   bool heroDraw = false, hideHud = false;   // hideHud: the scoreboard and captions stay off while the screen fades up from black
   Lane& Mine() { return lanes[-LMIN]; }
   ~Bowling() { for (Texture2D* t : { &carpet, &banner, &neon, &ads }) if (t->id) UnloadTexture(*t); Sfx("bowlRollOff"); Sfx("bowlGutterOff"); Sfx("bowlAmbienceOff"); }
@@ -229,6 +230,7 @@ struct Bowling : Classic {
   }
   void AimPhase() {
     bool cut = phase == "show";   // back to your own eyes: a straight cut, through a quick dip to black
+    if (roll == 0 && phase != "intro") { rackT = 0; rkPlayed = false; }   // a new frame: the machine sets down a fresh rack
     phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : 20; Mine().ball.on = false; camZ = -3.4f; shot = false; crash = false; startMask = Mine().pins.Mask();
     if (cut) { rig.Cut(); fadeA = 0.8f; fadeSpd = 1.f / 0.4f; }
     bxn = bxs = baimN = bhookN = 0; bpowN = 0.7f; aimLive = false; aim = 0;
@@ -288,7 +290,7 @@ struct Bowling : Classic {
     if (g_dbg == 36) fprintf(stderr, "BOWL ball=%d newly=%d down=%d%c", roll, newly, down, 10);   // debug: print every result
     pts[cur] += gain; if (again) roll = 1;
     Sfx("bowlRollOff"); Sfx("bowlGutterOff"); Sfx("bowlReturn");   // the rumble stops and the ball comes back up the return
-    phase = "show"; wait = down == 10 ? 3 : 2.4f; SendBowl("show", res);
+    phase = "show"; showT = 0; sweepU = -1; swPlayed = false; wait = down == 10 ? 3 : 2.4f; SendBowl("show", res);
   }
 
   // ---------------------------------------------------------------- update
@@ -320,10 +322,23 @@ struct Bowling : Classic {
       bool near = b.z > 16.5f && b.z < 19.5f && roll == 0; ts += ((near ? 0.4f : 1.f) - ts) * fminf(1.f, dt * 8);
       if ((b.z > PIT_Z + 0.4f && !L.pins.Moving()) || rollT > 9) Score();
     }
-    if (phase == "show") { windT += dt; wait -= dt; if (wait <= 0) { if (again) AimPhase(); else NextTurn(); } }
+    if (phase == "show") { windT += dt; showT += dt; UpdateSweep(); wait -= dt; if (wait <= 0) { if (again) AimPhase(); else NextTurn(); } }
   }
   // the whole alley carries on: the pins on every lane, and the other bowlers
+  // after a ball: the standing pins are lifted, the sweep bar clears everything else into the pit, the pins come back down. A new frame drops a fresh rack.
+  void UpdateSweep() {
+    const float SW0 = 0.7f, SWD = 1.6f; float u = (showT - SW0) / SWD; if (u < 0) { sweepU = -1; return; } if (u > 1) u = 1; sweepU = u;
+    if (!swPlayed) { swPlayed = true; Sfx("bowlSweep"); }
+    PinSet& ps = Mine().pins; float bz = SweepBar(u).z;
+    if (u >= 0.25f && u < 1) for (int i = 0; i < 10; i++) {
+      PinB& q = ps.p[i]; if (q.st == 3 || ps.Up(i)) continue;
+      if (q.z < bz + 0.12f) { q.z = bz + 0.12f; q.vx = q.vz = 0; if (q.st == 0) { q.st = 2; q.tilt = 1.5f; } }
+      if (q.z > PIT_Z + 0.02f && !q.inPit) { q.inPit = true; q.vy = -1.2f; q.vz = 0.6f; }
+    }
+    if (u >= 1) { for (int i = 0; i < 10; i++) if (!ps.Up(i)) ps.p[i].st = 3; sweepU = -1; }   // the machine takes the fallen pins away
+  }
   void UpdateWorld(float dt) {
+    rackT += dt; if (!rkPlayed && rackT > 0.8f) { rkPlayed = true; Sfx("bowlRack"); }
     for (auto& L : lanes) {
       if (std::abs(L.k) == 5) continue;   // the far lanes are just scenery
       if (L.k == 0) { if (L.ball.on && phase != "roll") RollStep(L.ball, L.pins, dt, 0); else if (phase != "roll" && L.pins.Moving()) StepPins(L.pins, dt); continue; }
@@ -371,12 +386,13 @@ struct Bowling : Classic {
     rlTexCoord2f(0, 0); rlVertex3f(x0, y, z0); rlTexCoord2f(0, (z1 - z0) / tile); rlVertex3f(x0, y, z1); rlTexCoord2f((x1 - x0) / tile, (z1 - z0) / tile); rlVertex3f(x1, y, z1); rlTexCoord2f((x1 - x0) / tile, 0); rlVertex3f(x1, y, z0);
     rlEnd(); rlSetTexture(0);
   }
-  void DrawPins(const PinSet& ps, float lx, bool casters, bool skip0 = false) {
+  void DrawPins(const PinSet& ps, float lx, bool casters, bool skip0 = false, float lift = 0) {
     for (int i = 0; i < 10; i++) {
       const PinB& q = ps.p[i]; if (q.st == 3 || (skip0 && i == 0)) continue;
+      float up = (q.st == 0 && !q.inPit) ? lift : 0;   // only pins that are standing are lifted
       float wob = 0; if (q.st == 0 && q.wobT > 0) { float a = 1.4f - q.wobT; wob = q.wobA * sinf(40 * a) * expf(-2.2f * a); }
       float tl = q.st == 0 ? wob : q.tilt; Vector3 ax = { q.dz, 0, -q.dx }; if (q.st == 0 && q.wobT <= 0) ax = { 1, 0, 0 };
-      Matrix m = MatrixMultiply(MatrixRotate(ax, tl), MatrixTranslate(lx + q.x, q.y + (q.st == 0 ? 0.f : 0.058f * sinf(q.tilt)), q.z));
+      Matrix m = MatrixMultiply(MatrixRotate(ax, tl), MatrixTranslate(lx + q.x, q.y + up + (q.st == 0 ? 0.f : 0.058f * sinf(q.tilt)), q.z));
       DrawProp(props.pin, m);
       if (casters && q.st == 0) lit.Caster({ lx + q.x, 0, q.z }, 0.07f);
     }
@@ -468,22 +484,58 @@ struct Bowling : Classic {
     }
   }
 
+  // the sweep bar of the pinsetter: parked up in the machine, it swings out over the deck, drops, sweeps the fallen pins back into the pit, lifts and parks again.
+  // u is 0..1 through the cycle; x is unused (the bar spans the lane)
+  static Vector3 SweepBar(float u) {
+    const Vector3 park = { 0, 1.15f, 20.05f }, out = { 0, 1.05f, 17.95f }, low = { 0, 0.06f, 17.95f }, end = { 0, 0.06f, 19.6f }, up = { 0, 1.0f, 19.6f };
+    if (u <= 0) return park; if (u >= 1) return park;
+    if (u < 0.12f) return Vector3Lerp(park, out, Sm(u / 0.12f));
+    if (u < 0.25f) return Vector3Lerp(out, low, Sm((u - 0.12f) / 0.13f));
+    if (u < 0.75f) return Vector3Lerp(low, end, (u - 0.25f) / 0.5f);
+    if (u < 0.88f) return Vector3Lerp(end, up, Sm((u - 0.75f) / 0.13f));
+    return Vector3Lerp(up, park, Sm((u - 0.88f) / 0.12f));
+  }
+  static float PinLift(float u) { if (u <= 0 || u >= 1) return 0; return 0.55f * (u < 0.12f ? Sm((u - 0.02f) / 0.1f) : u < 0.8f ? 1.f : 1 - Sm((u - 0.8f) / 0.18f)); }   // the standing pins are lifted out of the way
+  float PinsLift() { float a = rackT < 0.9f ? 1.1f * (1 - Sm(rackT / 0.9f)) : 0.f; return fmaxf(a, sweepU > 0 ? PinLift(sweepU) : 0.f); }
+  void DrawSweepBar(float lx, Vector3 p) {
+    lit.Draw(prim.cyl, TRS({ lx, p.y, p.z }, { 0, 0, PI / 2 }, { 0.07f, 1.12f, 0.07f }), Hex(0x8b93a3));
+    for (int sd = -1; sd <= 1; sd += 2) lit.Draw(prim.cube, TRS({ lx + sd * 0.56f, p.y + 0.28f, p.z }, { 0, 0, 0 }, { 0.05f, 0.56f, 0.05f }), Hex(0x5b6272));
+  }
+  // the end of a lane, built like a real one: the deck flanked by steel kickback plates, an open pit with its black cushion, and the pinsetter machine above it
+  void DrawLaneEnd(float lx, int k) {
+    const Color plate = Hex(0xa9b1c0), steel = Hex(0x9aa3b4), dark = Hex(0x1b1b24);
+    for (int sd = (k == LMIN ? -1 : 1); sd <= 1; sd += 2) {
+      float x = lx + sd * PITCH / 2;   // the divider between this lane and the next
+      lit.Draw(prim.cube, TRS({ x, 0.1f, 18.7f }, { 0, 0, 0 }, { 0.04f, 0.3f, 1.6f }), plate);        // kickback plate along the pin deck
+      lit.Draw(prim.cube, TRS({ x, -0.06f, 20.3f }, { 0, 0, 0 }, { 0.04f, 0.68f, 1.6f }), plate);      // the pit's side wall (the pit is below the deck)
+    }
+    lit.Draw(prim.cube, TRS({ lx, -0.4f, 20.48f }, { 0, 0, 0 }, { PITCH, 0.05f, 1.95f }), Hex(0x2a2a34));   // the pit floor
+    lit.Draw(prim.cube, TRS({ lx, 0.41f, 21.3f }, { 0, 0, 0 }, { 1.5f, 1.58f, 0.12f }), dark);           // the pit cushion
+    for (float y : { -0.05f, 0.3f, 0.65f }) lit.Draw(prim.cube, TRS({ lx, y, 21.235f }, { 0, 0, 0 }, { 1.5f, 0.04f, 0.02f }), Hex(0x3c3c4a));   // its ribs
+    lit.Draw(prim.cube, TRS({ lx, 2.0f, 21.3f }, { 0, 0, 0 }, { PITCH, 1.7f, 1.3f }), steel);            // the pinsetter housing above the pit
+    lit.Draw(prim.cube, TRS({ lx, 1.5f, 20.64f }, { 0, 0, 0 }, { 1.12f, 0.55f, 0.04f }), Hex(0x15161c)); // the opening the pins are lifted into
+    lit.Draw(prim.cube, TRS({ lx, 1.2f, 20.64f }, { 0, 0, 0 }, { PITCH, 0.1f, 0.05f }), Hex(0xe0b020)); // a hazard stripe along its lower edge
+    lit.Draw(prim.cube, TRS({ lx, 2.4f, 20.63f }, { 0, 0, 0 }, { 1.3f, 0.25f, 0.03f }), Hex(0x6a7283)); // a panel with its vents
+    if (k != 0) DrawSweepBar(lx, SweepBar(0));
+  }
   // ---------------------------------------------------------------- the building
   void DrawHall(Color) {
     // the floor outside the lanes is carpet with neon shapes; the approaches are polished wood
-    if (carpet.id) Floor(carpet, -24, 24, -16, 28, -0.04f, 3.5f, Color{ 150, 150, 175, 255 }); else lit.Draw(prim.plane, TRS({ 0, -0.04f, 6 }, { 0, 0, 0 }, { 48, 1, 44 }), Hex(0x1a1033));
+    if (carpet.id) {   // the carpet everywhere except the pits: those are open recesses behind the pin decks
+      const float PX = LaneX(LMAX) + PITCH / 2; Color cc = Color{ 150, 150, 175, 255 };
+      Floor(carpet, -24, -PX, -16, 28, -0.04f, 3.5f, cc); Floor(carpet, PX, 24, -16, 28, -0.04f, 3.5f, cc); Floor(carpet, -PX, PX, -16, 19.5f, -0.04f, 3.5f, cc); Floor(carpet, -PX, PX, 21.45f, 28, -0.04f, 3.5f, cc);
+    } else lit.Draw(prim.plane, TRS({ 0, -0.04f, 6 }, { 0, 0, 0 }, { 48, 1, 44 }), Hex(0x1a1033));
     lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ 0, -0.02f, -3.3f }, { 0, 0, 0 }, { PITCH * 11 + 0.6f, 0.04f, 6.6f }), Hex(0xd9b27c)); lit.Pattern(PAT_NONE);
     for (float z : { -1.5f, -2.6f }) for (int k = LMIN; k <= LMAX; k++) for (int d = -1; d <= 1; d++) lit.Draw(prim.cyl, TRS({ LaneX(k) + d * 0.16f, 0.0f, z }, { 0, 0, 0 }, { 0.05f, 0.005f, 0.05f }), Hex(0x2b2b30));   // stance dots
     for (int k = LMIN; k <= LMAX; k++) {
       float lx = LaneX(k);
-      lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ lx, -0.01f, 9.85f }, { 0, 0, 0 }, { 1.05f, 0.02f, 19.7f }), Hex(0xf2d29c)); lit.Pattern(PAT_NONE);
-      for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ lx + s * 0.65f, -0.07f, 9.85f }, { 0, 0, 0 }, { 0.25f, 0.02f, 19.7f }), Hex(0x14141c));   // gutters
+      lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ lx, -0.01f, 9.75f }, { 0, 0, 0 }, { 1.05f, 0.02f, 19.5f }), Hex(0xf2d29c)); lit.Pattern(PAT_NONE);
+      for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ lx + s * 0.65f, -0.07f, 9.75f }, { 0, 0, 0 }, { 0.25f, 0.02f, 19.5f }), Hex(0x14141c));   // gutters
       lit.Draw(prim.cube, TRS({ lx, 0.003f, 0.0f }, { 0, 0, 0 }, { 1.05f, 0.012f, 0.05f }), Hex(0xd7263d));   // foul line
       if (bumpers) for (int sd = -1; sd <= 1; sd += 2) DrawBumper(lx, sd, std::abs(k) <= 3);
       for (int i = -3; i <= 3; i++) lit.Draw(prim.cone, TRS({ lx + i * 0.12f, 0.005f, 4.6f + fabsf((float)i) * 0.3f }, { PI / 2, 0, 0 }, { 0.04f, 0.12f, 0.01f }), Hex(0x5b2d7a));   // the arrows
-      lit.Draw(prim.cube, TRS({ lx, -0.25f, 20.3f }, { 0, 0, 0 }, { 1.5f, 0.5f, 1.6f }), Hex(0x07070c));   // the pit
-      lit.Draw(prim.cube, TRS({ lx, 1.2f, 21.2f }, { 0, 0, 0 }, { 1.5f, 2.6f, 0.2f }), Hex(0x15122b));      // kickback
-      lit.Draw(prim.cube, TRS({ lx, 3.3f, 21.4f }, { 0, 0, 0 }, { 1.5f, 1.2f, 0.3f }), Hex(0x0f0c22));      // the masking unit over the pins
+      DrawLaneEnd(lx, k);
+      lit.Draw(prim.cube, TRS({ lx, 3.5f, 21.9f }, { 0, 0, 0 }, { PITCH, 1.2f, 0.3f }), Hex(0x0f0c22));      // the masking unit over the machine
       lit.Draw(prim.cube, TRS({ lx, 3.7f, 3.02f }, { 0, 0, 0 }, { 0.98f, 0.56f, 0.04f }), Hex(0x2a2a36));   // overhead monitor frame
       if (k < LMAX) DrawBallReturn(lx + PITCH / 2, k);   // a ball return between this lane and the next
     }
@@ -501,6 +553,8 @@ struct Bowling : Classic {
       float lx = LaneX(k); Color sc = k == 0 ? Hex(0x4dabff) : ColorFromHSV(fmodf(k * 61 + time * 6, 360), 0.45f, 0.9f);
       DrawCube({ lx, 3.7f, 3.0f }, 0.9f, 0.5f, 0.02f, Fade(sc, 0.22f));                        // the overhead score monitor
       DrawCube({ lx, 0.01f, 9.85f }, 1.0f, 0.002f, 19.6f, Color{ 255, 238, 200, 10 });         // a sheen of light down the boards
+      DrawCube({ lx, 1.1f, 20.58f }, 1.3f, 0.04f, 0.05f, Color{ 255, 250, 235, 235 });          // the lamp bar under the pinsetter
+      DrawCube({ lx, 0.015f, 18.75f }, 1.0f, 0.004f, 1.3f, Color{ 255, 244, 220, 26 });          // it floods the pin deck with light
     }
     rlDrawRenderBatchActive(); EndBlendMode(); BeginBlendMode(BLEND_ALPHA);
     if (ads.id) for (int k = LMIN; k <= LMAX; k++) { float lx = LaneX(k), u0 = ((k + 5 + (int)time / 6) % 8) / 8.f; Quad(ads, { lx + 0.7f, 0, 21.2f }, { lx - 0.7f, 0, 21.2f }, 3.05f, 3.55f, u0, u0 + 0.125f, 0.05f, 0.95f, Color{ 235, 235, 235, 255 }); }
@@ -572,6 +626,7 @@ struct Bowling : Classic {
     else { direct = false; if (phase == "show") { S = DECK; k = 2.4f; } else S = { { bxw * 0.85f, 1.62f, -5.5f }, { bxw * 0.35f, 0.5f, 15.0f }, 56 }; }
     if (g_dbg == 31) { S = { { LaneX(BIRTHDAY) + 2.6f, 1.55f, -5.2f }, { LaneX(BIRTHDAY) - 0.2f, 1.1f, -1.2f }, 50 }; k = 9; direct = false; }      // debug: the birthday lane
     if (g_dbg == 32) { S = { { LaneX(FOOD) - 2.6f, 1.55f, -5.2f }, { LaneX(FOOD) + 0.2f, 1.0f, -1.5f }, 50 }; k = 9; direct = false; }               // debug: the buffet
+    if (g_dbg == 34) { S = { { 0.15f, 1.15f, 16.6f }, { 0.0f, 0.55f, 20.8f }, 52 }; k = 9; direct = false; }   // debug: the pit and the pinsetter
     if (g_dbg == 33) { S = { { LaneX(1) + 0.9f, 1.55f, -5.5f }, { LaneX(1), 1.0f, 2.0f }, 50 }; k = 9; direct = false; }                              // debug: a neighbour bowling
     if (direct) { rig.p = S.p; rig.t = S.t; rig.f = S.f; rig.vp = rig.vt = {}; rig.vf = 0; rig.on = true; cam.position = S.p; cam.target = S.t; cam.fovy = S.f; }   // scripted: the rig follows along so a cut back to a spring shot is seamless
     else { Camera3D rc = rig.Go(S.p, S.t, S.f, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
@@ -581,8 +636,10 @@ struct Bowling : Classic {
     BeginMode3D(cam);
     lit.noRec = true; DrawHall(WHITE);   // the alley around you is a backdrop: it doesn't need to cast shadows
     if (phase == "intro") DrawSeating();   // the seats behind the approach are only in view during the flyover
-    for (auto& L : lanes) { float lx = LaneX(L.k); lit.noRec = L.k != 0; DrawPins(L.pins, lx, L.k == 0, L.k == 0 && hero.on); if (L.k != 0 && L.ball.on) DrawBall(L.ball, lx, L.ballCol, false); }
+    for (auto& L : lanes) { float lx = LaneX(L.k); lit.noRec = L.k != 0; DrawPins(L.pins, lx, L.k == 0, L.k == 0 && hero.on, L.k == 0 ? PinsLift() : 0.f); if (L.k != 0 && L.ball.on) DrawBall(L.ball, lx, L.ballCol, false); }
     lit.noRec = false;
+    { float lf = PinsLift(); DrawSweepBar(0, sweepU > 0 ? SweepBar(sweepU) : SweepBar(0));   // lane 0's sweep bar, and the table that holds the lifted pins
+      if (lf > 0.01f) lit.Draw(prim.cube, TRS({ 0, 0.41f + lf, 18.7f }, { 0, 0, 0 }, { 0.9f, 0.03f, 0.95f }), Hex(0x2a2d36)); }
     // your ball: on the foul line while you line it up, in the bowler's hand while they walk up, then rolling
     Color bc = P(cur).color;
     if (phase == "aim") { Ball b; b.x = bxw; b.z = 0.35f; b.y = BALL_R; DrawBall(b, 0, bc, true); }
