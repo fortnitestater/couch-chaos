@@ -853,8 +853,17 @@
   // ---------- 🎾 tennis: the court is on your phone. Watch the ring close, FLICK to hit, pick DRIVE / LOB / DROP ----------
   const TN = { st: null, shot: 'd', raf: 0, trail: null, sw: 0, lv: 0 };
   const TN_LV = ['😊 Easy', '🎾 Normal', '🔥 Hard'];   // the difficulty, shown on the button
+  // the court on the phone arrives as snapshots; between them every player and the ball glide to where they are now, so nothing moves in steps
+  function tnSm(st) {
+    const now = performance.now(), dt = Math.min(0.1, (now - (TN.smT || now)) / 1000); TN.smT = now; const a = 1 - Math.exp(-dt * 26);
+    const pl = st.pl || []; if (!TN.sp || TN.sp.length !== pl.length) TN.sp = pl.map(q => q.slice());
+    pl.forEach((q, i) => { const d = TN.sp[i]; if (Math.hypot(q[0] - d[0], q[1] - d[1]) > 5) { d[0] = q[0]; d[1] = q[1]; } else { d[0] += (q[0] - d[0]) * a; d[1] += (q[1] - d[1]) * a; } d[2] = q[2]; });
+    if (st.b) { if (!TN.sb || !st.live || Math.hypot(st.b[0] - TN.sb[0], st.b[1] - TN.sb[1]) > 7) TN.sb = st.b.slice(); else for (let i = 0; i < 3; i++) TN.sb[i] += (st.b[i] - TN.sb[i]) * a; }
+    TN.sk = TN.sk == null ? st.k : TN.sk + (st.k - TN.sk) * a;
+    return TN.sp;
+  }
   function renderTennis(L) {
-    TN.st = null; TN.trail = null; TN.serve = !!L.serve; TN.lv = L.lv | 0;
+    TN.st = null; TN.trail = null; TN.sp = null; TN.sb = null; TN.sk = null; TN.serve = !!L.serve; TN.lv = L.lv | 0;
     stage.innerHTML = `<div class="tnPad"><div class="bwTop"><b>YOUR SHOT</b><button class="bwBump on" id="tnLvl">${TN_LV[TN.lv]}</button><span id="tnScore">${L.serve ? 'You serve' : 'Rally'}</span></div>
       <div class="tnBars"><div class="tnBar"><i id="tnSt"></i><span>💨 STAMINA</span></div><div class="tnBar hv"><i id="tnHv"></i><span id="tnHvT">🔥 POWER</span></div></div>
       <div class="bwWrap" id="tnWrap"><canvas id="tnCv"></canvas><div class="bwPrompt" id="tnPrompt"></div></div>
@@ -894,18 +903,18 @@
           g.save(); g.globalAlpha = mine ? 1 : 0.4; g.fillStyle = `rgba(255,212,59,${0.18 + 0.15 * pu})`; g.beginPath(); g.ellipse(x, y, r, r * 0.5, 0, 0, 7); g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff3bf'; g.stroke();
           g.fillStyle = 'rgba(255,77,109,.75)'; g.beginPath(); g.ellipse(x, y, r * 0.42, r * 0.21, 0, 0, 7); g.fill();
           if (mine) { g.fillStyle = '#fff'; g.font = '800 11px system-ui'; g.textAlign = 'center'; g.fillText('🎯 ×2', x, y - r * 0.62); } g.restore(); });
-        const pls = st.pl || [];
+        const pls = tnSm(st);
         for (const q of pls.slice().sort((a, b) => b[1] - a[1])) { const mine = q[2] === 1, x = Xd(q[0], q[1]), y = Yd(q[1]), r = Math.max(7, Sc(q[1]) * 15);
           g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x, y + r * 0.7, r * 0.95, r * 0.38, 0, 0, 7); g.fill();
           g.fillStyle = mine ? (me && me.color) || '#ff4d6d' : '#cfd8ea'; g.beginPath(); g.arc(x, y - r * 0.9, r, 0, 7); g.fill(); g.lineWidth = 3; g.strokeStyle = mine ? '#fff' : 'rgba(0,0,0,.35)'; g.stroke();
           if (mine) { g.fillStyle = '#fff'; g.font = '800 11px system-ui'; g.textAlign = 'center'; g.fillText('YOU', x, y - r * 2.2); } }
         // my timing ring
         const my = pls.find(q => q[2] === 1);
-        if (my && st.r && st.live) { const x = Xd(my[0], my[1]), y = Yd(my[1]) - 4, rr = (16 + st.k * 78) * Math.max(0.8, Sc(my[1])), col = st.z === 2 ? '#51cf66' : st.z === 1 ? '#ffd43b' : '#ffffff';
+        if (my && st.r && st.live) { const x = Xd(my[0], my[1]), y = Yd(my[1]) - 4, rr = (16 + (TN.sk == null ? st.k : TN.sk) * 78) * Math.max(0.8, Sc(my[1])), col = st.z === 2 ? '#51cf66' : st.z === 1 ? '#ffd43b' : '#ffffff';
           g.lineWidth = 6; g.strokeStyle = col; g.globalAlpha = 0.95; g.beginPath(); g.arc(x, y, rr, 0, 7); g.stroke(); g.globalAlpha = 1; g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(x, y, 16 * Math.max(0.8, Sc(my[1])), 0, 7); g.stroke();
           if (st.z === 2) prompt = 'NOW!'; else if (st.z === 1) prompt = 'almost…'; }
         // ball (a shadow on the court, the ball above it)
-        if (st.live && st.b) { const bx = Xd(st.b[0], st.b[1]), by = Yd(st.b[1]), s = Math.max(0.7, Sc(st.b[1])), h = st.b[2] * 15 * s, br = Math.max(4.5, 7 * s);
+        if (st.live && st.b) { const B = TN.sb || st.b; const bx = Xd(B[0], B[1]), by = Yd(B[1]), s = Math.max(0.7, Sc(B[1])), h = B[2] * 15 * s, br = Math.max(4.5, 7 * s);
           g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(bx, by, br * 1.1, br * 0.45, 0, 0, 7); g.fill();
           g.fillStyle = '#e6f76a'; g.beginPath(); g.arc(bx, by - h - br, br, 0, 7); g.fill(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.4; g.beginPath(); g.arc(bx, by - h - br, br * 0.7, 0.5, 2.6); g.stroke(); }
         if (st.ph === 'serve') { if (st.sv) { prompt = 'FLICK UP TO SERVE'; hint = 'Flick up to toss and serve · flick faster = harder'; } else hint = 'Get ready to return'; }

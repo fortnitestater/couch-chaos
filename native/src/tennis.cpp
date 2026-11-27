@@ -367,7 +367,7 @@ struct Tennis : Classic {
   std::string Score(int tm) { if (Quick()) return I(pts[tm]); int a = pts[tm], b = pts[1 - tm]; if (a >= 3 && b >= 3) return a == b ? "40" : a > b ? "AD" : "40"; const char* S[] = { "0", "15", "30", "40" }; return S[std::min(3, a)]; }
   void Update(float dt) override {
     time += dt; fx.Update(dt); conf.Update(dt); callT -= dt; radarT -= dt; t -= dt; freezeT -= dt; superT -= dt;
-    tnT -= dt; if (tnT <= 0) { tnT = 0.066f; SendTn(); }
+    tnT -= dt; if (tnT <= 0) { tnT = 0.033f; SendTn(); }   // 30 times a second: the court on the phone moves smoothly
     talkT -= dt; judgeT -= dt; squeakT -= dt; spinA += spinR * dt; squash = fmaxf(0, squash - dt * 9);
     for (auto& m : marks) m.life -= dt;
     for (int i = 0; i < N(); i++) if (!P(i).bot && P(i).a && !P(i).pa) Swing(i, 0.65f);

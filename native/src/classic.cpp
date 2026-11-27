@@ -509,7 +509,7 @@ struct Hockey : Classic {
   void Goal(int tm) {
     score[tm]++; if (last >= 0 && m[last].team == tm) m[last].goals++;
     flash = 1; flashSide = tm == 0 ? 1 : -1; flashCol = tm == 0 ? Hex(0xff6b6b) : Hex(0x4dabf7);
-    Sfx("boom"); Sfx("cheer"); Shake(10);
+    Sfx("ahGoal"); Sfx("cheer"); Shake(10);
     float gx = tm == 0 ? R : L; conf.Spawn(W3(gx, CY, 2), 100, 2, 4); fx.Burst(W3(gx, CY, 0.5f), 30, tm == 0 ? Hex(0xff6b6b) : Hex(0x4dabf7), 8, 0.7f, 0.2f);
     GoalShot(tm);
     px = tm == 0 ? 800 + 160 : 800 - 160; py = CY; pvx = pvy = 0; pause = 1.3f; last = -1;
@@ -584,11 +584,11 @@ struct Hockey : Classic {
       float nd = 320 * h; bool nearGoal = fabsf(py - CY) < GH;
       if (py < TOP + PR + 10) pvy += nd; if (py > BOT - PR - 10) pvy -= nd;
       if (!nearGoal && px < L + PR + 10) pvx += nd; if (!nearGoal && px > R - PR - 10) pvx -= nd;
-      if (py < TOP + PR) { py = TOP + PR; Rail(0, 1); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } }
-      if (py > BOT - PR) { py = BOT - PR; Rail(0, -1); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } }
+      if (py < TOP + PR) { py = TOP + PR; Rail(0, 1); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("ahWall"); sndT = 0.06f; } }
+      if (py > BOT - PR) { py = BOT - PR; Rail(0, -1); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("ahWall"); sndT = 0.06f; } }
       bool inGoal = fabsf(py - CY) < GH - PR * 0.3f;
-      if (px < L + PR) { if (inGoal) { if (px < L - PR) { Goal(1); break; } } else { px = L + PR; Rail(1, 0); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } } }
-      if (px > R - PR) { if (inGoal) { if (px > R + PR) { Goal(0); break; } } else { px = R - PR; Rail(-1, 0); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } } }
+      if (px < L + PR) { if (inGoal) { if (px < L - PR) { Goal(1); break; } } else { px = L + PR; Rail(1, 0); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("ahWall"); sndT = 0.06f; } } }
+      if (px > R - PR) { if (inGoal) { if (px > R + PR) { Goal(0); break; } } else { px = R - PR; Rail(-1, 0); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("ahWall"); sndT = 0.06f; } } }
       for (int i = 0; i < N(); i++) {
         M& q = m[i]; float dx = px - q.x, dy = py - q.y, d = hypotf(dx, dy);
         if (d < MR + PR && d > 0.01f) {
@@ -597,7 +597,7 @@ struct Hockey : Classic {
           if (vn < 0) {   // a mallet (0.4 kg of arm behind it) hits a 25 g puck: a bounce with a little friction that puts spin on it
             float mP = 0.025f, mM = 0.4f, j = -(1 + 0.92f) * vn / (1 / mP + 1 / mM), dvp = j / mP; pvx += nx * dvp; pvy += ny * dvp;
             float tx = -ny, ty = nx, vt = rvx * tx + rvy * ty + pspin * PR * 0.5f, dvt = -copysignf(fminf(fabsf(vt) * 0.4f, 0.15f * dvp), vt);
-            pvx += tx * dvt; pvy += ty * dvt; pspin = Clamp(pspin - dvt / (PR * 0.5f), -60.f, 60.f); last = i; if (sndT <= 0 && fabsf(vn) > 80) { Sfx("pok"); sndT = 0.09f; } if (fabsf(vn) > 500) { Shake(3); fx.Burst(W3(px, py, 0.3f), 8, WHITE, 4, 0.3f, 0.12f); } if (!P(i).bot) Buzz(i, 30); }
+            pvx += tx * dvt; pvy += ty * dvt; pspin = Clamp(pspin - dvt / (PR * 0.5f), -60.f, 60.f); last = i; if (sndT <= 0 && fabsf(vn) > 80) { Sfx("ahHit"); sndT = 0.09f; } if (fabsf(vn) > 500) { Shake(3); fx.Burst(W3(px, py, 0.3f), 8, WHITE, 4, 0.3f, 0.12f); } if (!P(i).bot) Buzz(i, 30); }
         }
       }
       float sp = hypotf(pvx, pvy); if (sp > 1700) { pvx *= 1700 / sp; pvy *= 1700 / sp; }

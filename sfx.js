@@ -21,6 +21,10 @@ const SFX = (() => {
   // bowling alley effects and the STRIKE NIGHT intro (real recordings)
   for (const [k, f] of Object.entries({ b_release: 'bowl_release', b_strike: 'bowl_strike', b_strike2: 'bowl_strike2', b_pins: 'bowl_pins', b_bumper: 'bowl_bumper', b_return: 'bowl_return', b_pin: 'bowl_pin',
     i_drums: 'intro_drums', i_snare: 'intro_snare', i_riser: 'intro_riser', i_boom: 'intro_boom', i_brass: 'intro_brass', i_horn: 'intro_horn', i_crowd: 'intro_crowd' })) SAMPLE_FILES[k] = f;
+  // real recordings for the fight, the bowling pins and ball, tennis and air hockey (the synthesized versions stay only as a fallback while a file loads)
+  for (const [k, f] of Object.entries({ f_punch1: 'fight_punch1', f_punch2: 'fight_punch2', f_body1: 'fight_body1', f_body2: 'fight_body2', f_kick1: 'fight_kick1', f_kick2: 'fight_kick2', f_block: 'fight_block', f_bell: 'fight_bell',
+    f_fall: 'fight_fall', f_whoosh: 'fight_whoosh', f_roar: 'fight_roar', b_strike3: 'bowl_strike_a', b_strike4: 'bowl_strike_b', b_pin2: 'bowl_pin_a', b_pin3: 'bowl_pin_b', b_roll: 'bowl_roll', b_gutter: 'bowl_gutter',
+    t_net: 'tn_net', t_squeak: 'tn_squeak', a_hit1: 'ah_hit1', a_hit2: 'ah_hit2', a_wall: 'ah_wall', a_goal: 'ah_goal' })) SAMPLE_FILES[k] = f;
   // studio sound effects (ElevenLabs); each synth sound below falls back to its old beep if the file is missing
   for (const k of ['ui', 'ding', 'buzz', 'win', 'card', 'dice', 'pickup', 'whoosh', 'bonk', 'splash', 'boom', 'go', 'tick', 'join', 'snow']) SAMPLE_FILES['x_' + k] = 'sfx_' + k;
   // background music: one track per kind of game, loaded only when first needed
@@ -112,6 +116,13 @@ const SFX = (() => {
   function loopStop(h, fade) { if (!h) return; const t = ac.currentTime; try { h.g.gain.cancelScheduledValues(t); h.g.gain.setValueAtTime(Math.max(0.0001, h.g.gain.value), t); h.g.gain.linearRampToValueAtTime(0.0001, t + fade); h.src.stop(t + fade + 0.05); } catch (e) {} }
   // The ball rolling is mostly a low rumble that wobbles at the rate the ball turns (~13 turns a second at 9 m/s). Synthesized from filtered noise, because the
   // generated recordings of it were almost silent between the first thud and the end. kind 'wood': deep rumble and a little grain; 'gutter': hollow and metallic.
+  function realRoll(key, a, b, loopA, vol) {
+    if (!ac || !S[key]) return null; const t = ac.currentTime, len = b - a, g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.12); g.connect(master);
+    const s1 = ac.createBufferSource(), g1 = ac.createGain(); s1.buffer = S[key]; g1.gain.setValueAtTime(1, t); g1.gain.setValueAtTime(1, t + len - 0.35); g1.gain.linearRampToValueAtTime(0.0001, t + len); s1.connect(g1); g1.connect(g); s1.start(t, a, len);
+    const s2 = ac.createBufferSource(), g2 = ac.createGain(); s2.buffer = S[key]; s2.loop = true; s2.loopStart = loopA; s2.loopEnd = b; g2.gain.setValueAtTime(0.0001, t); g2.gain.setValueAtTime(0.0001, t + len - 0.35); g2.gain.linearRampToValueAtTime(1.6, t + len); s2.connect(g2); g2.connect(g); s2.start(t + len - 0.35, loopA);
+    return { stop(f) { const n = ac.currentTime; try { g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), n); g.gain.linearRampToValueAtTime(0.0001, n + f); s1.stop(n + f + 0.05); s2.stop(n + f + 0.05); } catch (e) {} } };
+  }
+  let rollR = null, gutR = null;
   let rumbleBuf = null;
   function rumbleOn(kind, vol) {
     if (!ac) return null; const t = ac.currentTime;
@@ -131,11 +142,21 @@ const SFX = (() => {
     init,
     shoot() { ok('s', 50) && tone(880, 0.07, 'square', 0.06, 0.5); },
     hit() { ok('h', 40) && tone(220, 0.1, 'sawtooth', 0.15, 0.6); },
-    fPunch() { ok('fp', 40) && (noise(0.12, 0.6, 2600), tone(135, 0.15, 'sine', 0.6, 0.4), tone(900, 0.04, 'square', 0.12, 0.3)); },
-    fKick() { ok('fk', 40) && (noise(0.22, 0.75, 1800), tone(85, 0.24, 'sine', 0.85, 0.35), tone(230, 0.08, 'sawtooth', 0.16, 0.4)); },
-    fBlock() { ok('fb', 40) && (noise(0.07, 0.35, 5000), tone(430, 0.07, 'triangle', 0.25, 0.6)); },
-    fBell() { for (let i = 0; i < 3; i++) { tone(1320, 0.9, 'sine', 0.22, 0.99, i * 0.3); tone(1980, 0.7, 'sine', 0.1, 0.99, i * 0.3); } },
-    fKO() { noise(0.5, 0.85, 900); tone(60, 0.8, 'sine', 0.95, 0.5); tone(120, 0.4, 'sine', 0.5, 0.4, 0.05); },
+    // ---- cage fight: real recorded punches, kicks, blocks, the bell, the fall and the crowd ----
+    fJab() { if (!ok('fj', 45)) return; samp('f_punch1', { vol: 2.3, off: 0.45, dur: 0.4, rate: 1.04 + Math.random() * 0.1, fo: 0.15 }) || (noise(0.12, 0.6, 2600), tone(135, 0.15, 'sine', 0.6, 0.4)); },
+    fCross() { if (!ok('fc', 45)) return; if (!samp('f_punch2', { vol: 1.7, off: 0.25, dur: 0.45, rate: 0.95 + Math.random() * 0.08, fo: 0.18 })) { noise(0.12, 0.6, 2600); tone(135, 0.15, 'sine', 0.6, 0.4); return; } samp('f_body2', { vol: 1.3, off: 0.22, dur: 0.4, fo: 0.2 }); },
+    fBody() { if (!ok('fy', 45)) return; (Math.random() < 0.5 ? samp('f_body1', { vol: 1.5, off: 0, dur: 0.4, rate: 0.92 + Math.random() * 0.1, fo: 0.18 }) : samp('f_body2', { vol: 2.7, off: 0.22, dur: 0.45, rate: 0.95 + Math.random() * 0.1, fo: 0.2 })) || (noise(0.2, 0.7, 1500), tone(90, 0.2, 'sine', 0.8, 0.4)); },
+    fLow() { if (!ok('fl', 45)) return; samp('f_kick2', { vol: 1.6, off: 0.75, dur: 0.45, rate: 0.97 + Math.random() * 0.08, fo: 0.2 }) || (noise(0.22, 0.75, 1800), tone(85, 0.24, 'sine', 0.85, 0.35)); },
+    fHead() { if (!ok('fh', 45)) return; if (!samp('f_kick1', { vol: 1.8, off: 0.9, dur: 0.5, rate: 0.9, fo: 0.2 })) { noise(0.22, 0.75, 1800); tone(85, 0.24, 'sine', 0.85, 0.35); return; } samp('f_body2', { vol: 1.9, off: 0.22, dur: 0.45, rate: 0.85, fo: 0.2 }); },
+    fPunch() { SFX.fJab(); }, fKick() { SFX.fLow(); },
+    fSwing() { if (!ok('fs', 90)) return; samp('f_whoosh', { vol: 0.8, off: 0.62, dur: 0.3, rate: 0.9 + Math.random() * 0.25, fo: 0.12 }) || bandNoise(0.28, 0.25, 1800, 4); X('whoosh', 0.3, 0.28, 0.1); },
+    fBlock() { if (!ok('fb', 45)) return; samp('f_block', { vol: 2.3, off: 0.15, dur: 0.4, rate: 0.95 + Math.random() * 0.12, fo: 0.15 }) || (noise(0.07, 0.35, 5000), tone(430, 0.07, 'triangle', 0.25, 0.6)); },
+    fBell() { if (samp('f_bell', { vol: 1.4, off: 0.15, dur: 2.6, fo: 0.9 })) return; for (let i = 0; i < 3; i++) tone(1320, 0.9, 'sine', 0.22, 0.99, i * 0.3); },
+    fKO() { if (!samp('f_fall', { vol: 1.8, off: 0.4, dur: 1.2, fo: 0.4 })) { noise(0.5, 0.85, 900); tone(60, 0.8, 'sine', 0.95, 0.5); } samp('f_roar', { vol: 1.5, off: 0.3, dur: 6.5, fo: 2.4 }); },
+    // ---- air hockey: the real clack of the mallet, the click off the rail, the puck dropping into the goal ----
+    ahHit() { if (!ok('ah', 60)) return; (Math.random() < 0.5 ? samp('a_hit1', { vol: 1.4, off: 0.13, dur: 0.25, rate: 0.94 + Math.random() * 0.14, fo: 0.08 }) : samp('a_hit2', { vol: 2.0, off: 0.13, dur: 0.25, rate: 0.94 + Math.random() * 0.14, fo: 0.08 })) || SFX.pok(); },
+    ahWall() { if (!ok('aw', 50)) return; samp('a_wall', { vol: 0.9, off: 0.12, dur: 0.2, rate: 0.95 + Math.random() * 0.2, fo: 0.06 }) || SFX.tink(); },
+    ahGoal() { if (!samp('a_goal', { vol: 3.4, off: 0.15, dur: 1.3, fo: 0.4 })) { SFX.boom(); return; } samp('i_horn', { vol: 0.75, dur: 1.5, delay: 0.3, fo: 0.6 }); },
     boom() { ok('bm', 60) && (X('boom', 1, 1.8, 0.08) || noise(0.8, 0.7, 1400)); },
     tink() { ok('t', 50) && (X('ui', 0.7, 0.4, 0.15) || tone(1800, 0.08, 'triangle', 0.15)); },
     pickup() { if (X('pickup', 0.8, 1.2)) return; tone(660, 0.08, 'square', 0.15); tone(990, 0.14, 'square', 0.15, 1, 0.08); },
@@ -158,13 +179,14 @@ const SFX = (() => {
     snow() { ok('sn', 50) && (X('snow', 0.9, 0.8, 0.12) || noise(0.2, 0.4, 1200)); },
     // ---- bowling: every sound is a real recording ----
     bowlRelease() { samp('b_release', { vol: 1.5, off: 2.85, dur: 1.7, fo: 0.5 }); },                                      // the ball lands on the wood
-    bowlRollOn() { if (!ac) return; SFX.bowlRollOff(true); rollSrc = rumbleOn('wood', 0.5); },                                // the rumble of the ball on the boards
-    bowlRollOff(quick) { rumbleOff(rollSrc, quick ? 0.03 : 0.3); rollSrc = null; },
-    bowlGutterOn() { if (!ac) return; SFX.bowlRollOff(true); rumbleOff(gutSrc, 0.05); gutSrc = rumbleOn('gutter', 0.55); samp('b_bumper', { vol: 1.0, off: 0.25, dur: 1.0, rate: 1.15, fo: 0.3 }); },   // it dropped into the gutter
-    bowlGutterOff() { rumbleOff(gutSrc, 0.4); gutSrc = null; },
+    bowlRollOn() { if (!ac) return; SFX.bowlRollOff(true); rollR = realRoll('b_roll', 0.3, 2.2, 1.45, 9); rollSrc = rumbleOn('wood', rollR ? 0.26 : 0.5); },                                // the rumble of the ball on the boards
+    bowlRollOff(quick) { rumbleOff(rollSrc, quick ? 0.03 : 0.3); rollSrc = null; if (rollR) { rollR.stop(quick ? 0.03 : 0.3); rollR = null; } },
+    bowlGutterOn() { if (!ac) return; SFX.bowlRollOff(true); rumbleOff(gutSrc, 0.05); if (gutR) gutR.stop(0.05); gutR = realRoll('b_gutter', 0.6, 3.3, 1.2, 7); gutSrc = rumbleOn('gutter', gutR ? 0.3 : 0.55); samp('b_bumper', { vol: 1.0, off: 0.25, dur: 1.0, rate: 1.15, fo: 0.3 }); },   // it dropped into the gutter
+    bowlGutterOff() { rumbleOff(gutSrc, 0.4); gutSrc = null; if (gutR) { gutR.stop(0.4); gutR = null; } },
     bowlBumper() { if (ok('bb', 110)) samp('b_bumper', { vol: 1.3, off: 0.25, dur: 1.2, rate: 0.92 + Math.random() * 0.16, fo: 0.3 }); },   // a thump off the padded rail
-    bowlCrash(vm = 1) { if (!S.b_strike) { play('strike', 2, 1, true); return; } const a = Math.random() < 0.5; samp(a ? 'b_strike' : 'b_strike2', { vol: (a ? 2.1 : 2.6) * vm, off: a ? 0.5 : 0.8, dur: 2.7, fo: 0.5 }); },   // the pins go down
-    bowlPin() { if (!ok('bp', 85) || !S.b_pin) return; if (Math.random() < 0.3 && S.b_pins) samp('b_pins', { vol: 1.1, off: 0.0, dur: 1.6, rate: 0.9 + Math.random() * 0.2, fo: 0.4 }); else samp('b_pin', { vol: 1.2, off: 0.05, dur: 0.9, rate: 0.88 + Math.random() * 0.3, fo: 0.3 }); },   // a pin knocking another
+    bowlCrash(vm = 1) { if (S.b_strike3 && S.b_strike4) { const n = Math.random() < 0.5; samp(n ? 'b_strike3' : 'b_strike4', { vol: 2.2 * vm, off: n ? 0.44 : 0.27, dur: 2.0, rate: 0.96 + Math.random() * 0.08, fo: 0.6 }); return; }
+      if (!S.b_strike) { play('strike', 2, 1, true); return; } const a = Math.random() < 0.5; samp(a ? 'b_strike' : 'b_strike2', { vol: (a ? 2.1 : 2.6) * vm, off: a ? 0.5 : 0.8, dur: 2.7, fo: 0.5 }); },   // the pins go down
+    bowlPin() { if (!ok('bp', 85)) return; if (S.b_pin2 && S.b_pin3) { const n = Math.random() < 0.5; samp(n ? 'b_pin2' : 'b_pin3', { vol: 1.25, off: n ? 0.5 : 0.41, dur: 0.95, rate: 0.9 + Math.random() * 0.25, fo: 0.35 }); return; } if (!S.b_pin) return; if (Math.random() < 0.3 && S.b_pins) samp('b_pins', { vol: 1.1, off: 0.0, dur: 1.6, rate: 0.9 + Math.random() * 0.2, fo: 0.4 }); else samp('b_pin', { vol: 1.2, off: 0.05, dur: 0.9, rate: 0.88 + Math.random() * 0.3, fo: 0.3 }); },   // a pin knocking another
     bowlReturn() { samp('b_return', { vol: 0.9, off: 2.7, dur: 2.6, delay: 1.2, fo: 0.9 }); },                              // the ball comes back up the return
     bowlSweep() { samp('b_pins', { vol: 1.3, off: 0.0, dur: 2.2, delay: 0.5, rate: 0.85, fo: 0.7 }); },                                   // the sweep clears the deck into the pit
     bowlRack() { samp('b_pin', { vol: 1.1, off: 0.05, dur: 0.8, rate: 0.8, fo: 0.3 }); samp('b_pins', { vol: 0.5, off: 0.0, dur: 0.9, rate: 1.25, fo: 0.4 }); },   // a new rack of pins is set down
@@ -207,8 +229,8 @@ const SFX = (() => {
     bounce() { if (!ok('bo', 60)) return; if (play('bounce', 1.6, 1, true)) return; tone(150, 0.07, 'sine', 0.5, 0.6); },
     strike() { play('strike', 2, 1, true) || noise(0.8, 0.7, 1400); },
     bat() { play('bat', 2.2, 1, true) || tone(220, 0.1, 'sawtooth', 0.15, 0.6); },
-    netHit() { noise(0.25, 0.4, 900); tone(90, 0.2, 'sine', 0.3); },
-    swish() { ok('sw', 120) && bandNoise(0.28, 0.25, 1800, 4); },
+    netHit() { samp('t_net', { vol: 1.4, off: 0.58, dur: 0.9, fo: 0.3 }) || (noise(0.25, 0.4, 900), tone(90, 0.2, 'sine', 0.3)); },
+    swish() { if (!ok('sw', 120)) return; samp('f_whoosh', { vol: 0.55, off: 0.62, dur: 0.3, rate: 0.85 + Math.random() * 0.2, fo: 0.12 }) || bandNoise(0.28, 0.25, 1800, 4); },
     // crowd: a looping murmur, plus cheers / "ooh" / applause swells on top
     crowdOn(level = 0.12) {
       if (!ac) return; SFX.musicOff();
@@ -235,7 +257,7 @@ const SFX = (() => {
     cheer(k = 1) { if (play('cheer', 1.4 * Math.min(1.3, k + 0.3))) return; bandNoise(2.2 * k + 0.6, 0.55 * k, 1100, 0.7, 0.35); bandNoise(1.6 * k, 0.3 * k, 2600, 1.2, 0.2); },
     pinsFar() { if (!ac || !ok('pf', 350)) return; if (!samp('b_strike', { vol: 0.28, off: 0.5, dur: 1.8, rate: 0.8 + Math.random() * 0.4, fo: 0.5 })) play('strike', 0.22, 0.85 + Math.random() * 0.35, true); },   // other people's pins crashing, far away
     // shoe squeak on a hard court, Hawk-Eye stings, and the cinematic slow-motion / impact hits
-    squeak() { if (!ac || !ok('sq', 160)) return; const f = 2300 + Math.random() * 900; tone(f, 0.06, 'sine', 0.05, 1.25); tone(f * 1.5, 0.05, 'triangle', 0.025, 0.8, 0.04); },
+    squeak() { if (!ac || !ok('sq', 160)) return; if (samp('t_squeak', { vol: 0.6, off: 0.33, dur: 0.22, rate: 0.9 + Math.random() * 0.3, fo: 0.06 })) return; const f = 2300 + Math.random() * 900; tone(f, 0.06, 'sine', 0.05, 1.25); tone(f * 1.5, 0.05, 'triangle', 0.025, 0.8, 0.04); },
     varSting() { if (!ac) return; [988, 1319, 1760].forEach((f, i) => tone(f, 0.14, 'sine', 0.16, 1, i * 0.09)); bandNoise(0.5, 0.16, 3000, 2, 0.05); },
     varIn() { if (!ac) return; [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.5, 'triangle', 0.15, 1, i * 0.05)); },
     varOut() { if (!ac) return; tone(196, 0.35, 'sawtooth', 0.13, 0.9); tone(147, 0.5, 'sawtooth', 0.13, 0.9, 0.13); },
@@ -255,6 +277,7 @@ const SFX = (() => {
       hostSrc = src; hostLast = now + (o.delay || 0); return true;
     },
     hostClipCount() { return hostClips.length; },
+    has(k) { return !!S[k]; },
     say(text, o = {}) {
       if (SFX.muteVoice) return;
       // 1) the recorded ElevenLabs announcer, when every sentence is a known call

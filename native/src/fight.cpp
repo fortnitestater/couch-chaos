@@ -89,8 +89,8 @@ struct Fight : Classic {
   void Resolve(Fi& a, Fi& d, const Atk& A) {
     Vector3 fw = Fwd(a, d); float dist = Dist();
     Vector3 hit = { (a.pos.x + d.pos.x) / 2, A.zone == 0 ? 1.5f : A.zone == 1 ? 1.1f : 0.5f, (a.pos.z + d.pos.z) / 2 };
-    if (dist > A.reach + 0.15f) { Sfx("swish"); return; }                                 // a miss
-    if (d.inv > 0) { Call(d, "DODGED!", Hex(0x74c0fc), 0.8f); Call(a, "MISSED!", Hex(0xced4da), 0.7f); d.counterT = 0.9f; a.t += 0.22f; PopText({ d.pos.x, 1.9f, d.pos.z }, "DODGE!", Hex(0x74c0fc)); Sfx("swish"); return; }
+    if (dist > A.reach + 0.15f) { Sfx("fSwing"); return; }                                 // a miss
+    if (d.inv > 0) { Call(d, "DODGED!", Hex(0x74c0fc), 0.8f); Call(a, "MISSED!", Hex(0xced4da), 0.7f); d.counterT = 0.9f; a.t += 0.22f; PopText({ d.pos.x, 1.9f, d.pos.z }, "DODGE!", Hex(0x74c0fc)); Sfx("fSwing"); return; }
     if (d.st == Fi::DOWN || d.st == Fi::KO || d.st == Fi::GETUP) return;
     float dmg = 0.72f * A.dmg * (0.6f + 0.4f * a.sta / 100.f);                          // a tired fighter hits softer
     if (a.comboT > 0) { a.combo++; dmg *= 1 + 0.1f * fminf(4, (float)a.combo); } else a.combo = 1; a.comboT = 0.75f;
@@ -107,7 +107,7 @@ struct Fight : Classic {
     else d.dL = fminf(100.f, d.dL + dmg * 1.5f);
     d.flash = 0.12f; d.vel = Vector3Add(d.vel, Vector3Scale(fw, A.push * 5)); d.pos = Vector3Add(d.pos, Vector3Scale(fw, A.push * 0.5f));
     hitstop = A.heavy || counter ? 0.10f : 0.05f; Shake(A.heavy ? 8.f : 3.f); roar = fmaxf(roar, A.heavy ? 0.7f : 0.3f);
-    Sfx(A.zone == 2 || A.heavy ? "fKick" : "fPunch"); BZ(d.pid, A.heavy ? 90 : 40); BZ(a.pid, 25);
+    static const char* HS[5] = { "fJab", "fCross", "fBody", "fLow", "fHead" }; Sfx(HS[&A - ATK]); BZ(d.pid, A.heavy ? 90 : 40); BZ(a.pid, 25);
     fx.Burst(hit, 10 + (int)dmg, Hex(0xfff3bf), 4, 0.25f, 0.04f);                          // sparks of the impact
     PopText({ d.pos.x, 2.0f, d.pos.z }, I((int)ceilf(dmg)), counter ? Hex(0xff6b6b) : Hex(0xffffff), counter || A.heavy ? 1.4f : 1.f);
     if (counter) { Call(a, "COUNTER!", Hex(0xff6b6b), 1.1f); Sfx("ooh"); }
@@ -217,7 +217,7 @@ struct Fight : Classic {
         if (live) {
           bool blocking = a.blk; float sp = (blocking ? 0.45f : 1.f) * legK * staK;
           target = Vector3Add(Vector3Scale(fw, a.mv.y * (a.mv.y > 0 ? 2.3f : 1.7f) * sp), Vector3Scale(rt, a.mv.x * 2.0f * sp));
-          if (a.want >= 0) { int k = a.want; a.want = -1; a.blk = false; a.st = Fi::ATTACK; a.atk = k; a.t = 0; a.landed = false; float cost = ATK[k].sta; if (a.sta < cost) { a.sta = 0; Call(a, "GASSED!", Hex(0xadb5bd), 0.9f); } else a.sta -= cost; Sfx("swish"); }
+          if (a.want >= 0) { int k = a.want; a.want = -1; a.blk = false; a.st = Fi::ATTACK; a.atk = k; a.t = 0; a.landed = false; float cost = ATK[k].sta; if (a.sta < cost) { a.sta = 0; Call(a, "GASSED!", Hex(0xadb5bd), 0.9f); } else a.sta -= cost; Sfx("fSwing"); }
           else if (a.dodgeReq && a.dodgeCd <= 0 && a.sta >= 10) { a.st = Fi::DODGE; a.t = 0; a.inv = 0.3f; a.dodgeCd = 0.7f; a.sta -= 12; a.dodgeDir = a.mv.x > 0.2f ? 1 : a.mv.x < -0.2f ? -1 : 0; Sfx("whoosh"); }
         }
         a.dodgeReq = false; break; }
