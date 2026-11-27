@@ -663,7 +663,7 @@
     if (L.name === 'swing') orRecenter = true;
     if (needPerm) setTimeout(motionGate, 0);
     if (L.name !== 'cards') lastHand = null;
-    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, bowl: renderBowl, tennis: renderTennis, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour, touch: renderTouch };
+    const R = { panel: L => (lastPanel ? renderPanel(lastPanel) : renderMsg({ emoji: '🃏', text: 'Shuffling…' })), swing: renderSwing, fight: renderFight, bowl: renderBowl, tennis: renderTennis, lobby: renderLobby, pad: renderPad, button: renderButton, shake: renderShake, intro: renderIntro, choice: renderChoice, draw: renderDraw, bingo: renderBingo, dice: renderDice, song: renderSong, wires: renderWires, curl: renderCurl, four: renderFour, touch: renderTouch };
     if (R[L.name]) R[L.name](L);
     else if (L.name === 'cards') { lastHand ? renderHand(lastHand) : (stage.innerHTML = '<div class="center"><p>Dealing…</p></div>'); }
     else renderMsg(L);
@@ -700,7 +700,7 @@
     else if (n === 'panel') idle = !!lastPanel && !lastPanel.myTurn;
     else if (n === 'four') idle = !layout.my;
     else if (n === 'tennis') idle = false;
-    else idle = n === 'msg' || (layout && !['lobby', 'intro', 'choice', 'pad', 'button', 'swing', 'shake', 'draw', 'bingo', 'dice', 'song', 'wires', 'curl', 'touch', 'cards'].includes(n));
+    else idle = n === 'msg' || (layout && !['lobby', 'intro', 'choice', 'pad', 'button', 'swing', 'shake', 'draw', 'bingo', 'dice', 'song', 'wires', 'curl', 'touch', 'cards', 'fight'].includes(n));
     dock.classList.toggle('hidden', !idle); document.body.classList.toggle('dockOn', idle);
   }
   // ---------- 🎳 bowling: slide the ball, FLICK it up, curve your flick for a hook, steer it while it rolls ----------
@@ -858,7 +858,10 @@
     stage.innerHTML = `<div class="tnPad"><div class="bwTop"><b>YOUR SHOT</b><button class="bwBump on" id="tnLvl">${TN_LV[TN.lv]}</button><span id="tnScore">${L.serve ? 'You serve' : 'Rally'}</span></div>
       <div class="tnBars"><div class="tnBar"><i id="tnSt"></i><span>💨 STAMINA</span></div><div class="tnBar hv"><i id="tnHv"></i><span id="tnHvT">🔥 POWER</span></div></div>
       <div class="bwWrap" id="tnWrap"><canvas id="tnCv"></canvas><div class="bwPrompt" id="tnPrompt"></div></div>
+      <div class="tnAdv" id="tnAdv"></div>
+      <div class="tnShots">${[['d', '💥 DRIVE', 'fast · tires them'], ['l', '🌈 LOB', 'beats the net man'], ['p', '🪶 DROP', 'beats the deep one'], ['s', '🛡 SLICE', 'safe · saves breath']].map(s => `<button data-s="${s[0]}" class="${TN.shot === s[0] ? 'on' : ''}"><b>${s[1]}</b><small>${s[2]}</small></button>`).join('')}</div>
       <div class="rhint" id="tnHint"></div></div>`;
+    stage.querySelectorAll('.tnShots button').forEach(b => b.addEventListener('pointerdown', e => { e.stopPropagation(); TN.shot = b.dataset.s; stage.querySelectorAll('.tnShots button').forEach(x => x.classList.toggle('on', x === b)); navigator.vibrate?.(10); }));
     $('#tnLvl').addEventListener('click', () => { TN.lv = (TN.lv + 1) % 3; $('#tnLvl').textContent = TN_LV[TN.lv]; sendMsg({ t: 'act', a: 'tlevel', i: TN.lv }); navigator.vibrate?.(10); });   // easy → normal → hard
     const wrap = $('#tnWrap'), cv = $('#tnCv'), g = cv.getContext('2d'); let cw = 0, ch = 0, d = 1;
     const fit = () => { const W = wrap.clientWidth, H = wrap.clientHeight; if (!W || !H) return; d = Math.min(2, devicePixelRatio || 1); cw = W; ch = H; cv.width = Math.round(W * d); cv.height = Math.round(H * d); cv.style.width = W + 'px'; cv.style.height = H + 'px'; };
@@ -910,12 +913,14 @@
         else if (st.ph === 'point') { prompt = st.msg || ''; hint = ''; }
         else if (st.ph === 'var') { prompt = 'HAWK-EYE'; hint = 'Reviewing the line…'; }
         else if (st.ph === 'end') { prompt = st.msg || 'GAME OVER'; }
-        if (hint === '' && st.ph !== 'point' && st.ph !== 'end' && st.ph !== 'var') hint = 'Fast flick = drive · slow long swipe = lob · tiny flick = drop shot';
+        if (hint === '' && st.ph !== 'point' && st.ph !== 'end' && st.ph !== 'var') hint = 'Pick a shot, then flick up — flick faster = harder';
       }
       // the finger's trail
       if (TN.trail) { const a = 1 - (performance.now() - TN.trail.t) / 450; if (a > 0) { g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 8; g.strokeStyle = `rgba(255,255,255,${a * 0.8})`; g.beginPath(); TN.trail.pts.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y))); g.stroke(); } else TN.trail = null; }
       if (st) { const a = $('#tnSt'), h = $('#tnHv'); if (a) { a.style.width = Math.round((st.sa == null ? 1 : st.sa) * 100) + '%'; a.style.background = st.sa > 0.5 ? '#51cf66' : st.sa > 0.25 ? '#ffd43b' : '#ff4d6d'; }
         if (h) { const full = (st.hv || 0) >= 1; h.style.width = Math.round((st.hv || 0) * 100) + '%'; h.parentNode.classList.toggle('full', full); const ht = $('#tnHvT'); if (ht) ht.textContent = full ? '🔥 FIREBALL READY!' : '🔥 POWER'; if (full && st.r) hint = 'POWER FULL — your next hit is an unstoppable FIREBALL!'; } }
+      if (st) { const av = $('#tnAdv'); if (av) { const t = st.ph === 'rally' || st.ph === 'serve' ? (st.am || '') : ''; if (av.textContent !== t) av.textContent = t; }
+        stage.querySelectorAll('.tnShots button').forEach(b => b.classList.toggle('rec', !!st.ad && b.dataset.s === st.ad && (st.ph === 'rally' || st.ph === 'serve'))); }
       const sc = $('#tnScore'); if (sc) { const t = !st ? '' : st.ph === 'serve' ? (st.sv ? 'You serve' : 'Return') : st.ph === 'rally' ? (st.r ? 'Your shot' : 'Their ball') : st.ph === 'var' ? 'Review' : ''; if (sc.textContent !== t) sc.textContent = t; }
       const pe = $('#tnPrompt'); if (pe && pe.textContent !== prompt) { pe.textContent = prompt; pe.classList.toggle('bwBig', !!prompt && (st && (st.ph === 'point' || st.ph === 'end' || st.z === 2))); }
       const he = $('#tnHint'); if (he && he.textContent !== hint) he.textContent = hint;
@@ -930,13 +935,61 @@
     wrap.addEventListener('pointermove', e => { if (e.pointerId !== pid) return; pts.push(pos(e)); if (pts.length > 60) pts.shift(); TN.trail = { pts: pts.slice(), t: performance.now() + 9999 }; });
     const end = e => {
       if (e.pointerId !== pid) return; pid = null;
-      const f = bwFit(pts); let aim = 0, pw = 0.62, shot = 'd';
-      if (f && f.dy >= 50) { aim = clamp(f.aimN * 1.2); pw = clamp(0.3 + f.powN * 0.7, 0.3, 1); shot = f.dy >= 170 && f.v < 0.6 ? 'l' : f.dy < 90 ? 's' : 'd'; }   // the shot comes from the swing: a long slow swipe is a lob, a tiny flick a drop shot, anything else a drive
+      const f = bwFit(pts); let aim = 0, pw = 0.62; const shot = TN.shot;   // the shot is the one you picked: the swipe only gives power and direction
+      if (f && f.dy >= 50) { aim = clamp(f.aimN * 1.2); pw = clamp(0.3 + f.powN * 0.7, 0.3, 1); }
       else if (pts.length > 4 && Math.abs(pts[pts.length - 1].x - pts[0].x) > 30) return;   // a sideways scribble isn't a swing
       TN.trail = pts.length > 4 ? { pts: pts.slice(), t: performance.now() } : null;
       sendMsg({ t: 'act', a: 'swing', id: aim.toFixed(2) + '|' + shot, p: +pw.toFixed(2) }); navigator.vibrate?.([20, 15, 30]);
     };
     wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
+  }
+  // ---------- 🥊 cage fight: a stick to move, buttons to strike, HOLD to block, DODGE; when you are knocked down, TAP to get up ----------
+  const FI = { st: null, raf: 0 };
+  function renderFight(L) {
+    FI.st = null; cancelAnimationFrame(FI.raf);
+    stage.innerHTML = `<div class="fiPad">
+      <div class="fiTop"><b id="fiOp">vs …</b><span id="fiRd"></span><span id="fiClk"></span></div>
+      <div class="fiBar opp"><i id="fiOh"></i><span id="fiOhT"></span></div>
+      <div class="fiBar"><i id="fiHp"></i><span id="fiHpT">HEALTH</span></div>
+      <div class="fiBar sta"><i id="fiSta"></i><span>STAMINA</span></div>
+      <div class="fiDmg"><span>HEAD<i id="fiH"></i></span><span>BODY<i id="fiB"></i></span><span>LEGS<i id="fiL"></i></span></div>
+      <div class="fiMsg" id="fiMsg"></div>
+      <div class="fiCtl" id="fiCtl">
+        <div class="fiStick" id="fiStick"><i id="fiKnob"></i><em>MOVE</em></div>
+        <div class="fiBtns" id="fiBtns">
+          <button data-a="j" class="a1">👊<b>JAB</b></button><button data-a="c" class="a2">💥<b>CROSS</b></button><button data-a="b" class="a3">🥊<b>BODY</b></button>
+          <button data-a="l" class="k1">🦵<b>LOW KICK</b></button><button data-a="h" class="k2">🦶<b>HEAD KICK</b></button><button data-d="1" class="dg">💨<b>DODGE</b></button>
+          <button data-blk="1" class="blk">🛡<b>BLOCK</b><small>hold</small></button>
+        </div>
+        <button class="fiUp" id="fiUp" style="display:none"><span>GET UP!</span><small>tap, tap, tap!</small><u><i id="fiUpBar"></i></u></button>
+      </div></div>`;
+    const stick = $('#fiStick'), knob = $('#fiKnob'); let sp = null, last = [9, 9], lastT = 0;
+    const setMv = (x, y, force) => { const n = performance.now(); if (!force && Math.abs(x - last[0]) < 0.06 && Math.abs(y - last[1]) < 0.06) return; if (!force && n - lastT < 45) return; last = [x, y]; lastT = n; sendMsg({ t: 'act', a: 'mv', id: x.toFixed(2) + '|' + y.toFixed(2) }); };
+    const move = e => { const r = stick.getBoundingClientRect(), R0 = r.width / 2; let dx = (e.clientX - (r.left + R0)) / R0, dy = (e.clientY - (r.top + R0)) / R0; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }
+      knob.style.transform = `translate(${dx * R0 * 0.55}px,${dy * R0 * 0.55}px)`; const dz = v => (Math.abs(v) < 0.18 ? 0 : v); setMv(dz(dx), dz(-dy)); };
+    stick.addEventListener('pointerdown', e => { e.preventDefault(); sp = e.pointerId; try { stick.setPointerCapture(sp); } catch (_) {} move(e); });
+    stick.addEventListener('pointermove', e => { if (e.pointerId === sp) move(e); });
+    const rel = e => { if (e.pointerId !== sp) return; sp = null; knob.style.transform = ''; setMv(0, 0, true); }; stick.addEventListener('pointerup', rel); stick.addEventListener('pointercancel', rel);
+    stage.querySelectorAll('.fiBtns button').forEach(b => {
+      if (b.dataset.blk) { b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} sendMsg({ t: 'act', a: 'blk', id: '1' }); b.classList.add('held'); navigator.vibrate?.(10); });
+        const up = () => { sendMsg({ t: 'act', a: 'blk', id: '0' }); b.classList.remove('held'); }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); }
+      else b.addEventListener('pointerdown', e => { e.preventDefault(); if (b.dataset.d) sendMsg({ t: 'act', a: 'dg' }); else sendMsg({ t: 'act', a: 'atk', id: b.dataset.a }); navigator.vibrate?.(12); });
+    });
+    $('#fiUp').addEventListener('pointerdown', e => { e.preventDefault(); sendMsg({ t: 'act', a: 'up' }); navigator.vibrate?.(15); });
+    const draw = () => {
+      if (!document.getElementById('fiStick')) return; const st = FI.st;
+      if (st) {
+        const hp = Math.max(0, Math.min(100, st.hp)); $('#fiHp').style.width = hp + '%'; $('#fiHp').style.background = hp > 55 ? '#51cf66' : hp > 28 ? '#ffd43b' : '#ff4d4d'; $('#fiHpT').textContent = '❤️ ' + Math.round(hp);
+        $('#fiSta').style.width = Math.max(0, st.sta) + '%'; $('#fiH').style.width = st.h + '%'; $('#fiB').style.width = st.b + '%'; $('#fiL').style.width = st.l + '%';
+        $('#fiOp').textContent = 'vs ' + (st.op || ''); const oh = Math.max(0, Math.min(100, st.oh == null ? 100 : st.oh)); $('#fiOh').style.width = oh + '%'; $('#fiOhT').textContent = (st.op || 'Opponent') + '  ' + Math.round(oh); $('#fiRd').textContent = 'ROUND ' + st.rd + '/' + st.rds; const t = st.tm | 0; $('#fiClk').textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+        const down = st.st === 'down', ko = st.st === 'ko'; $('#fiUp').style.display = down ? '' : 'none'; $('#fiStick').style.display = down ? 'none' : ''; $('#fiBtns').style.display = down ? 'none' : '';
+        $('#fiUpBar').style.width = Math.round((st.tap || 0) * 100) + '%';
+        $('#fiMsg').textContent = ko ? '💀 K.O.' : down ? 'YOU ARE DOWN!' : st.st === 'rocked' ? '😵 ROCKED! Cover up!' : st.st === 'getup' ? 'Getting up…' : st.ph === 'bell' ? 'Get ready…' : st.ph === 'rest' ? 'Rest in your corner' : st.ph === 'result' ? 'Fight over' : (st.ms || (st.sta < 18 ? 'GASSED: stop swinging, breathe!' : st.bl ? '🩸 You are bleeding' : ''));
+        document.querySelector('.fiPad').classList.toggle('hurt', st.hp < 28 || st.st === 'rocked');
+      }
+      FI.raf = requestAnimationFrame(draw);
+    };
+    FI.raf = requestAnimationFrame(draw);
   }
   function renderMsg(L) { stage.innerHTML = `<div class="center"><div class="bigEm">${icoSplit(L.emoji || '').icon || esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
   const COVER = id => id ? `covers/sm/${String(id).replace(/^_/, 'q-')}.jpg` : '';
@@ -1385,6 +1438,7 @@
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
+    else if (m.t === 'fi') { FI.st = m; }
     else if (m.t === 'tn') { TN.st = m; if (m.lv != null && m.lv !== TN.lv) { TN.lv = m.lv; const lb = $('#tnLvl'); if (lb) lb.textContent = TN_LV[TN.lv]; } }
     else if (m.t === 'bowl') { const s = BW.st; s.ph = m.ph; if (m.x != null) { s.x = +m.x; s.z = +m.z; } if (m.pins != null) s.pins = m.pins | 0; if (m.bump != null) BW.bump = !!m.bump; s.msg = m.msg || ''; if (m.ph !== 'aim') BW.thrown = BW.thrown || 1; if (m.ph === 'aim') { BW.thrown = 0; BW.mode = null; } }
     else if (m.t === 'paint') { if (TM.on) TM.paint = m; }

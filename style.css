@@ -397,6 +397,38 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .songSug button:active{background:#cc5de8;transform:scale(.98)}
 .songSug button:first-child{box-shadow:0 0 0 2px #ffd43b inset}   /* the top match: Enter on the keyboard picks this one */
 .songSug b{font-size:18px}
+.fiPad{display:flex;flex-direction:column;gap:7px;height:100%;padding:6px 10px 12px;box-sizing:border-box;user-select:none;-webkit-user-select:none;touch-action:none;transition:box-shadow .2s}
+.fiPad.hurt{box-shadow:inset 0 0 40px rgba(255,40,40,.45)}
+.fiTop{display:flex;justify-content:space-between;align-items:center;font:800 14px system-ui,sans-serif;gap:8px}
+.fiTop b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fiTop #fiClk{font-size:18px;color:#ffd43b}
+.fiBar{position:relative;height:26px;border-radius:13px;background:rgba(255,255,255,.14);overflow:hidden}
+.fiBar i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:13px;background:#51cf66;transition:width .1s,background .2s}
+.fiBar.opp{height:18px;border-radius:9px}.fiBar.opp i{background:#e03131;border-radius:9px}
+.fiBar.sta{height:18px;border-radius:9px}.fiBar.sta i{background:#4dabf7;border-radius:9px}
+.fiBar span{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;height:100%;font:800 12px system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85)}
+.fiDmg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font:800 10px system-ui,sans-serif}
+.fiDmg span{position:relative;height:17px;border-radius:9px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;overflow:hidden;color:#fff;text-shadow:0 1px 2px #000}
+.fiDmg i{position:absolute;left:0;top:0;bottom:0;width:0;background:#ff6b3d;opacity:.75;z-index:0}
+.fiMsg{min-height:28px;text-align:center;font:900 20px system-ui,sans-serif;color:#ffd43b;text-shadow:0 2px 4px #000}
+.fiCtl{flex:1;display:flex;align-items:flex-end;justify-content:space-between;gap:10px;min-height:0}
+.fiStick{position:relative;width:min(44vw,200px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.2),rgba(255,255,255,.05));border:3px solid rgba(255,255,255,.38);flex:none;touch-action:none}
+.fiStick i{position:absolute;left:50%;top:50%;width:46%;height:46%;margin:-23% 0 0 -23%;border-radius:50%;background:#fff;opacity:.88;box-shadow:0 4px 10px rgba(0,0,0,.45)}
+.fiStick em{position:absolute;left:0;right:0;bottom:9px;text-align:center;font:800 10px system-ui,sans-serif;opacity:.6;font-style:normal}
+.fiBtns{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;align-content:end;min-width:0}
+.fiBtns button{min-height:min(15vh,84px);border:0;border-radius:16px;color:#fff;font:800 11px system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;touch-action:none;padding:2px}
+.fiBtns button b{font-size:11.5px}.fiBtns button small{font-size:9px;opacity:.8}
+.fiBtns button.blk{grid-column:1/-1;min-height:56px;flex-direction:row;gap:8px}
+.fiBtns button.a1,.fiBtns button.a2,.fiBtns button.a3{--bc:#e03131}.fiBtns button.k1,.fiBtns button.k2{--bc:#f08c00}.fiBtns button.dg{--bc:#1c7ed6}.fiBtns button.blk{--bc:#4c6ef5}
+.fiBtns button.held{filter:brightness(1.25)}
+.fiUp{flex:1;min-height:220px;border:0;border-radius:26px;--bc:#ff6b00;color:#fff;font:900 34px system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;touch-action:none}
+.fiUp small{font:800 14px system-ui,sans-serif;opacity:.9}.fiUp u{display:block;width:80%;height:14px;border-radius:7px;background:rgba(0,0,0,.35);overflow:hidden;text-decoration:none}.fiUp u i{display:block;height:100%;width:0;background:#ffd43b}
+.tnAdv{font:800 13px system-ui,sans-serif;text-align:center;color:#ffe9a8;padding:0 6px 3px;min-height:17px;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+.tnShots{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:0 4px 5px}
+.tnShots button{border:0;border-radius:14px;padding:7px 2px 6px;color:#fff;display:flex;flex-direction:column;align-items:center;gap:1px;font:800 13px system-ui,sans-serif;min-width:0}
+.tnShots button b{font-size:13px}.tnShots button small{font:700 9.5px system-ui,sans-serif;opacity:.85;line-height:1.1;text-align:center}
+.tnShots button.rb{--bc:#232c52}.tnShots button.rb.on{--bc:#f08c00}
+.tnShots button.rec{outline:3px solid #ffd43b;outline-offset:1px;animation:tnRec .7s infinite alternate}
+@keyframes tnRec{to{outline-color:#fff;filter:brightness(1.25)}}
 .tnBars{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:2px 4px 6px}
 .tnBar{position:relative;height:24px;border-radius:12px;background:rgba(255,255,255,.14);overflow:hidden}
 .tnBar i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:12px;background:#51cf66;transition:width .15s,background .2s}

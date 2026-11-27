@@ -26,7 +26,10 @@ const ALL_GAMES = [
     desc: "You're IT! Tag someone to pass it on. Whoever is IT the least wins.", how: ['Tap on your phone where to run', 'IT? Touch someone to pass it on', 'Least time as IT wins'], make: c => new NativeGame(c, 'tag', 4) },
   // 🎾 motion sports (swing the phone)
   { id: 'tennis', cat: 'sports', name: 'Smash Tennis', emoji: '🎾', art: ['#d8f5a2', '#2b8a3e'], ctrl: 'swing', players: '1-8', mins: 3,
-    desc: 'Real 1:1 tennis in a roaring 3D stadium: serve, rally, aces, smashes, fireballs and a bullseye to hit. Watch your stamina! An announcer and a crowd.', how: ['SERVE: flick up — toss + hit happen for you', 'Flick when the ring closes: fast flick = drive, slow long swipe = lob, tiny flick = drop shot', '🎯 land the ball in the glowing ring, ACE, SMASH or 🔥 FIREBALL (full POWER) = 2 points · running tires you out'], make: c => new NativeGame(c, 'tennis', 1) },
+    desc: 'Real 1:1 tennis in a roaring 3D stadium: serve, rally, aces, smashes, fireballs and a bullseye to hit. Watch your stamina! An announcer and a crowd.', how: ['PICK A SHOT, then flick when the ring closes: LOB beats a player at the net, DROP beats a player far back, DRIVE tires and punishes a tired player, SLICE is safe', 'The wrong shot is punished: a bad lob gets smashed, a bad drop gets volleyed away', '🎯 glowing ring, ACE, SMASH, 🔥 FIREBALL (full POWER) = 2 points · running tires you out'], make: c => new NativeGame(c, 'tennis', 1) },
+  { id: 'fight', cat: 'sports', name: 'Cage Fight', emoji: '🥊', art: ['#ff8787', '#c92a2a'], ctrl: 'fight', players: '2-8', mins: 5,
+    desc: 'A full cage fight with real damage: jabs, crosses, body shots, low kicks and head kicks, blocks and dodges. Cuts, blood, knockdowns and KOs! Two rounds, then the judges.',
+    how: ['Left thumb: MOVE round the cage · right thumb: punch and kick', 'HOLD BLOCK to stop punches and high kicks (low kicks cannot be blocked: DODGE them)', 'Hurt the head and he gets rocked, then drops. Knocked down? Tap GET UP fast!'], make: c => new NativeGame(c, 'fight', 2) },
   { id: 'bowling', cat: 'sports', name: 'Strike Bowling', emoji: '🎳', art: ['#e599f7', '#5f3dc4'], ctrl: 'swing', players: '1-8', mins: 4,
     desc: 'Real 3D neon bowling alley. Tilt to line up the ball, swing your arm to roll, pins fly in slow-mo.', how: ['TILT the phone to slide the ball + 🎯 line', 'SWING your arm like a real bowl', 'Strike = 20, spare = 15'], make: c => new NativeGame(c, 'bowling', 1) },
   { id: 'derby', cat: 'sports', name: 'Home Run Derby', emoji: '⚾', art: ['#ffe066', '#e8590c'], ctrl: 'swing', players: '1-8', mins: 2,
@@ -113,7 +116,7 @@ const ALL_GAMES = [
   { id: 'meter', cat: 'action', name: 'Stop the Meter', emoji: '⏱️', art: ['#91a7ff', '#364fc7'], ctrl: 'tap', players: '1-8', mins: 1,
     desc: 'Stop the swinging needle right in the gold zone.', how: ['Watch the needle', 'Tap STOP in the gold zone', 'Perfect = 150 points'], make: c => new NativeGame(c, 'meter', 1) },
 ];
-const CTRL_LABEL = { touch: '👆 Touch map', swing: '📱 Swing motion', tap: '👆 Tap only', move: '🕹️ Move / tilt', shake: '📳 Shake', talk: '🗣️ Talk & vote', type: '⌨️ Type on phone' };
+const CTRL_LABEL = { touch: '👆 Touch map', swing: '📱 Swing motion', tap: '👆 Tap only', move: '🕹️ Move / tilt', shake: '📳 Shake', fight: '🥊 Stick + buttons', talk: '🗣️ Talk & vote', type: '⌨️ Type on phone' };
 // The line-up: 16 polished games in three rows (the other games stay in the code, off the menu)
 const CATEGORIES = [
   { id: 'show', name: '🎤 Showtime' },
@@ -121,6 +124,6 @@ const CATEGORIES = [
   { id: 'sports', name: '🏆 Sports' },
 ];
 const LINEUP = { song: 'show', trivia: 'show', likely: 'show', elf: 'show', doodle: 'show', bomb: 'show', lowest: 'show', reflex: 'show',
-  blackjack: 'cards', storm: 'cards', avalanche: 'cards', four: 'cards', tycoon: 'cards', tennis: 'sports', bowling: 'sports', airhockey: 'sports' };
-const ORDER = ['song', 'trivia', 'likely', 'elf', 'doodle', 'bomb', 'lowest', 'reflex', 'storm', 'avalanche', 'four', 'tycoon', 'blackjack', 'tennis', 'bowling', 'airhockey'];
+  blackjack: 'cards', storm: 'cards', avalanche: 'cards', four: 'cards', tycoon: 'cards', tennis: 'sports', fight: 'sports', bowling: 'sports', airhockey: 'sports' };
+const ORDER = ['song', 'trivia', 'likely', 'elf', 'doodle', 'bomb', 'lowest', 'reflex', 'storm', 'avalanche', 'four', 'tycoon', 'blackjack', 'tennis', 'fight', 'bowling', 'airhockey'];
 const GAMES = ORDER.map(id => ALL_GAMES.find(g => g.id === id)).filter(Boolean).map(g => Object.assign({}, g, { cat: LINEUP[g.id] }));
