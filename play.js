@@ -708,7 +708,11 @@
   const BW = { st: { ph: 'aim', x: 0, z: 0.3, pins: 1023, msg: '' }, raf: 0, x: 0, aimN: 0, hookN: 0, powN: 0, mode: null, steer: 0, thrown: 0, throwT: 0 };
   const BW_L = 18.3, BW_PIN = i => { let r = 0, k = i; while (k > r) { r++; k -= r; } return { x: (k - r / 2) * 0.305, z: 18.3 + r * 0.264 }; };
   // the ball's planned path: starts at x0 with a straight slope, then curves (hook) late
-  const bwPath = (x0, aimN, hookN, z) => x0 + aimN * 0.035 * z + hookN * 0.42 * (z / BW_L) * (z / BW_L);
+  // the oil pattern: slick for 11.5 m, then the boards grip. The hook is a sideways acceleration there, so a slower ball curves more.
+  const bwProf = z => { const t = clamp((z - 11.5) / 4, 0, 1); return 0.12 + 0.88 * t * t * (3 - 2 * t); };
+  const BW_I = (() => { const a = [0]; let s0 = 0, s1 = 0; for (let i = 1; i <= 230; i++) { const u = (i - 0.5) * 0.1, pf = bwProf(u); s0 += pf * 0.1; s1 += u * pf * 0.1; a.push(i * 0.1 * s0 - s1); } return a; })();
+  const bwI = z => { const f = clamp(z, 0, 22.9) * 10, i = Math.floor(f); return BW_I[i] + (BW_I[Math.min(i + 1, 230)] - BW_I[i]) * (f - i); };
+  const bwPath = (x0, aimN, hookN, z) => { const vz = 6.5 + 4.5 * (BW.mode === 'throw' ? BW.powN : 0.55); return x0 + aimN * 0.035 * z + hookN * 0.9 * bwI(z) / (vz * vz); };
   // fit a flick: initial slope + curvature from the finger's path, power from how fast it ended
   function bwFit(pts) {
     if (pts.length < 3) return null;
@@ -741,7 +745,7 @@
     const fromPx = px => clamp(((px - cw / 2) / (HW(0) * 0.78)) * 0.53 / 0.42);             // finger x at the foul line → -1..1
     const hint = t => { const e = $('#bwHint'); if (e && e.textContent !== t) e.textContent = t; };
     const draw = () => {
-      if (!document.body.contains(cv)) return; if (!cw) fit();
+      if (!document.body.contains(cv)) return; if (!cw || wrap.clientWidth !== cw || wrap.clientHeight !== ch) fit();
       g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, cw, ch);
       // lane
       const grd = g.createLinearGradient(0, yT(), 0, yB()); grd.addColorStop(0, '#c99a5f'); grd.addColorStop(1, '#f0c58a');
@@ -838,7 +842,7 @@
     const line = (x0, d0, x1, d1, w = 2.5, col = '#fff') => { g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(Xd(x0, d0), Yd(d0)); g.lineTo(Xd(x1, d1), Yd(d1)); g.stroke(); };
     const poly = (pts, fill) => { g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(Xd(q[0], q[1]), Yd(q[1])) : g.moveTo(Xd(q[0], q[1]), Yd(q[1])))); g.closePath(); g.fillStyle = fill; g.fill(); };
     const draw = () => {
-      if (!document.body.contains(cv)) return; if (!cw) fit();
+      if (!document.body.contains(cv)) return; if (!cw || wrap.clientWidth !== cw || wrap.clientHeight !== ch) fit();
       g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, cw, ch); g.fillStyle = '#0e4a36'; g.fillRect(0, 0, cw, ch);
       poly([[-DWn - 1.6, DMIN], [DWn + 1.6, DMIN], [DWn + 1.6, DMAX], [-DWn - 1.6, DMAX]], '#1d7a55');
       poly([[-DWn - 0.8, -2.2], [DWn + 0.8, -2.2], [DWn + 0.8, 2 * HLn + 2.2], [-DWn - 0.8, 2 * HLn + 2.2]], '#2b6a52');

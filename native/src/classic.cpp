@@ -450,7 +450,7 @@ struct Tug : Classic {
 // =====================================================================================
 struct Hockey : Classic {
   struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; };
-  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0; int score[2] = { 0, 0 }, last = -1; bool over = false;
+  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0, pspin = 0, pang = 0; int score[2] = { 0, 0 }, last = -1; bool over = false;
   const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 125, MR = 46, PR = 26;
   void Start() override {
     InitCam(40); sc.Init(26, 17, true);
@@ -543,25 +543,36 @@ struct Hockey : Classic {
       if (d < MR * 2 && d > 0.01f) { float o = (MR * 2 - d) / 2; m[i].x -= dx / d * o; m[i].y -= dy / d * o; m[j].x += dx / d * o; m[j].y += dy / d * o; }
     }
     if (pause > 0) return;
-    const int SUB = 4; float h = dt / SUB;
+    const int SUB = 8; float h = dt / SUB;
+    // a rail: a bounce that keeps ~90% of the speed, and rubbing along it trades puck spin for sideways speed
+    auto Rail = [&](float nx, float ny) {
+      float vn = pvx * nx + pvy * ny; if (vn >= 0) return; float tx = -ny, ty = nx, vt = pvx * tx + pvy * ty, j = -(1 + 0.9f) * vn;
+      pvx += nx * j; pvy += ny * j; float slip = vt + pspin * PR * 0.5f, dvt = -copysignf(fminf(fabsf(slip) * 0.5f, 0.12f * j), slip);
+      pvx += tx * dvt; pvy += ty * dvt; pspin = Clamp(pspin - dvt / (PR * 0.5f), -60.f, 60.f);
+    };
     for (int s = 0; s < SUB && !over; s++) {
       px += pvx * h; py += pvy * h;
       float f = expf(-0.22f * h); pvx *= f; pvy *= f;
+      pspin *= expf(-0.7f * h); pang += pspin * h;
+      { float sp2 = hypotf(pvx, pvy); if (sp2 > 1) { float ax = -pvy, ay = pvx; pvx += ax * pspin * 0.004f * h; pvy += ay * pspin * 0.004f * h; } }   // spin curves the puck a little
       // the table's air gently blows a slow puck off the rails, so it never gets stuck in a corner
       float nd = 320 * h; bool nearGoal = fabsf(py - CY) < GH;
       if (py < TOP + PR + 10) pvy += nd; if (py > BOT - PR - 10) pvy -= nd;
       if (!nearGoal && px < L + PR + 10) pvx += nd; if (!nearGoal && px > R - PR - 10) pvx -= nd;
-      if (py < TOP + PR) { py = TOP + PR; pvy = fabsf(pvy) * 0.92f; if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } }
-      if (py > BOT - PR) { py = BOT - PR; pvy = -fabsf(pvy) * 0.92f; if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } }
+      if (py < TOP + PR) { py = TOP + PR; Rail(0, 1); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } }
+      if (py > BOT - PR) { py = BOT - PR; Rail(0, -1); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } }
       bool inGoal = fabsf(py - CY) < GH - PR * 0.3f;
-      if (px < L + PR) { if (inGoal) { if (px < L - PR) { Goal(1); break; } } else { px = L + PR; pvx = fabsf(pvx) * 0.92f; if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } } }
-      if (px > R - PR) { if (inGoal) { if (px > R + PR) { Goal(0); break; } } else { px = R - PR; pvx = -fabsf(pvx) * 0.92f; if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } } }
+      if (px < L + PR) { if (inGoal) { if (px < L - PR) { Goal(1); break; } } else { px = L + PR; Rail(1, 0); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } } }
+      if (px > R - PR) { if (inGoal) { if (px > R + PR) { Goal(0); break; } } else { px = R - PR; Rail(-1, 0); if (sndT <= 0 && hypotf(pvx, pvy) > 150) { Sfx("tink"); sndT = 0.06f; } } }
       for (int i = 0; i < N(); i++) {
         M& q = m[i]; float dx = px - q.x, dy = py - q.y, d = hypotf(dx, dy);
         if (d < MR + PR && d > 0.01f) {
           float nx = dx / d, ny = dy / d; px = q.x + nx * (MR + PR); py = q.y + ny * (MR + PR);
           float rvx = pvx - q.vx, rvy = pvy - q.vy, vn = rvx * nx + rvy * ny;
-          if (vn < 0) { pvx -= 1.9f * vn * nx; pvy -= 1.9f * vn * ny; last = i; if (sndT <= 0 && fabsf(vn) > 80) { Sfx("pok"); sndT = 0.09f; } if (fabsf(vn) > 500) { Shake(3); fx.Burst(W3(px, py, 0.3f), 8, WHITE, 4, 0.3f, 0.12f); } if (!P(i).bot) Buzz(i, 30); }
+          if (vn < 0) {   // a mallet (0.4 kg of arm behind it) hits a 25 g puck: a bounce with a little friction that puts spin on it
+            float mP = 0.025f, mM = 0.4f, j = -(1 + 0.92f) * vn / (1 / mP + 1 / mM), dvp = j / mP; pvx += nx * dvp; pvy += ny * dvp;
+            float tx = -ny, ty = nx, vt = rvx * tx + rvy * ty + pspin * PR * 0.5f, dvt = -copysignf(fminf(fabsf(vt) * 0.4f, 0.15f * dvp), vt);
+            pvx += tx * dvt; pvy += ty * dvt; pspin = Clamp(pspin - dvt / (PR * 0.5f), -60.f, 60.f); last = i; if (sndT <= 0 && fabsf(vn) > 80) { Sfx("pok"); sndT = 0.09f; } if (fabsf(vn) > 500) { Shake(3); fx.Burst(W3(px, py, 0.3f), 8, WHITE, 4, 0.3f, 0.12f); } if (!P(i).bot) Buzz(i, 30); }
         }
       }
       float sp = hypotf(pvx, pvy); if (sp > 1700) { pvx *= 1700 / sp; pvy *= 1700 / sp; }
@@ -610,6 +621,7 @@ struct Hockey : Classic {
     Vector3 pp = W3(px, py);
     lit.Draw(prim.cyl, TRS(pp, { 0, 0, 0 }, { PR * SC * 2, 0.16f, PR * SC * 2 }), Hex(0x212529));
     lit.Draw(prim.cyl, TRS({ pp.x, 0.16f, pp.z }, { 0, 0, 0 }, { PR * SC * 1.3f, 0.01f, PR * SC * 1.3f }), Hex(0xffd43b));
+    lit.Draw(prim.cyl, TRS({ pp.x + cosf(pang) * PR * SC * 0.45f, 0.168f, pp.z + sinf(pang) * PR * SC * 0.45f }, { 0, 0, 0 }, { PR * SC * 0.35f, 0.006f, PR * SC * 0.35f }), Hex(0x212529));   // a mark on the puck: you can see it spin
     if (hypotf(pvx, pvy) > 700) fx.Puff({ pp.x, 0.1f, pp.z }, Hex(0xffd43b, 120), 0.15f, 0.25f);
     fx.Draw(); conf.Draw();
     EndMode3D();

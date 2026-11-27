@@ -246,7 +246,7 @@ void Lit::Pattern(int p) { float f = (float)p; SetShaderValue(shader, locPat, &f
 void Lit::Draw(const Mesh& m, Matrix t, Color c) {
   mat.maps[MATERIAL_MAP_DIFFUSE].color = c; rlDisableBackfaceCulling(); DrawMesh(m, mat, t);
   // opaque, not-huge things cast sun shadows (floors, walls and sky domes only receive them)
-  if (c.a == 255 && rec.size() < 6000) {
+  if (!noRec && c.a == 255 && rec.size() < 6000) {
     float sx = t.m0 * t.m0 + t.m1 * t.m1 + t.m2 * t.m2, sy = t.m4 * t.m4 + t.m5 * t.m5 + t.m6 * t.m6, sz = t.m8 * t.m8 + t.m9 * t.m9 + t.m10 * t.m10;
     if (fmaxf(sx, fmaxf(sy, sz)) < 30 * 30) rec.push_back({ m, t });
   }

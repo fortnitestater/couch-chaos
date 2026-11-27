@@ -35,12 +35,12 @@ struct Person {
   std::vector<int> parent; std::vector<Vector3> T0, S0; std::vector<Quaternion> R0; std::vector<bool> hasMat; std::vector<Matrix> M0;
   std::vector<int> joints; std::vector<Matrix> invBind; std::vector<Prim> prims; std::vector<Clip> clips; std::vector<Color> mats;
   int idle = -1, walk = -1, run = -1, wave = -1, interact = -1, idle2 = -1;
-  int shirt = -1, skin = -1, skin2 = -1, hair = -1;
+  int shirt = -1, skin = -1, skin2 = -1, hair = -1; int cKey = -1, cTq = -1;
   float unit = 1, footY = 0;
   std::vector<Vector3> T; std::vector<Quaternion> R; std::vector<Vector3> S; std::vector<Matrix> W, J;
   std::vector<std::string> names; std::vector<char> upper; int head = -1, neck = -1, wristR = -1; std::map<std::string, int> clipCache;
 };
-Person P[4];
+Person P[64];   // 0..3: the shared people; 4..63: instances with their own skinned meshes (a crowd that animates at a lower rate)
 const int CFG[4][4] = { { 2, 3, 4, 7 }, { 1, 2, -1, 6 }, { 0, 1, -1, 3 }, { 3, 0, -1, -1 } };   // shirt / skin / skin2 / hair glTF material
 const char* FILE_[4] = { "p0.glb", "p1.glb", "p2.glb", "p3.glb" };
 
@@ -101,10 +101,11 @@ void Skin(Person& p, bool upload) {
     if (upload) { rlUpdateVertexBuffer(pr.mesh.vboId[0], pr.outP.data(), (int)(vc * 3 * sizeof(float)), 0); rlUpdateVertexBuffer(pr.mesh.vboId[2], pr.outN.data(), (int)(vc * 3 * sizeof(float)), 0); }
   }
 }
-bool Load(int v) {
+bool Load(int v, int var = -1) {
+  if (var < 0) var = v % 4;
   Person& p = P[v];
   if (p.tried) return p.ok;
-  auto it = Files().find(FILE_[v]); if (it == Files().end()) return false;
+  auto it = Files().find(FILE_[var]); if (it == Files().end()) return false;
   p.tried = true;
   cgltf_options opt{}; cgltf_data* d = nullptr;
   if (cgltf_parse(&opt, it->second.data(), it->second.size(), &d) != cgltf_result_success) return false;
@@ -180,7 +181,7 @@ bool Load(int v) {
   cgltf_free(d);
   if (p.prims.empty()) return false;
   p.idle = ClipIdx(p, "Idle"); p.walk = ClipIdx(p, "Walk"); p.run = ClipIdx(p, "Run"); p.wave = ClipIdx(p, "Wave"); p.interact = ClipIdx(p, "Interact"); p.idle2 = ClipIdx(p, "Idle_Neutral");
-  p.shirt = CFG[v][0]; p.skin = CFG[v][1]; p.skin2 = CFG[v][2]; p.hair = CFG[v][3];
+  p.shirt = CFG[var][0]; p.skin = CFG[var][1]; p.skin2 = CFG[var][2]; p.hair = CFG[var][3];
   // measure the standing height once
   Pose(p, p.idle, 0); Skin(p, false);
   float y0 = 1e9f, y1 = -1e9f; for (auto& pr : p.prims) for (size_t k = 1; k < pr.outP.size(); k += 3) { y0 = fminf(y0, pr.outP[k]); y1 = fmaxf(y1, pr.outP[k]); }
@@ -227,13 +228,16 @@ static int ClipByName(Person& p, const char* name) {
   int i = ClipIdx(p, name); p.clipCache[name] = i; return i;
 }
 bool DrawPersonPose(const PersonPose& q) {
-  int v = (int)(q.hsh % 4);
-  if (!Load(v)) { bool any = false; for (int k = 0; k < 4 && !any; k++) if (Load(k)) { v = k; any = true; } if (!any) return false; }
+  int v = q.slot >= 4 && q.slot < 64 ? q.slot : (int)(q.hsh % 4), var = (int)(q.hsh % 4);
+  if (!Load(v, var)) { bool any = false; for (int k = 0; k < 4 && !any; k++) if (Load(k)) { v = k; any = true; } if (!any) return false; }
   Person& p = P[v];
   int a = ClipByName(p, q.clip); if (a < 0) a = p.idle;
   float ta = a >= 0 && q.scrub ? Clamp(q.t, 0, 1) * p.clips[a].len * 0.999f : q.t;
   int b = ClipByName(p, q.clip2); float tb = b >= 0 && q.scrub2 ? Clamp(q.t2, 0, 1) * p.clips[b].len * 0.999f : q.t2;
-  PoseEx(p, a, ta, b, tb, q.mix, q.headYaw, q.headPitch); Skin(p, true);
+  // a crowd member with its own mesh only re-poses ~14 times a second (and only when its pose really changed)
+  int key = a * 131 + b * 17 + (int)(q.mix * 8) + (q.scrub ? 1000 : 0) + (q.scrub2 ? 2000 : 0) + (int)((q.headYaw + 3) * 5) * 7 + (int)((q.headPitch + 3) * 5) * 3, tq = (int)((ta + tb * 3.7f) * 14);
+  bool reuse = q.lowRate && v >= 4 && p.cKey == key && p.cTq == tq;
+  if (!reuse) { PoseEx(p, a, ta, b, tb, q.mix, q.headYaw, q.headPitch); Skin(p, true); p.cKey = key; p.cTq = tq; }
   float s = q.height * p.unit;
   Matrix xf = MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -p.footY, 0), MatrixScale(s, s, s)), MatrixMultiply(MatrixRotateY(q.yaw), MatrixTranslate(q.pos.x, q.pos.y, q.pos.z)));
   static const Color SK[5] = { Hex(0xf1c7a3), Hex(0xd9a47a), Hex(0xb57a52), Hex(0x7d4e33), Hex(0xf5d5bd) };
@@ -246,6 +250,7 @@ bool DrawPersonPose(const PersonPose& q) {
     lit.Draw(pr.mesh, xf, col);
   }
   if (q.wrist && p.wristR >= 0) *q.wrist = MatrixMultiply(p.W[p.wristR], xf);
+  if (q.headM && p.head >= 0) *q.headM = MatrixMultiply(p.W[p.head], xf);
   return true;
 }
 // ---------- static props from .glb files (furniture, plants, lamps) ----------
@@ -275,6 +280,21 @@ bool LoadPropModel(const std::string& name, PropModel& pm) {
       }
       if (cp.indices) { size_t ic = cp.indices->count; m.triangleCount = (int)(ic / 3); m.indices = (unsigned short*)MemAlloc((unsigned)(ic * sizeof(unsigned short))); for (size_t k = 0; k < ic; k++) m.indices[k] = (unsigned short)cgltf_accessor_read_index(cp.indices, k); }
       else m.triangleCount = (int)(vc / 3);
+      {  // a textured material: sample the picture at every vertex and keep it as the vertex colour
+        cgltf_accessor* at = nullptr; for (size_t a = 0; a < cp.attributes_count; a++) if (cp.attributes[a].type == cgltf_attribute_type_texcoord && cp.attributes[a].index == 0) at = cp.attributes[a].data;
+        cgltf_texture* tx = cp.material ? cp.material->pbr_metallic_roughness.base_color_texture.texture : nullptr;
+        if (at && tx && tx->image && tx->image->buffer_view) {
+          cgltf_buffer_view* bv = tx->image->buffer_view; const unsigned char* data = (const unsigned char*)bv->buffer->data + bv->offset;
+          const char* ext = tx->image->mime_type && strstr(tx->image->mime_type, "jpeg") ? ".jpg" : ".png";
+          Image img = LoadImageFromMemory(ext, data, (int)bv->size);
+          if (img.data && img.width > 0) {
+            m.colors = (unsigned char*)MemAlloc((unsigned)(vc * 4));
+            for (size_t k = 0; k < vc; k++) { float uv[2] = { 0, 0 }; cgltf_accessor_read_float(at, k, uv, 2); float u = uv[0] - floorf(uv[0]), v = uv[1] - floorf(uv[1]);
+              Color c = GetImageColor(img, Clamp((int)(u * img.width), 0, img.width - 1), Clamp((int)(v * img.height), 0, img.height - 1)); m.colors[k * 4] = c.r; m.colors[k * 4 + 1] = c.g; m.colors[k * 4 + 2] = c.b; m.colors[k * 4 + 3] = 255; }
+          }
+          if (img.data) UnloadImage(img);
+        }
+      }
       UploadMesh(&m, false);
       const float* c = cp.material ? cp.material->pbr_metallic_roughness.base_color_factor : nullptr;
       pp.c = c ? Color{ ToSRGB(c[0]), ToSRGB(c[1]), ToSRGB(c[2]), 255 } : WHITE;

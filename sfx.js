@@ -143,6 +143,7 @@ const SFX = (() => {
     musicMuted() { return musicMuted; },
     toggleMusic() { musicMuted = !musicMuted; if (musicMuted) { const w = musicWanted; SFX.musicOff(); musicWanted = w; } else if (musicWanted) SFX.musicOn(); return !musicMuted; },
     cheer(k = 1) { if (play('cheer', 1.4 * Math.min(1.3, k + 0.3))) return; bandNoise(2.2 * k + 0.6, 0.55 * k, 1100, 0.7, 0.35); bandNoise(1.6 * k, 0.3 * k, 2600, 1.2, 0.2); },
+    pinsFar() { if (!ac || !ok('pf', 350)) return; if (!play('strike', 0.22, 0.85 + Math.random() * 0.35, true)) bandNoise(0.5, 0.12, 1800, 1.2, 0.01); },   // other people's pins crashing, far away
     // shoe squeak on a hard court, Hawk-Eye stings, and the cinematic slow-motion / impact hits
     squeak() { if (!ac || !ok('sq', 160)) return; const f = 2300 + Math.random() * 900; tone(f, 0.06, 'sine', 0.05, 1.25); tone(f * 1.5, 0.05, 'triangle', 0.025, 0.8, 0.04); },
     varSting() { if (!ac) return; [988, 1319, 1760].forEach((f, i) => tone(f, 0.14, 'sine', 0.16, 1, i * 0.09)); bandNoise(0.5, 0.16, 3000, 2, 0.05); },

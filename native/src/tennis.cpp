@@ -20,7 +20,7 @@ struct Tennis : Classic {
   std::vector<Vector3> trail; Mesh crowdMesh{}; int camShot = -1; float shotT = 0;
   // presentation: LED ads, officials who talk, ball feel, Hawk-Eye reviews
   Texture2D adTex{}, scrTex{};
-  float spinA = 0, spinR = 30, squash = 0, gK = 1, squeakT = 0; Vector3 spinAx{ 1, 0, 0 };
+  float spinA = 0, spinR = 30, squash = 0, squeakT = 0; Vector3 spinAx{ 1, 0, 0 }; float camSide = 0;   // spin: topspin in rad/s (negative = backspin)
   struct Mark { Vector3 p; float life, yaw; }; std::vector<Mark> marks;
   std::vector<Vector3> path;   // the ball's flight since the last hit (Hawk-Eye replays it)
   struct Var { bool on = false; float t = 0; Vector3 at{}; bool in = false, alongX = true; float cm = 0; int team = 0, stage = 0; std::vector<Vector3> path; } var;
@@ -67,23 +67,44 @@ struct Tennis : Classic {
     }
   }
   // launch the ball from 'from' to land at target, at speed v (m/s), clearing the net
+  // ----- the ball: gravity, air drag (it slows down), Magnus lift (topspin makes it dip, backspin makes it float), and a bounce that grips or skids -----
+  static constexpr float KD = 0.0194f, KM = 7.5e-4f;
+  static void Fly(Vector3& p, Vector3& v, float sp, float dt) {
+    float s = Vector3Length(v), vh = hypotf(v.x, v.z);
+    Vector3 a = { -KD * s * v.x, -G - KD * s * v.y, -KD * s * v.z };
+    if (vh > 0.5f) { float m = KM * sp; a.y += -m * vh; a.x += m * v.y * v.x / vh; a.z += m * v.y * v.z / vh; }
+    v = Vector3Add(v, Vector3Scale(a, dt)); p = Vector3Add(p, Vector3Scale(v, dt));
+  }
+  static void Bounce(Vector3& p, Vector3& v, float& sp) {
+    const float e = 0.74f, r = 0.033f; p.y = 0.033f; float vy = -v.y; v.y = vy * e;
+    float vh = hypotf(v.x, v.z); if (vh > 0.05f) {   // the court grips the bottom of the ball: topspin kicks it forward, backspin sets it up
+      float slip = vh - sp * r, dv = -copysignf(fminf(fabsf(slip) * 0.4f, 0.6f * (1 + e) * vy), slip);
+      v.x += dv * v.x / vh; v.z += dv * v.z / vh; sp = Clamp(sp - 1.5f * dv / r, -260.f, 260.f);
+    }
+  }
+  // choose the launch velocity so that THIS physics lands the ball on the target, over the net
   void Launch(Vector3 from, Vector3 target, float speed, float tmul = 1) {
     Vector3 d = { target.x - from.x, 0, target.z - from.z }; float dist = hypotf(d.x, d.z);
-    float T = fmaxf(0.55f, dist / (speed * GSPD)) * tmul, g = G * gK;
-    for (int k = 0; k < 12; k++) {  // make sure it clears the net with room to spare
-      float vy = (0 - from.y + 0.5f * g * T * T) / T, tn = fabsf(from.z) / fmaxf(0.01f, fabsf(d.z)) * T;
-      float hn = from.y + vy * tn - 0.5f * g * tn * tn;
-      if (hn > NETH + 0.35f) break; T *= 1.08f;
+    float T = fmaxf(0.55f, dist / (speed * GSPD)) * tmul; Vector3 v{};
+    for (int tries = 0; tries < 6; tries++) {
+      v = { d.x / T, (0 - from.y + 0.5f * G * T * T) / T, d.z / T };
+      float clear = 9;
+      for (int it = 0; it < 8; it++) {   // shoot, see where it lands, correct
+        Vector3 p = from, w = v; float t = 0; clear = 9;
+        while (t < 6) { float zb = p.z; Fly(p, w, spin, 1 / 240.f); t += 1 / 240.f; if ((zb < 0) != (p.z < 0)) clear = p.y; if (p.y <= 0.033f && w.y < 0) break; }
+        v.x += (target.x - p.x) / t; v.z += (target.z - p.z) / t; v.y += (T - t) * G * 0.5f;
+      }
+      if (clear > NETH + 0.3f) break; T *= 1.08f;
     }
-    bv = { d.x / T, (0 - from.y + 0.5f * g * T * T) / T, d.z / T }; bp = from; live = true; bounced = false; bounces = 0;
+    bv = v; bp = from; live = true; bounced = false; bounces = 0; spinR = spin * 0.15f;
     path.clear(); path.push_back(from);
   }
   // where (and when) the receiver should hit: after the bounce, when the ball comes down to ~1 m
   void Predict() {
-    Vector3 p = bp, v = bv; bool b = bounced; float tt = 0; const float back = HL + 1.0f;
-    for (int k = 0; k < 900; k++) {
-      float dt = 1 / 120.f; Vector3 pv = v; v.y -= G * gK * dt; p = Vector3Add(p, Vector3Scale(v, dt)); tt += dt;
-      if (p.y < 0.033f && v.y < 0) { p.y = 0.033f; v.y = -v.y * 0.72f; v.x *= 0.88f; v.z *= 0.88f; if (b) break; b = true; continue; }
+    Vector3 p = bp, v = bv; bool b = bounced; float tt = 0, sp = spin; const float back = HL + 1.0f;
+    for (int k = 0; k < 1800; k++) {
+      float dt = 1 / 240.f; Vector3 pv = v; Fly(p, v, sp, dt); tt += dt;
+      if (p.y < 0.033f && v.y < 0) { Bounce(p, v, sp); if (b) break; b = true; continue; }
       if (!b) continue;
       // after the bounce: take it at the top of the bounce if that's a nice height, else on the way down at ~1.2 m,
       // and never let the player be pushed far behind the baseline
@@ -168,10 +189,10 @@ struct Tennis : Classic {
     bool smash = bp.y > 1.75f && power >= 0.75f && good && (!ai || frand(0, 1) < 0.3f);
     if (smash) { float w = Doubles() ? DW : HW; tz = -Side(p.team) * frand(HL * 0.45f, HL * 0.72f); tx = Clamp(aim, -1, 1) * w * 0.55f; }
     float spd = (smash ? 34 : 20 + power * 13) * (good ? 1 : 0.82f);
-    gK = smash ? 1.0f : power > 0.7f ? 1.3f : power < 0.45f ? 0.85f : 1.15f; spinR = smash ? 14 : power > 0.7f ? 48 : power < 0.45f ? -26 : 32;
+    spin = smash ? 40.f : power > 0.7f ? 190.f : power < 0.45f ? -70.f : 130.f;   // hard shots carry topspin (they dip into the court), soft ones are sliced
     float tmul = 1;
-    if (!smash && shot == 1) { tz = -Side(p.team) * (HL - 0.7f - frand(0, 1.3f)); spd = 13; tmul = 1.12f; gK = 0.95f; spinR = -18; }       // LOB: high and deep, over a player who has come in
-    else if (!smash && shot == 2) { tz = -Side(p.team) * frand(2.4f, 4.2f); spd = 10; gK = 0.8f; spinR = -34; }                               // DROP: short and soft, drags the other player forward
+    if (!smash && shot == 1) { tz = -Side(p.team) * (HL - 0.7f - frand(0, 1.3f)); spd = 13; tmul = 1.12f; spin = 80; }       // LOB: high and deep, over a player who has come in
+    else if (!smash && shot == 2) { tz = -Side(p.team) * frand(2.4f, 4.2f); spd = 10; spin = -150; }                           // DROP: backspin, short and soft, drags the other player forward
     Launch(bp, { tx, 0, tz }, spd, tmul); smashLive = smash;
     int kmh = (int)(spd * 3.6f * 1.1f); radar = shot == 1 && !smash ? "LOB" : shot == 2 && !smash ? "DROP SHOT" : I(kmh) + " km/h"; radarT = 1.6f;
     Sfx(smash ? "smash" : "pok"); Shake(smash ? 10 : 2); if (!smash) fx.Burst(bp, 12, WHITE, 3, 0.5f, 0.05f, 2);
@@ -273,7 +294,7 @@ struct Tennis : Classic {
         float sx = s.pos.x > 0 ? -1.f : 1.f;
         Vector3 target = { sx * frand(0.6f, HW - 0.5f) * 0.9f + serveAim * 0.6f, 0, -Side(s.team) * frand(SVC - 2.2f, SVC - 0.5f) };
         target.x = Clamp(target.x, -HW + 0.3f, HW - 0.3f); if (target.x * sx < 0.2f) target.x = sx * 0.6f;
-        bp.y = 2.7f; lastHitTeam = s.team; float spd = 20 + servePow * 11; gK = 1.1f; spinR = 24; Launch(bp, target, spd);
+        bp.y = 2.7f; lastHitTeam = s.team; float spd = 20 + servePow * 11; spin = 70 + servePow * 60; Launch(bp, target, spd);
         radar = I((int)(spd * 3.6f * 1.15f)) + " km/h"; radarT = 1.6f; Sfx("smash"); s.sw = 1; phase = "rally"; Predict(); recv = Receiver();
       }
       return;
@@ -281,12 +302,12 @@ struct Tennis : Classic {
     if (phase == "rally" && live) {
       int steps = 4; float h = dt / steps;
       for (int k = 0; k < steps && live; k++) {
-        float zb = bp.z; bv.y -= G * gK * h; bp = Vector3Add(bp, Vector3Scale(bv, h));
+        float zb = bp.z; Fly(bp, bv, spin, h);
         path.push_back(bp); if (path.size() > 900) path.erase(path.begin(), path.begin() + 300);
         if ((zb < 0) != (bp.z < 0) && bp.y < NETH) { live = false; Sfx("netHit"); Point(1 - lastHitTeam, "NET!"); return; }
         if (bp.y < 0.033f && bv.y < 0) {
           float my = atan2f(bv.x, bv.z);
-          bp.y = 0.033f; bv.y = -bv.y * 0.72f; bv.x *= 0.88f; bv.z *= 0.88f; bounces++; Sfx("bounce");
+          Bounce(bp, bv, spin); bounces++; Sfx("bounce"); spinR = spin * 0.15f;
           squash = 1; marks.push_back({ bp, 3.0f, my }); if (marks.size() > 12) marks.erase(marks.begin());
           if (smashLive && bounces == 1) { cine::Impact(bp); Sfx("boom"); Shake(12); }
           float w = Doubles() ? DW : HW; bool onRecvSide = bp.z * Side(lastHitTeam) < 0;
@@ -339,7 +360,9 @@ struct Tennis : Classic {
     int shot = phase == "var" ? (var.t < 0.9f ? 3 : 4) : phase == "serve" && tossT < 0 && server >= 0 && server < (int)on.size() ? 1 : phase == "point" && ptTeam >= 0 ? 2 : 0;
     if (shot != camShot) { if (shot) rig.Cut(); camShot = shot; shotT = 0; }
     shotT += g_frameDt; float push = 1.3f - 0.3f * EaseOutQ(shotT / 2.4f);
-    Vector3 wp = { bx + 0.6f * sinf(time * 0.12f), 7.4f + 0.3f * sinf(time * 0.17f), -25.5f }, wt = { bx * 0.6f, 0.9f, 1.8f }; float wf = 42, k = 2.6f;
+    // the TV is behind the player who is serving, a little above head height (it cuts to the other end when the serve changes sides)
+    float sd = Side(serveTeam); if (sd != camSide) { if (camSide != 0) rig.Cut(); camSide = sd; }
+    Vector3 wp = { bx * 1.2f, 3.3f, sd * (HL + 6.6f) }, wt = { bx * 0.8f, 0.8f, -sd * 4.0f }; float wf = 46, k = 2.6f;
     const Pl* hero = nullptr;
     if (shot == 1) hero = &on[server]; else if (shot == 2) for (auto& o : on) if (o.team == ptTeam) { hero = &o; break; }
     if (hero) { float sd = -Side(hero->team); wt = { hero->pos.x + 0.2f * sd, 1.1f, hero->pos.z }; wp = Vector3Add(wt, Vector3Scale({ 2.8f * sd, 0.35f, 3.9f * sd }, push)); wf = 34; k = 3.0f; }

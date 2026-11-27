@@ -78,7 +78,7 @@ enum { PAT_NONE = 0, PAT_GRASS, PAT_WOOD, PAT_FELT, PAT_SNOW, PAT_ICE, PAT_TILE,
 struct Lit {
   Shader shader{}; Material mat{}; int locLight, locCam, locFog, locFogD, locAmb, locPat, locCast, locNCast, locTime, locSun, locSky;
   std::vector<Vector4> cast, castPrev;  // soft contact shadows (x, groundY, z, radius), drawn one frame late
-  float time = 0;
+  float time = 0; bool noRec = false;   // noRec: things drawn now don't cast sun shadows (a big static backdrop doesn't need to)
   // real sun shadows: every opaque lit.Draw is recorded, and next frame the scene is rendered from the sun into a depth map
   struct Rec { Mesh m; Matrix t; };
   std::vector<Rec> rec; Camera3D lastCam{}; bool haveCam = false; float shOn = 0; Matrix lightVP{};
@@ -246,6 +246,8 @@ struct PersonPose {
   const char* clip2 = nullptr; float t2 = 0; bool scrub2 = false; float mix = 0;       // the upper body, blended toward clip2
   float headYaw = 0, headPitch = 0;
   Matrix* wrist = nullptr;                                                             // out: the right wrist (world)
+  Matrix* headM = nullptr;                                                             // out: the head (world), for hats
+  int slot = -1; bool lowRate = false;                                                 // slot >= 4: this person has their own mesh; lowRate: re-pose ~14 times a second (a crowd)
 };
 bool DrawPersonPose(const PersonPose& q);
 inline unsigned PersonHash(Color c) { return (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29; }
