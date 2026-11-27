@@ -1183,7 +1183,7 @@
   }
   // ---------- 🎵 song guess: type + pick from live suggestions ----------
   const sNorm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-  let songList = [], songTried = [], songRound = -1;
+  let songList = [], songPending = null, songTick = 0, songEnd = 0, songWait = 10;
   function songMatches(q) {
     q = sNorm(q); if (!q) return [];
     const words = q.split(' '), out = [];
@@ -1198,55 +1198,78 @@
   }
   function renderSong(L) {
     if (L.list && L.list.length !== songList.length) songList = L.list.map((s, i) => { const [t, a = ''] = s.split(' — '); return { i, s, t: sNorm(t), a, title: t, n: sNorm(s), w: sNorm(s).split(' ') }; });
-    if (L.round !== songRound) { songRound = L.round; songTried = []; }
     let root = $('#songUI');
     if (!root || +root.dataset.r !== L.round) {
+      clearInterval(songTick); songPending = null;
       stage.innerHTML = `<div class="songUI" id="songUI" data-r="${L.round}">
         <div class="songTop"><b id="sgRound"></b><span id="sgPts"></span></div>
         <div class="songStages" id="sgStages"></div>
         <div class="songStat" id="sgStat"></div>
+        <div class="songTimer" id="sgTimer"><i></i></div>
+        <div class="songBtns" id="sgBtns"><button id="sgRep">🔁 Replay</button><button id="sgSkip">⏭ Skip · more music</button></div>
         <div class="songIn" id="sgBox"><input id="sgIn" type="search" enterkeyhint="go" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="🔎 Type a song or artist…"><button id="sgX" aria-label="Clear">✕</button></div>
         <div class="songSug" id="sgSug"></div>
         <div class="songTried" id="sgTried"></div>
-        <div class="songBtns" id="sgBtns"><button id="sgRep">🔁 Replay</button><button id="sgSkip">⏭ Skip · more music</button></div>
         <div class="songHost" id="sgHost"></div></div>`;
       root = $('#songUI');
-      const inp = $('#sgIn'), sug = $('#sgSug');
+      const inp = $('#sgIn'), sug = $('#sgSug'), round = L.round;
+      // a tap = finger down and up in the same place (so scrolling the list never picks a song). Pressing never takes focus away from the text box, so the keyboard stays up and nothing jumps under your finger.
+      const tap = (el, fn, sel) => {
+        let d = null;
+        el.addEventListener('mousedown', e => e.preventDefault());
+        el.addEventListener('pointerdown', e => { const b = sel ? e.target.closest(sel) : el; d = b ? { b, x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId } : null; });
+        el.addEventListener('pointermove', e => { if (d && e.pointerId === d.id && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) d = null; });
+        el.addEventListener('pointercancel', () => { d = null; });
+        el.addEventListener('pointerup', e => { const k = d; d = null; if (!k || e.pointerId !== k.id || Date.now() - k.t > 1200) return; e.preventDefault(); fn(k.b); });
+      };
       const pickSong = it => {
-        if (!layout || layout.name !== 'song' || layout.state !== 'guess') return;
+        if (!it || !layout || layout.name !== 'song' || layout.state !== 'guess') return;
         sendMsg({ t: 'act', a: 'guess', i: it.i }); navigator.vibrate?.(25);
-        songTried.push(it.s); inp.value = ''; sug.innerHTML = ''; inp.blur();
+        songPending = it; inp.value = ''; sug.innerHTML = ''; sug._list = []; inp.blur();
         layout.state = 'sent'; songUpdate(layout);
+        setTimeout(() => { if (layout && layout.name === 'song' && layout.state === 'sent' && layout.round === round) { layout.state = 'guess'; songUpdate(layout); } }, 3500);   // never stuck on "checking": if the TV did not answer, you can go on
       };
       const draw = () => {
         const list = songMatches(inp.value);
         sug.innerHTML = list.map((it, k) => `<button data-k="${k}"><b>${esc(it.title)}</b><small>${esc(it.a)}</small></button>`).join('') || (inp.value.trim() ? '<div class="muted sgNone">No match — try the artist name</div>' : '');
-        sug.querySelectorAll('button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); pickSong(list[+b.dataset.k]); }));
         sug._list = list;
       };
+      tap(sug, b => pickSong((sug._list || [])[+b.dataset.k]), 'button[data-k]');
       inp.addEventListener('input', draw);
+      inp.addEventListener('focus', () => setTimeout(() => { const s = $('#sgStat'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 280));   // lift the answer area above the keyboard
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const l = sug._list || []; if (l[0]) pickSong(l[0]); } });
-      $('#sgX').onclick = () => { inp.value = ''; draw(); inp.focus(); };
-      $('#sgRep').onclick = () => { sendMsg({ t: 'act', a: 'replay' }); navigator.vibrate?.(15); };
-      $('#sgSkip').onclick = () => { sendMsg({ t: 'act', a: 'skip' }); navigator.vibrate?.(15); inp.blur(); layout.state = 'skip'; songUpdate(layout); };
+      tap($('#sgX'), () => { inp.value = ''; draw(); inp.focus(); });
+      tap($('#sgRep'), () => { sendMsg({ t: 'act', a: 'replay' }); navigator.vibrate?.(15); });
+      tap($('#sgSkip'), () => { if (!layout || layout.state !== 'guess') return; sendMsg({ t: 'act', a: 'skip' }); navigator.vibrate?.(15); inp.blur(); layout.state = 'skip'; songUpdate(layout); });
+      songTick = setInterval(() => {   // the time left on this clip
+        const el = $('#sgTimer'); if (!el) return clearInterval(songTick);
+        const left = Math.max(0, songEnd - Date.now()) / 1000, f = Math.min(1, left / (songWait || 10));
+        el.firstChild.style.width = (f * 100) + '%'; el.classList.toggle('low', f < 0.3);
+      }, 200);
+      if (window.visualViewport && !window._songVV) { window._songVV = 1; const set = () => { document.documentElement.style.setProperty('--vvh', visualViewport.height + 'px'); document.body.classList.toggle('vvShort', visualViewport.height < 560); }; visualViewport.addEventListener('resize', set); set(); }
     }
     songUpdate(L);
   }
   function songUpdate(L) {
     const st = L.state, live = st === 'guess';
+    if (st !== 'sent') { songEnd = Date.now() + (+L.left || 0) * 1000; songWait = +L.wait || 10; }   // (a local "sent" does not reset the clock)
     $('#sgRound').textContent = L.round ? (L.total ? `🎵 Song ${L.round} / ${L.total}` : `🎵 Song ${L.round} · endless`) : '🎵 Song Guess';
     $('#sgPts').textContent = `${L.pts || 0} pts`;
     $('#sgStages').innerHTML = (L.stages || []).map((s, i) => `<span class="${i < L.stage ? 'past' : i === L.stage && st !== 'reveal' ? 'cur' : ''}">${s}s</span>`).join('');
     const msg = {
       load: '⏳ Next song coming…', guess: L.stage === 0 ? '👂 0.1 seconds… what is it?!' : `👂 Heard ${L.stages[L.stage]}s — what is it?`,
-      sent: '📨 Checking…', wrong: '❌ Not that one! More music is coming…', skip: '⏭ Skipped — listen to the next bit',
+      sent: songPending ? `📨 Checking “${songPending.title}”…` : '📨 Checking…', wrong: '❌ Not that one! More music is coming…', skip: '⏭ Skipped — listen to the next bit',
       right: `✅ YOU GOT IT! ${L.mine || ''}`, reveal: `It was <b>${esc(L.answer || '')}</b><br>${esc(L.mine || '')}`,
     }[st] || '';
     const sEl = $('#sgStat'); sEl.innerHTML = st === 'reveal' ? msg : esc(msg); sEl.className = 'songStat ' + st;
-    const inp = $('#sgIn'); inp.disabled = !live; if (!live) { inp.value = ''; $('#sgSug').innerHTML = ''; }
+    const inp = $('#sgIn'); inp.disabled = !live; if (!live) { inp.value = ''; $('#sgSug').innerHTML = ''; $('#sgSug')._list = []; }
     $('#sgBox').style.display = st === 'right' || st === 'reveal' || st === 'load' ? 'none' : '';
-    $('#sgBtns').style.display = live ? '' : 'none';
-    $('#sgTried').innerHTML = songTried.length && st !== 'reveal' ? songTried.map(s => `<div>❌ <s>${esc(s)}</s></div>`).join('') : '';
+    $('#sgBtns').style.display = st === 'load' || st === 'reveal' ? 'none' : '';
+    $('#sgSkip').style.display = live ? '' : 'none'; $('#sgBtns').style.gridTemplateColumns = live ? '' : '1fr';   // you can always hear the clip again; skipping only while you can still guess
+    $('#sgTimer').style.display = st === 'guess' || st === 'sent' || st === 'wrong' || st === 'skip' ? '' : 'none';
+    // wrong guesses come from the TV, which is the one that judged them: a right guess can never show up crossed out
+    const tr = L.tried || [];
+    $('#sgTried').innerHTML = tr.length && st !== 'reveal' && st !== 'load' ? tr.map(s => `<div>❌ <s>${esc(s)}</s></div>`).join('') : '';
     const h = $('#sgHost');
     h.innerHTML = st === 'reveal' && L.host ? `<button data-b="next">⏭ Next song</button><button data-b="end" class="end">🏁 End game</button>` : '';
     h.querySelectorAll('button').forEach(b => b.onclick = () => sendMsg({ t: 'act', a: 'btn', id: b.dataset.b }));

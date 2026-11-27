@@ -291,9 +291,9 @@ struct Aval : GameNight {
     Board("💣 STILL STANDING", Sorted([&](int i) { return alive[i] ? 1.f : 0.f; }), [&](int i) { return alive[i] ? std::string("✔") : std::string("❄️"); });
     Title("AVALANCHE!", Hex(0xff8787));
     // danger meter
-    float mw = 420; RRect(800 - mw / 2, 148, mw, 40, 20, Hex(0x0a1230, 210), Hex(0x0a1230, 210), Hex(0xffffff, 120), 1.5f, false, true);
-    RRect(800 - mw / 2 + 4, 152, fmaxf(32, (mw - 8) * fminf(1, d * 2.2f)), 32, 16, d > 0.3f ? Hex(0xff4d5e) : d > 0.15f ? Hex(0xff9f43) : Hex(0x34c77b), d > 0.3f ? Hex(0xc92a3a) : d > 0.15f ? Hex(0xe8590c) : Hex(0x2b8a3e), BLANK, 0, true);
-    Text(800, 168, 18, WHITE, std::to_string(deck.size()) + " CARDS  ·  DANGER " + std::to_string((int)(d * 100)) + "%", 0, TS_HEAVY | TS_SHADOW);
+    float mw = 420; RRect(800 - mw / 2, 190, mw, 40, 20, Hex(0x0a1230, 210), Hex(0x0a1230, 210), Hex(0xffffff, 120), 1.5f, false, true);
+    RRect(800 - mw / 2 + 4, 194, fmaxf(32, (mw - 8) * fminf(1, d * 2.2f)), 32, 16, d > 0.3f ? Hex(0xff4d5e) : d > 0.15f ? Hex(0xff9f43) : Hex(0x34c77b), d > 0.3f ? Hex(0xc92a3a) : d > 0.15f ? Hex(0xe8590c) : Hex(0x2b8a3e), BLANK, 0, true);
+    Text(800, 210, 18, WHITE, std::to_string(deck.size()) + " CARDS  ·  DANGER " + std::to_string((int)(d * 100)) + "%", 0, TS_HEAVY | TS_SHADOW);
     LogBar();
     if (pa.by >= 0) {
       RRect(560, 210, 480, 110, 24, Hex(0x14204a, 230), Hex(0x0a1230, 230), Hex(0xffffff, 200), 3, true, true);

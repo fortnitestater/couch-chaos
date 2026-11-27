@@ -118,6 +118,7 @@ struct QuizShow : Show {
       PodiumLabels(); return;
     }
     if (phase == "end") { Heading("FINAL SCORES", title, 70, 52); PodiumLabels(); return; }
+    { float hw = fmaxf(Measure(kick, 21, TS_PLAIN | TS_HEAVY | TS_SPACED), Measure(title, 38, TS_DISPLAY)) + 56; Glass(78, 14, hw, 88, 22); }   // the heading sits on glass: the neon frame no longer cuts through it
     Text(112, 38, 21, Hex(0xc9d3f2), kick, -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
     Text(110, 76, 38, WHITE, title, -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (phase == "ask") Timer(t, tMax, 1490, 66);

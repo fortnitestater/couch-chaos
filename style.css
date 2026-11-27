@@ -387,7 +387,12 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .songIn input:focus{border-color:#ffd43b}
 .songIn input:disabled{opacity:.45;border-color:#555}
 .songIn button{width:54px;border-radius:16px;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:20px}
-.songSug{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow-y:auto}
+.songSug{display:flex;flex-direction:column;gap:6px;max-height:calc(var(--vvh,100vh) * .5 - 120px);min-height:0;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.songTimer{height:7px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden;margin:-2px 2px}
+.songTimer i{display:block;height:100%;width:100%;background:#ffd43b;border-radius:4px;transition:width .25s linear}
+.songTimer.low i{background:#ff4d6d}
+.songIn input::-webkit-search-cancel-button{display:none}
+.vvShort .songStages,.vvShort .songTop{display:none}.vvShort .songStat{padding:8px;font-size:16px}.vvShort .songUI{gap:7px;padding-top:6px}
 .songSug button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:11px 14px;border-radius:14px;border:0;background:#2a1f5c;color:#fff;font:inherit}
 .songSug button:active{background:#cc5de8;transform:scale(.98)}
 .songSug b{font-size:18px}
@@ -395,6 +400,7 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .sgNone{text-align:center;padding:8px}
 .songTried{font-size:15px;color:#ff8787;display:flex;flex-direction:column;gap:2px}
 .songBtns{display:grid;grid-template-columns:1fr 1.6fr;gap:8px}
+.songBtns button{padding:12px 10px !important}
 .songBtns button,.songHost button{padding:16px 10px;border-radius:16px;border:0;font:800 17px Inter,system-ui,sans-serif;color:#fff;background:#364fc7}
 .songBtns button#sgSkip{background:#5f3dc4}
 .songHost{display:grid;grid-template-columns:1fr 1fr;gap:8px}

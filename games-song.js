@@ -140,7 +140,8 @@ class SongGuess {
     this.cur = this.queue.shift().ready; this.prefetch();
     this.idx = SONGS.indexOf(this.cur.song);
     this.got = new Map(); // p -> {stage, pts}
-    this.stage = -1; this.replays = 0;
+    this.tried = new Map(); // p -> the wrong guesses of this song
+    this.stage = -1; this.replays = 0; this.grace = false;
     this.nextStage();
   }
   nextStage() {
@@ -159,6 +160,7 @@ class SongGuess {
   }
   play(sec, fade = 0.012) {
     if (!this.ac || !this.cur) return;
+    if (this.ac.state !== 'running') { try { this.ac.resume(); } catch (e) {} }   // a TV browser can suspend the audio after a while
     this.stopAudio();
     const src = this.ac.createBufferSource(), g = this.ac.createGain(), t = this.ac.currentTime + 0.03;
     src.buffer = this.cur.buf; src.connect(g); g.connect(this.out);
@@ -167,23 +169,30 @@ class SongGuess {
     src.start(t, this.cur.off, sec + 0.05); this.src = src; this.playing = { t0: performance.now() + 30, sec };
   }
   stopAudio() { if (this.src) { try { this.src.stop(); } catch (e) {} this.src = null; } this.playing = null; }
+  isPlaying() { return !!this.playing && performance.now() - this.playing.t0 < this.playing.sec * 1000 + 60; }
   guessersLeft() { return this.ps.filter(p => !this.got.has(p) && !this.st.has(p)); }
   stillIn() { return this.ps.filter(p => !this.got.has(p)); }
+  open() { return this.phase === 'listen' || this.phase === 'guess' || (this.phase === 'gap' && this.grace); }   // grace: the clock has just run out, a tap that is already on its way still counts
   answer(p, i) {
-    if ((this.phase !== 'listen' && this.phase !== 'guess') || this.got.has(p) || this.st.has(p)) return;
+    if (!this.open() || this.got.has(p) || this.st.has(p)) { this.pushOne(p); return; }
     if (i === this.idx) {
       const tIn = Math.max(0, this.stageT - this.clipEnd), first = ![...this.got.values()].some(g => g.stage === this.stage);
       const pts = SONG_PTS[this.stage] + Math.round(Math.max(0, 1 - tIn / SONG_WAIT) * 100) + (first ? 100 : 0);
       this.got.set(p, { stage: this.stage, pts }); this.score.set(p, this.score.get(p) + pts);
       this.c.sfx.ding(); this.fx.text(800, 640, `${p.name} got it!`, p.color, 36);
       if (!p.bot) { this.c.send(p, { t: 'buzz', ms: 60 }); }
-    } else { this.st.set(p, 'wrong'); if (!p.bot) this.c.send(p, { t: 'buzz', ms: 200 }); }
+    } else { this.st.set(p, 'wrong'); this.tried.set(p, [...(this.tried.get(p) || []), SONG_LIST[i] || '?']); if (!p.bot) this.c.send(p, { t: 'buzz', ms: 200 }); }
     this.pushOne(p); this.checkStage();
   }
-  skip(p) { if ((this.phase !== 'listen' && this.phase !== 'guess') || this.got.has(p) || this.st.has(p)) return; this.st.set(p, 'skip'); this.pushOne(p); this.checkStage(); }
+  replay(p) {
+    const now = performance.now();
+    if (this.phase !== 'guess' || !this.cur || this.isPlaying() || now - (this._repAt || 0) < 350) { this.pushOne(p); return; }
+    this._repAt = now; this.replays++; this.play(SONG_STAGES[this.stage]); this.fx.text(800, 600, `🔁 ${p.name} replays the clip`, '#fff', 26);
+  }
+  skip(p) { if (!this.open() || this.got.has(p) || this.st.has(p)) { this.pushOne(p); return; } this.st.set(p, 'skip'); this.pushOne(p); this.checkStage(); }
   checkStage() {
     if (!this.stillIn().length) return this.reveal();
-    if (!this.guessersLeft().length) { this.phase = 'gap'; this.gapT = 0.7; }
+    if (!this.guessersLeft().length) { this.phase = 'gap'; this.gapT = 0.7; this.grace = false; }
   }
   reveal() {
     this.phase = 'reveal'; this.revT = 0; this.stopAudio();
@@ -206,11 +215,12 @@ class SongGuess {
   }
   // ---------- phones ----------
   layoutFor(p) {
-    const base = { name: 'song', round: this.n, total: this.total, stage: this.stage, stages: SONG_STAGES, pts: this.score.get(p), list: SONG_LIST };
+    const left = this.phase === 'listen' || this.phase === 'guess' ? Math.max(0, this.clipEnd + SONG_WAIT - this.stageT) : 0;
+    const base = { name: 'song', round: this.n, total: this.total, stage: this.stage, stages: SONG_STAGES, pts: this.score.get(p), list: SONG_LIST, tried: (this.tried && this.tried.get(p)) || [], left: +left.toFixed(1), wait: SONG_WAIT };
     if (this.phase === 'load' || this.phase === 'setup') return { ...base, state: 'load' };
     if (this.phase === 'reveal') {
       const g = this.got.get(p);
-      return { ...base, state: 'reveal', answer: songLabel(this.cur.song), mine: g ? `✅ +${g.pts}` : '😬 Nobody told you?', host: p === this.host && this.endless };
+      return { ...base, state: 'reveal', answer: songLabel(this.cur.song), mine: g ? `✅ +${g.pts}` : '😬 You missed this one', host: p === this.host && this.endless };
     }
     const g = this.got.get(p);
     if (g) return { ...base, state: 'right', mine: `+${g.pts}` };
@@ -227,14 +237,14 @@ class SongGuess {
     }
     if (m.a === 'guess') this.answer(p, m.i | 0);
     else if (m.a === 'skip') this.skip(p);
-    else if (m.a === 'replay' && (this.phase === 'guess') && this.replays < 3 && !this.playing) { this.replays++; this.play(SONG_STAGES[this.stage]); this.fx.text(800, 600, '🔁 replay', '#fff', 28); }
+    else if (m.a === 'replay') this.replay(p);
     else if (m.a === 'btn' && p === this.host && this.phase === 'reveal') { if (m.id === 'end') this.end(); else if (m.id === 'next') this.revT = 99; }
   }
   // ---------- loop ----------
   update(dt) {
     if (this.done) return;
     this.t += dt; this.fx.update(dt);
-    if (this.playing) { if (performance.now() - this.playing.t0 > this.playing.sec * 1000 + 60) this.playing = null; this.spin += dt * 3.2; }
+    if (this.playing) { if (!this.isPlaying()) this.playing = null; this.spin += dt * 3.2; }
     // equalizer from the real audio
     if (this.an && this.playing) { this.an.getByteFrequencyData(this.freq); for (let i = 0; i < this.bars.length; i++) { const v = this.freq[Math.floor(2 + i * 1.9)] / 255; this.bars[i] = Math.max(v, this.bars[i] - dt * 2.5); } }
     else for (let i = 0; i < this.bars.length; i++) this.bars[i] = Math.max(0, this.bars[i] - dt * 2.5);
@@ -254,10 +264,10 @@ class SongGuess {
       for (const p of this.ps) if (p.bot && !this.got.has(p) && !this.st.has(p) && this.stageT >= p._songAt) {
         if (p._songRight) this.answer(p, this.idx); else if (Math.random() < 0.5) this.answer(p, (this.idx + irnd(1, SONGS.length - 1)) % SONGS.length); else this.skip(p);
       }
-      if (this.phase === 'guess' && this.stageT >= this.clipEnd + SONG_WAIT) { for (const p of this.guessersLeft()) this.st.set(p, 'skip'); this.phase = 'gap'; this.gapT = 0.4; }
+      if (this.phase === 'guess' && this.stageT >= this.clipEnd + SONG_WAIT) { this.phase = 'gap'; this.gapT = 1.0; this.grace = true; }
       return;
     }
-    if (this.phase === 'gap') { this.gapT -= dt; if (this.gapT <= 0) this.nextStage(); return; }
+    if (this.phase === 'gap') { this.gapT -= dt; if (this.gapT <= 0) { this.grace = false; this.nextStage(); } return; }
     if (this.phase === 'reveal') { this.revT += dt; if (this.revT > (this.endless ? 11 : 9)) this.afterReveal(); }
   }
   // ---------- TV ----------
