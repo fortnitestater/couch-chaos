@@ -460,6 +460,9 @@ body.landing { overflow: auto; touch-action: auto; user-select: auto; -webkit-us
 .bwTop { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 8px; }
 .bwTop b { color: var(--chAcc, #ffd43b); letter-spacing: .08em; font-size: 15px; }
 .bwTop span { opacity: .85; font-size: 13px; font-weight: 700; }
+.bwBump { appearance: none; border: 0; border-radius: 14px; padding: 5px 11px; font: 800 12px/1 system-ui, sans-serif; letter-spacing: .04em; color: #cfd6ee; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .18); -webkit-tap-highlight-color: transparent; }
+.bwBump.on { color: #1b1236; background: #ffd43b; box-shadow: none; }
+.bwBump:disabled { opacity: .5; }
 .bwWrap { position: relative; flex: 1; min-height: 0; border-radius: 20px; overflow: hidden; background: #17102e; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14), 0 8px 24px rgba(0, 0, 0, .35); touch-action: none; }
 .bowlPad:not(.mine) .bwWrap { opacity: .92; }
 .bwWrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

@@ -712,7 +712,33 @@
   const bwProf = z => { const t = clamp((z - 11.5) / 4, 0, 1); return 0.12 + 0.88 * t * t * (3 - 2 * t); };
   const BW_I = (() => { const a = [0]; let s0 = 0, s1 = 0; for (let i = 1; i <= 230; i++) { const u = (i - 0.5) * 0.1, pf = bwProf(u); s0 += pf * 0.1; s1 += u * pf * 0.1; a.push(i * 0.1 * s0 - s1); } return a; })();
   const bwI = z => { const f = clamp(z, 0, 22.9) * 10, i = Math.floor(f); return BW_I[i] + (BW_I[Math.min(i + 1, 230)] - BW_I[i]) * (f - i); };
-  const bwPath = (x0, aimN, hookN, z) => { const vz = 6.5 + 4.5 * (BW.mode === 'throw' ? BW.powN : 0.55); return x0 + aimN * 0.035 * z + hookN * 0.9 * bwI(z) / (vz * vz); };
+  // The ball's whole path, simulated step by step exactly as the TV does it (same numbers as bowling.cpp): the skid, the late hook, the little pull toward the pocket,
+  // and the rebounds off the bumpers (or, with no bumpers, the slide into the gutter). So the line on your phone is the line on the TV, 1:1.
+  const BW_BUMP = { X: 0.54 - 0.1085, END: 17.9, E: 0.45 };
+  function bwSim(x0, aimN, hookN, powN, bump) {
+    const vz0 = 6.5 + 4.5 * powN, Ln = 18.29; let slope = aimN * 0.035;
+    const xi = x0 + slope * Ln + hookN * 0.9 * bwI(Ln) / (vz0 * vz0);
+    if (Math.abs(xi) < 0.26) { const tgt = (xi === 0 ? -1 : Math.sign(xi)) * 0.075, xi2 = xi + (tgt - xi) * 0.4; slope += (xi2 - xi) / Ln; }
+    let x = x0, z = -0.1, vx = slope * vz0, vz = vz0, gut = false; const ax = hookN * 0.9, h = 1 / 240, out = [x0]; let g = 1;
+    for (let n = 0; n < 4000 && g <= 184; n++) {
+      const xp = x, zp = z;
+      if (z < Ln) vx += ax * bwProf(z) * h;
+      x += vx * h; z += vz * h;
+      if (bump) { if (z < BW_BUMP.END && Math.abs(x) > BW_BUMP.X) { const sg = Math.sign(x); x = sg * BW_BUMP.X; if (vx * sg > 0) { vx *= -BW_BUMP.E; vz *= 0.985; } } }
+      else if (!gut && z < 19.2 && Math.abs(x) > 0.5) gut = true;
+      if (gut) { const sg = Math.sign(x) || 1; vx = 0; x += (sg * 0.65 - x) * Math.min(1, 14 * h); }
+      while (g <= 184 && z >= g * 0.1) { const f = (g * 0.1 - zp) / (z - zp); out.push(xp + (x - xp) * f); g++; }
+    }
+    while (out.length < 185) out.push(out[out.length - 1]);
+    return out;
+  }
+  let bwCache = { k: '', xs: [] };
+  const bwPath = (x0, aimN, hookN, z) => {
+    const pw = BW.mode === 'throw' ? BW.powN : 0.55, bump = BW.bump !== false, k = [x0, aimN, hookN, pw, bump].join('|');
+    if (bwCache.k !== k) bwCache = { k, xs: bwSim(x0, aimN, hookN, pw, bump) };
+    const f = clamp(z, 0, 18.4) * 10, i = Math.min(Math.floor(f), 183); return bwCache.xs[i] + (bwCache.xs[i + 1] - bwCache.xs[i]) * (f - i);
+  };
+  if (/debug/.test(location.search)) { window.CCBW = BW; window.CCBWSIM = bwSim; }   // for the tests: compares the phone's prediction with what the TV really rolls
   // fit a flick: initial slope + curvature from the finger's path, power from how fast it ended
   function bwFit(pts) {
     if (pts.length < 3) return null;
@@ -728,10 +754,10 @@
     return { aimN: clamp(r1 * 1.5), hookN: clamp(dz(r2 * 1.3)), powN: clamp((v - 0.35) / 1.7, 0.18, 1), dy, v };
   }
   function renderBowl(L) {
-    BW.L = L; BW.mine = !!L.mine; BW.mode = null; BW.thrown = 0; BW.steer = 0;
+    BW.L = L; BW.mine = !!L.mine; BW.bump = L.bump == null ? true : !!L.bump; BW.mode = null; BW.thrown = 0; BW.steer = 0;
     BW.st.who = L.who || ''; BW.st.frame = L.frame || 1; BW.st.frames = L.frames || 3; BW.st.ball = L.ball || 1; BW.st.ph = L.ph || 'aim'; BW.st.msg = ''; if (L.pins != null) BW.st.pins = L.pins;
     if (BW.mine) { BW.x = 0; BW.aimN = 0; BW.hookN = 0; BW.powN = 0; }
-    stage.innerHTML = `<div class="bowlPad ${BW.mine ? 'mine' : ''}"><div class="bwTop"><b>${BW.mine ? 'YOUR ROLL' : esc((L.who || 'Someone') + ' is bowling')}</b><span>Frame ${BW.st.frame}/${BW.st.frames} · ${BW.st.ball === 1 ? '1st' : '2nd'} ball</span></div>
+    stage.innerHTML = `<div class="bowlPad ${BW.mine ? 'mine' : ''}"><div class="bwTop"><b>${BW.mine ? 'YOUR ROLL' : esc((L.who || 'Someone') + ' is bowling')}</b>${BW.mine ? '<button class="bwBump" id="bwBump"></button>' : ''}<span>Frame ${BW.st.frame}/${BW.st.frames} · ${BW.st.ball === 1 ? '1st' : '2nd'} ball</span></div>
       <div class="bwWrap" id="bwWrap"><canvas id="bwCv"></canvas><div class="bwPrompt" id="bwPrompt"></div></div>
       <div class="bwBot"><div class="bwPow ${BW.mine ? '' : 'off'}"><i id="bwPowI"></i><span>POWER</span></div><div class="rhint" id="bwHint"></div></div></div>`;
     const wrap = $('#bwWrap'), cv = $('#bwCv'), g = cv.getContext('2d'); let cw = 0, ch = 0, d = 1;
@@ -754,7 +780,7 @@
       quad(-0.78, 0.78, 0, 20, '#0d0a20');                       // gutters
       quad(-0.53, 0.53, 0, 20, grd);                              // wood
       g.strokeStyle = 'rgba(120,70,20,.28)'; g.lineWidth = 1; for (let i = -6; i <= 6; i++) { g.beginPath(); g.moveTo(X(i * 0.0815, 0), Y(0)); g.lineTo(X(i * 0.0815, 20), Y(20)); g.stroke(); }
-      for (const sd of [-1, 1]) { quad(sd * 0.46, sd * 0.53, 0, 17.6, 'rgba(255,212,59,.95)'); quad(sd * 0.53, sd * 0.6, 0, 17.6, '#4a2a8a'); }   // bumpers
+      if (BW.bump) for (const sd of [-1, 1]) { quad(sd * 0.54, sd * 0.69, 0, 17.9, '#1c1e26'); quad(sd * 0.54, sd * 0.63, 0, 17.9, '#9aa2b0'); quad(sd * 0.575, sd * 0.625, 0, 17.9, '#eef1f6'); for (let z = 0.5; z < 17.9; z += 3) quad(sd * 0.54, sd * 0.645, z, z + 0.16, '#2f333d'); }   // bumpers: the same grey rails with a chrome bar and posts that the TV shows
       g.fillStyle = 'rgba(120,70,20,.55)'; for (let i = -3; i <= 3; i++) { const z = 4.6 + Math.abs(i) * 0.3, x = i * 0.12, w = 0.04 * S(z) * cw * 0.12; g.beginPath(); g.moveTo(X(x, z) - w, Y(z)); g.lineTo(X(x, z) + w, Y(z)); g.lineTo(X(x, z + 0.9), Y(z + 0.9)); g.closePath(); g.fill(); }
       g.fillStyle = '#e03131'; g.fillRect(X(-0.53, 1), Y(1) - 2, X(0.53, 1) - X(-0.53, 1), 3);
       // pins (standing ones)
@@ -782,6 +808,7 @@
       else if (st.ph === 'show') pt = st.msg || '';
       else if (BW.mode === 'throw') pt = BW.hookN ? (BW.hookN > 0 ? 'HOOK →' : '← HOOK') : 'RELEASE!';
       if (pe && pe.textContent !== pt) { pe.textContent = pt; pe.classList.toggle('bwBig', st.ph === 'show'); }
+      const bb = $('#bwBump'); if (bb) { const t = BW.bump ? '🛡 Bumpers ON' : '🛡 Bumpers OFF'; if (bb.textContent !== t) { bb.textContent = t; bb.classList.toggle('on', BW.bump); } bb.disabled = st.ph !== 'aim'; }
       const pw = $('#bwPowI'); if (pw) pw.style.width = Math.round((BW.mode === 'throw' ? BW.powN : (st.ph === 'roll' ? 0 : 0)) * 100) + '%';
       if (!BW.mine) hint(st.ph === 'roll' ? 'Rolling…' : 'Watch the TV — send a reaction 😀');
       else if (st.ph === 'aim') hint(BW.mode === 'throw' ? 'Keep going up — faster = harder' : 'Slide the ball side to side, then FLICK it up. Curve the flick for a hook!');
@@ -791,6 +818,7 @@
     };
     cancelAnimationFrame(BW.raf); BW.raf = requestAnimationFrame(draw);
     if (!BW.mine) return;
+    $('#bwBump').addEventListener('click', () => { if (BW.st.ph !== 'aim') return; BW.bump = !BW.bump; sendMsg({ t: 'act', a: 'bumpers', i: BW.bump ? 1 : 0 }); navigator.vibrate?.(10); });
     // ----- touch -----
     let pid = null, pts = [], sx0 = 0, lastSend = 0;
     wrap.style.touchAction = 'none';
@@ -1299,7 +1327,7 @@
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
     else if (m.t === 'snap') onSnap(m);
     else if (m.t === 'tn') { TN.st = m; }
-    else if (m.t === 'bowl') { const s = BW.st; s.ph = m.ph; if (m.x != null) { s.x = +m.x; s.z = +m.z; } if (m.pins != null) s.pins = m.pins | 0; s.msg = m.msg || ''; if (m.ph !== 'aim') BW.thrown = BW.thrown || 1; if (m.ph === 'aim') { BW.thrown = 0; BW.mode = null; } }
+    else if (m.t === 'bowl') { const s = BW.st; s.ph = m.ph; if (m.x != null) { s.x = +m.x; s.z = +m.z; } if (m.pins != null) s.pins = m.pins | 0; if (m.bump != null) BW.bump = !!m.bump; s.msg = m.msg || ''; if (m.ph !== 'aim') BW.thrown = BW.thrown || 1; if (m.ph === 'aim') { BW.thrown = 0; BW.mode = null; } }
     else if (m.t === 'paint') { if (TM.on) TM.paint = m; }
     else if (m.t === 'buzz') navigator.vibrate?.(m.ms || 80);
     else if (m.t === 'toast') toast(m.text);

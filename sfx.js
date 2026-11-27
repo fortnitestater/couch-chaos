@@ -17,7 +17,7 @@ const SFX = (() => {
     return segs.filter(s => s[1] - s[0] > 0.18);
   }
   // recorded samples (ElevenLabs sound effects + music)
-  const SAMPLE_FILES = { crowd: 'crowd', cheer: 'cheer', ooh: 'ooh', applause: 'applause', hit: 'hit', bounce: 'bounce', smash: 'smash', strike: 'strike', bat: 'bat', music: 'music' };
+  const SAMPLE_FILES = { crowd: 'crowd', cheer: 'cheer', ooh: 'ooh', applause: 'applause', hit: 'hit', bounce: 'bounce', smash: 'smash', strike: 'strike', bat: 'bat', music: 'music', bowl_intro: 'bowl_intro' };
   // studio sound effects (ElevenLabs); each synth sound below falls back to its old beep if the file is missing
   for (const k of ['ui', 'ding', 'buzz', 'win', 'card', 'dice', 'pickup', 'whoosh', 'bonk', 'splash', 'boom', 'go', 'tick', 'join', 'snow']) SAMPLE_FILES['x_' + k] = 'sfx_' + k;
   // background music: one track per kind of game, loaded only when first needed
@@ -86,6 +86,48 @@ const SFX = (() => {
     const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     src.connect(f); f.connect(g); g.connect(master); src.start(t);
   }
+  // ===== STRIKE NIGHT, the bowling intro: an NFL-style kickoff, built from war drums, a riser, brass stabs, cymbals, an air horn and a crowd going wild =====
+  let introSrc = [], introVoice = null, bus = null; const MASTER = 0.35;
+  const keep = s => { introSrc.push(s); return s; };
+  const whiteBuf = sec => { const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return b; };
+  // filtered noise that sweeps f0 -> f1; swells in over atk seconds, then dies away
+  function nz(t, dur, vol, type, f0, f1, q = 1, atk = 0.01) {
+    const src = ac.createBufferSource(); src.buffer = whiteBuf(dur + 0.05);
+    const f = ac.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + atk); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    src.connect(f); f.connect(g); g.connect(bus || master); src.start(t); src.stop(t + dur + 0.05); keep(src);
+  }
+  function osc(type, f0, f1, t, dur, vol, atk = 0.01) {
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + atk); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    o.connect(g); g.connect(bus || master); o.start(t); o.stop(t + dur + 0.05); keep(o);
+  }
+  const kick = (t, v = 1) => { osc('sine', 165, 42, t, 0.42, 0.95 * v, 0.004); nz(t, 0.035, 0.32 * v, 'highpass', 3000, 3000, 0.7, 0.002); };
+  const snare = (t, v = 1) => { nz(t, 0.18, 0.5 * v, 'bandpass', 2200, 1700, 0.6, 0.002); osc('triangle', 230, 140, t, 0.1, 0.35 * v, 0.002); };
+  const cymbal = (t, dur, v = 1) => { nz(t, dur, 0.4 * v, 'highpass', 7000, 6000, 0.5, 0.004); nz(t, dur * 0.6, 0.25 * v, 'bandpass', 9500, 8000, 1.2, 0.004); };
+  // horns: detuned saw waves through a filter that snaps open and falls back
+  function brass(t, notes, dur, v = 1) {
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 2.5; f.frequency.setValueAtTime(350, t); f.frequency.exponentialRampToValueAtTime(3400, t + 0.07); f.frequency.exponentialRampToValueAtTime(700, t + dur);
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05 * v, t + 0.03); g.gain.setValueAtTime(0.05 * v, t + dur * 0.35); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    f.connect(g); g.connect(bus || master);
+    for (const n of notes) for (const c of [-9, 0, 9]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = n; o.detune.value = c; o.connect(f); o.start(t); o.stop(t + dur + 0.05); keep(o); }
+  }
+  function airHorn(t, dur, v = 1) {   // the stadium air horn: a loud, slightly sour chord, a little sag at the end
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2600; f.Q.value = 1.2;
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07 * v, t + 0.02); g.gain.setValueAtTime(0.07 * v, t + dur * 0.8); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    f.connect(g); g.connect(bus || master);
+    for (const n of [392, 415, 494, 587]) { const o = ac.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(n, t); o.frequency.setValueAtTime(n, t + dur * 0.8); o.frequency.exponentialRampToValueAtTime(n * 0.93, t + dur); o.connect(f); o.start(t); o.stop(t + dur + 0.05); keep(o); }
+  }
+  // a riser: noise climbing through the spectrum and a saw sweeping up, both getting louder until the cut
+  function riser(t, dur, v = 1) {
+    const src = ac.createBufferSource(); src.buffer = whiteBuf(dur + 0.05); const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.4; f.frequency.setValueAtTime(260, t); f.frequency.exponentialRampToValueAtTime(7500, t + dur);
+    const g = ac.createGain(); g.gain.setValueAtTime(0.004, t); g.gain.exponentialRampToValueAtTime(0.42 * v, t + dur); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.04);
+    src.connect(f); f.connect(g); g.connect(bus || master); src.start(t); src.stop(t + dur + 0.06); keep(src);
+    const o = ac.createOscillator(), lp = ac.createBiquadFilter(), og = ac.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(950, t + dur);
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t); lp.frequency.exponentialRampToValueAtTime(5200, t + dur); og.gain.setValueAtTime(0.004, t); og.gain.exponentialRampToValueAtTime(0.1 * v, t + dur); og.gain.linearRampToValueAtTime(0.0001, t + dur + 0.04);
+    o.connect(lp); lp.connect(og); og.connect(bus || master); o.start(t); o.stop(t + dur + 0.06); keep(o);
+  }
+  function stopIntro() { const t = ac.currentTime; for (const s of introSrc) { try { s.stop(t); } catch (e) {} } introSrc = []; if (introVoice) { try { introVoice.stop(t); } catch (e) {} introVoice = null; } }
   const ok = (k, ms) => { const n = performance.now(); if (last[k] && n - last[k] < ms) return false; last[k] = n; return true; };
   return {
     init,
@@ -111,6 +153,34 @@ const SFX = (() => {
     whoosh() { ok('wh', 80) && (X('whoosh', 0.7, 0.8, 0.08) || noise(0.5, 0.35, 2500)); },
     dice() { ok('di', 150) && (X('dice', 0.9, 1.6, 0.05) || noise(0.3, 0.3, 2000)); },
     snow() { ok('sn', 50) && (X('snow', 0.9, 0.8, 0.12) || noise(0.2, 0.4, 1200)); },
+    // ---- the bowling intro (STRIKE NIGHT) ----
+    introRise() {   // the announcer and the build-up: opening hit, war drums, the title hit, a snare roll and a riser, all aimed at the moment of impact (~4.9 s)
+      if (!ac) return; stopIntro(); const t = ac.currentTime + 0.06; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(MASTER, t);
+      if (S.bowl_intro && !SFX.muteVoice) { const s = ac.createBufferSource(); s.buffer = S.bowl_intro; s.connect(voiceOut); s.start(t + 0.1); introVoice = s; }
+      bus = ac.createGain(); bus.gain.value = 0.5; bus.connect(master);   // the build-up sits under the announcer
+      brass(t, [110, 165, 220, 277], 1.2, 1); cymbal(t, 1.6, 0.8); kick(t, 1.3);
+      for (let i = 0, u = 0.55; u < 2.75; i++, u += 0.4) { kick(t + u, 0.85); if (i % 2) snare(t + u, 0.6); }
+      brass(t + 2.9, [147, 220, 294, 370], 1.0, 1.1); cymbal(t + 2.9, 1.2, 0.7); kick(t + 2.9, 1.3); kick(t + 3.02, 0.9);
+      for (let u = 3.25, g = 0.12; u < 4.86; u += g, g = Math.max(0.028, g * 0.92)) snare(t + u, 0.22 + 0.55 * (u - 3.25) / 1.6);
+      riser(t + 0.3, 4.55, 1); bus = null;
+    },
+    introWhoosh() { if (!ac) return; const t = ac.currentTime; nz(t, 0.55, 0.55, 'bandpass', 500, 4200, 1.2, 0.2); X('whoosh', 0.8, 0.9, 0.12); },
+    introThrow() { if (!ac) return; const t = ac.currentTime; nz(t, 0.7, 0.5, 'bandpass', 400, 5000, 1.0, 0.3); osc('sawtooth', 180, 760, t, 0.6, 0.12, 0.05); kick(t, 0.9); },
+    introImpact() {   // the ball hits: crash, boom, a cymbal, the crowd gasps, and a pin screams toward the lens
+      if (!ac) return; const t = ac.currentTime; play('strike', 1.6, 1, true); X('boom', 1.0, 1.8, 0.05); osc('sine', 80, 28, t, 1.1, 0.8, 0.004); cymbal(t, 1.8, 0.6); play('ooh', 0.9);
+      nz(t + 0.05, 0.62, 0.7, 'bandpass', 300, 6500, 1.8, 0.5); osc('sawtooth', 220, 1700, t + 0.05, 0.62, 0.18, 0.4);
+    },
+    introBlack() {   // the pin hits the lens: everything cuts to silence
+      if (!ac) return; const t = ac.currentTime; for (const s of introSrc) { try { s.stop(t); } catch (e) {} } introSrc = [];
+      master.gain.cancelScheduledValues(t); master.gain.setTargetAtTime(0.0, t, 0.01); master.gain.setTargetAtTime(MASTER, t + 1.4, 0.05);
+    },
+    introSwell() {   // lights up: horns, an air horn, a huge boom and the whole stadium on its feet
+      if (!ac) return; const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(MASTER, t);
+      brass(t, [110, 165, 220, 277, 330], 1.8, 1.0); airHorn(t, 1.3, 0.8); kick(t, 1.1); osc('sine', 70, 30, t, 1.3, 0.8, 0.004); cymbal(t, 2.4, 0.7);
+      kick(t + 0.5, 0.7); kick(t + 0.75, 0.8); snare(t + 0.75, 0.6); nz(t, 2.3, 0.35, 'bandpass', 900, 1500, 0.8, 0.3);
+      play('cheer', 1.5); play('applause', 1.0);
+    },
+    introStop() { if (!ac) return; stopIntro(); master.gain.cancelScheduledValues(ac.currentTime); master.gain.setTargetAtTime(MASTER, ac.currentTime, 0.05); },
     // ---- sports / stadium ----
     pok(power = 0.7) { if (!ok('pk', 40)) return; if (play('hit', 1.4 + power, 0.9 + power * 0.25, true)) return; tone(320 + power * 180, 0.06, 'triangle', 0.5); noise(0.07, 0.5 + power * 0.3, 4200); }, // racket hits ball
     smash() { if (play('smash', 2.2, 1, true)) return; noise(0.25, 0.9, 6000); tone(180, 0.25, 'sawtooth', 0.3, 0.4); tone(90, 0.4, 'sine', 0.5, 0.5); },

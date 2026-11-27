@@ -12,7 +12,14 @@ namespace {
 using kit::I;
 constexpr float PITCH = 1.55f, HEAD_Z = 18.29f, PIT_Z = 19.5f, BACK_Z = 21.1f;
 constexpr float PIN_R = 0.0605f, PIN_M = 1.55f, BALL_R = 0.1085f, BALL_M = 6.35f;
-constexpr int LMIN = -5, LMAX = 5, BIRTHDAY = -2, FOOD = 2;
+constexpr int LMIN = -5, LMAX = 5, BIRTHDAY = -4, FOOD = 4;   // the party and the buffet are easter eggs, way over on the sides
+// the intro (seconds): a flyover of the alley, a bowler walks up and throws, the ball hits, a pin flies at the lens, black, fade in
+constexpr float I_WALK = 2.45f, I_REL = 3.45f, I_BLACK_HOLD = 0.5f, I_FADE = 0.9f;
+// a throw: the bowler walks up for W_WALK, swings for W_SWING and lets go W_LET into the swing
+constexpr float W_WALK = 0.7f, W_SWING = 0.7f, W_LET = 0.3f, W_REL = W_WALK + W_LET;
+// bumpers: padded rails over the gutters (inner face BUMP_IN from the lane's centre line, running BUMP_END down the lane). The ball bounces off
+// them, so its centre can never get closer than BUMP_X. The phone draws and predicts exactly the same rails, 1:1.
+constexpr float BUMP_IN = 0.54f, BUMP_W = 0.14f, BUMP_H = 0.13f, BUMP_END = 17.9f, BUMP_X = BUMP_IN - BALL_R, BUMP_E = 0.45f;
 constexpr float AMAX = 0.9f;   // m/s^2 of sideways grip on the dry boards at full hook
 inline float LaneX(int k) { return k * PITCH; }
 // the oil: slick for the first 11 m, then the back end grabs
@@ -20,7 +27,7 @@ inline float Prof(float z) { float t = Clamp((z - 11.5f) / 4.0f, 0.f, 1.f); retu
 // sideways displacement from hooking, at depth z, for hook h and a ball doing vz m/s:  AMAX * h * HookI(z) / vz^2
 float HookI(float z) { float s = 0; const float st = 0.1f; for (float u = 0; u < z; u += st) s += (z - u - st * 0.5f) * Prof(u + st * 0.5f) * st; return s; }
 
-struct Ball { float x = 0, z = 0, vx = 0, vz = 0, y = BALL_R, rot = 0, ax = 0; bool on = false, bump = true, bumped = false; };
+struct Ball { float x = 0, z = 0, vx = 0, vz = 0, y = BALL_R, rot = 0, ax = 0; bool on = false, bump = true, bumped = false, gut = false; };   // bump: the bumpers are up · gut: in the gutter
 struct PinB { float x = 0, z = 0, vx = 0, vz = 0, tilt = 0, w = 0, dx = 0, dz = 1, y = 0, vy = 0, wobA = 0, wobT = 0, pitT = 0; int st = 0; bool inPit = false; };   // st: 0 standing, 1 falling, 2 lying, 3 gone
 
 struct PinSet {
@@ -102,7 +109,10 @@ void RollStep(Ball& b, PinSet& ps, float dt, float steer) {
   for (int i = 0; i < n; i++) {
     if (b.z < HEAD_Z) { b.vx += b.ax * Prof(b.z) * h; if (b.z < 15.5f) b.vx += -steer * 0.12f * h; }
     b.x += b.vx * h; b.z += b.vz * h; b.rot += b.vz * h / BALL_R;
-    if (b.bump && b.z < 17.9f && fabsf(b.x) > 0.5f) { b.x = copysignf(0.5f, b.x); b.vx *= -0.5f; b.vz *= 0.97f; b.bumped = true; }
+    if (b.bump) {   // the bumper rails: the ball hits the padded face, loses most of its sideways speed and rebounds
+      if (b.z < BUMP_END && fabsf(b.x) > BUMP_X) { float sg = copysignf(1.f, b.x); b.x = sg * BUMP_X; if (b.vx * sg > 0) { b.vx *= -BUMP_E; b.vz *= 0.985f; b.bumped = true; } }
+    } else if (!b.gut && b.z < PIT_Z - 0.3f && fabsf(b.x) > 0.5f) { b.gut = true; b.bumped = true; }   // no bumpers: over the edge and into the gutter
+    if (b.gut) { float sg = copysignf(1.f, b.x); b.vx = 0; b.x += (sg * 0.65f - b.x) * fminf(1.f, 14.f * h); b.y = fmaxf(BALL_R - 0.13f, b.y - 1.2f * h); }
     ps.BallHit(b); ps.Step(h);
     if (b.z > PIT_Z) { b.y = fmaxf(BALL_R - 0.35f, b.y - 2.5f * h); b.vz *= fmaxf(0.f, 1 - 5 * h); if (b.z > BACK_Z) { b.z = BACK_Z; b.vz = 0; } }
   }
@@ -117,12 +127,45 @@ struct Lane {
   unsigned hsh = 0; Color shirt = WHITE; Color ballCol = WHITE;
 };
 
+// ---- cameras: a shot is where the camera is, what it looks at, and its lens
+struct Shot { Vector3 p{}, t{}; float f = 55; };
+inline float Sm(float t) { t = Clamp(t, 0.f, 1.f); return t * t * (3 - 2 * t); }
+inline Shot ShotLerp(const Shot& a, const Shot& b, float u) { return { Vector3Lerp(a.p, b.p, u), Vector3Lerp(a.t, b.t, u), Lerp(a.f, b.f, u) }; }
+const Shot DECK = { { 1.3f, 1.2f, 16.0f }, { -0.05f, 0.2f, 19.3f }, 38 };   // the pin deck, seen from the side after a ball
+// the bowler walks up: you step out of your own head, back and up, to a view over their shoulder from behind
+inline Shot WindShot(float x, float wt) { float e = Clamp(wt / 1.4f, 0.f, 1.f); return { { x + 0.6f - 0.2f * e, 1.95f - 0.35f * e, -6.2f + 1.5f * e }, { x - 0.05f, 0.95f, 0.5f }, 50 }; }
+// the ball is let go: a low tracking shot right behind it with a lens punch and a slow sway, swinging out to the pin deck as it arrives
+inline Shot RollShot(const Ball& b, float rt, float x0, float wt, float& bank) {
+  Shot w = WindShot(x0, wt), c; float e = EaseOut(rt / 0.6f), z = b.z;
+  c.p = { b.x * 0.8f + 1.1f * (1 - Sm((z - 1.0f) / 5.5f)), 0.5f + 1.9f * (1 - Sm((z - 1.0f) / 5.0f)), z - 1.9f };
+  c.t = { b.x * 0.85f, 0.14f, z + 6.f }; c.f = 50 + 18 * expf(-rt * 3.2f);   // a crane move: up and over the bowler's head and the ball returns, then down behind the ball
+  Shot s = ShotLerp(w, c, e); s.t = Vector3Lerp(w.t, c.t, EaseOut(rt / 0.3f)); float d = Sm((z - 12.f) / 4.5f);   // the camera looks down the lane almost at once, even while it is still flying over the bowler
+  bank = 0.055f * sinf(rt * 3.f) * (1 - d) * Clamp(rt * 2.f, 0.f, 1.f);
+  return ShotLerp(s, DECK, d);
+}
+// the flyover that opens the game: over the party, along the lanes, past the buffet, then in behind the first bowler
+inline Shot IntroKey(float t) {
+  Shot K[6] = { { { 3.6f, 2.7f, -13.0f }, { -2.5f, 1.0f, 6.0f }, 64 }, { { -10.3f, 2.6f, -8.2f }, { -6.0f, 1.4f, -0.8f }, 56 }, { { -8.4f, 2.7f, -7.8f }, { -5.2f, 1.5f, 0.6f }, 56 },
+                { { -2.6f, 2.4f, -7.8f }, { -1.0f, 1.1f, 6.0f }, 64 }, { { 4.8f, 2.3f, -7.6f }, { 6.2f, 1.2f, -1.2f }, 54 }, WindShot(0, 0.55f) };
+  float s = t < 1.0f ? t : 1 + (t - 1.0f) / 0.5f; s = Clamp(s, 0.f, 5.f); int i = std::min((int)s, 4); float u = s - i;   // a slow dolly over the seats for the first second, then the quick review
+  auto cr = [&](float a, float b, float c, float d) { return 0.5f * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u * u * u); };
+  const Shot &A = K[std::max(i - 1, 0)], &B = K[i], &C = K[i + 1], &D = K[std::min(i + 2, 5)];
+  Shot r; r.p = { cr(A.p.x, B.p.x, C.p.x, D.p.x), cr(A.p.y, B.p.y, C.p.y, D.p.y), cr(A.p.z, B.p.z, C.p.z, D.p.z) }; r.t = { cr(A.t.x, B.t.x, C.t.x, D.t.x), cr(A.t.y, B.t.y, C.t.y, D.t.y), cr(A.t.z, B.t.z, C.t.z, D.t.z) };
+  r.f = cr(A.f, B.f, C.f, D.f); return r;
+}
+
 struct Bowling : Classic {
   std::vector<Lane> lanes; Texture2D carpet{}, banner{}, neon{}, ads{};
   // the phone's plan for this ball: where it starts (bxn, -1..1 screen-right), its slope (baimN), its late curve (bhookN), how hard (bpowN)
   float bxn = 0, bxs = 0, baimN = 0, bhookN = 0, bpowN = 0.7f, sendT = 0; bool aimLive = false; std::string res;
   std::vector<int> order, pts, strikes; int ti = -1, cur = 0, roll = 0, firstDown = 0, frames = 3, frameNo = 1, startMask = 1023;
   std::string phase = "aim", pop; Color popC = WHITE; float wait = 0, rollT = 0, aim = 0, camZ = -3, ts = 1, popT = 0, partyT = 3; bool again = false, fin = false, shot = false, crash = false;
+  // a throw in progress: the bowler walks up and swings (windT), and lets go at W_REL
+  float windT = 0, wx = 0, wslope = 0, wvz = 8, whk = 0; bool wlet = false, bumpers = true; Shot camFrom{};   // bumpers: up on every lane (any bowler can switch them with the button on their phone)
+  // the intro
+  float introT = 0, fadeA = 0, fadeSpd = 1.1f, blackT = 0, impT = -1, camX = 0; int introWho = 0; bool introBlack = false, introFade = false, introThrown = false, introHit = false, introRose = false; int cues = 0;
+  struct HeroPin { bool on = false; Vector3 p{}, q{}; float t = 0, ang = 0; } hero;
+  bool heroDraw = false, hideHud = false;   // hideHud: the scoreboard and captions stay off while the screen fades up from black
   Lane& Mine() { return lanes[-LMIN]; }
   ~Bowling() { for (Texture2D* t : { &carpet, &banner, &neon, &ads }) if (t->id) UnloadTexture(*t); }
 
@@ -134,8 +177,44 @@ struct Bowling : Classic {
       const unsigned SH[] = { 0xe03131, 0x1c7ed6, 0x2f9e44, 0xf08c00, 0x9c36b5, 0x0b7285, 0xd6336c, 0x495057 }; L.shirt = Hex(SH[(k + 9) % 8]); L.ballCol = Hex(SH[(k + 13) % 8]);
       lanes.push_back(L);
     }
-    Layout(-1, kit::Msg("🎳", "Bowling!", "Wait for your turn"));
-    Sfx("crowdOn"); NextTurn();
+    Layout(-1, kit::Msg("🎳", "Strike night!", "Watch the TV…"));
+    Sfx("crowdOn"); BeginIntro();
+  }
+  // ---------------------------------------------------------------- the intro: the alley, a throw, a pin in your face
+  void BeginIntro() {
+    phase = "intro"; introT = -0.45f; introWho = order.empty() ? 0 : order[0]; cur = introWho; fadeA = 0; fadeSpd = 1.f / I_FADE; blackT = 0; impT = -1;
+    introBlack = introFade = introThrown = introHit = introRose = false; cues = 0; hero = HeroPin(); Mine().ball = Ball(); Mine().pins.Reset(); rig.Cut();
+  }
+  void StartBlack() {   // a pin fills the lens: everything goes black; behind it the lane is set up for the game
+    introBlack = true; hideHud = true; fadeA = 1; blackT = 0; hero.on = false; Lane& L = Mine(); L.ball = Ball(); L.pins.Reset(); Sfx("introBlack");
+  }
+  void UpdateIntro(float dt) {
+    introT += dt; Lane& L = Mine();
+    if (!introRose && introT >= 0) { introRose = true; Sfx("introRise"); }   // the music and the announcer start with the flyover
+    if (!introBlack && introT > 1.2f) for (int i = 0; i < N(); i++) if (!P(i).bot && P(i).a && !P(i).pa) { StartBlack(); blackT = I_BLACK_HOLD; Sfx("introStop"); break; }   // skip
+    if (introBlack) {
+      blackT += dt;
+      if (blackT >= I_BLACK_HOLD && !introFade) {   // lights up: the first bowler's turn begins under the fade
+        introFade = true; rig.Cut(); NextTurn(); fadeA = 1; fadeSpd = 1.f / I_FADE; Sfx("introSwell"); conf.Spawn({ 0, 3.0f, 3 }, 90, 2.0f, 4); conf.Spawn({ 0, 3.4f, 9 }, 80, 2.0f, 4);
+      }
+      return;
+    }
+    static const float CU[] = { 0.5f, 1.15f, 1.75f, 2.35f };   // whooshes on the cuts of the flyover
+    if (cues < 4 && introT >= CU[cues]) { Sfx("introWhoosh"); cues++; }
+    if (!introThrown && introT >= I_REL) {   // the ball goes: fast, straight at the pocket
+      introThrown = true; L.ball = Ball(); L.ball.bump = bumpers; L.ball.x = 0; L.ball.z = -0.1f; L.ball.vz = 12.5f; L.ball.vx = 0.0038f * 12.5f; L.ball.on = true; Sfx("introThrow"); Shake(2);
+    }
+    if (introThrown && !introHit && (L.pins.hits > 0 || introT > I_REL + 2.4f)) {   // contact: one pin leaves the deck, straight for the camera
+      introHit = true; impT = introT; L.pins.hits = 0; L.pins.bigHit = 0;
+      hero.on = true; hero.t = 0; hero.ang = 0; hero.q = { 0.0f, 0.3f, HEAD_Z + 0.05f }; hero.p = hero.q;
+      Sfx("introImpact"); Shake(14); fx.Burst({ 0, 0.4f, 18.3f }, 46, WHITE, 6, 0.8f, 0.04f, 3); fx.Burst({ 0, 0.4f, 18.3f }, 30, Hex(0xffd43b), 5, 0.6f, 0.04f, 3);
+    }
+    if (hero.on) {
+      hero.t += dt; float s = Clamp(hero.t / 0.62f, 0.f, 1.f), e = powf(s, 1.25f);
+      Vector3 f = Vector3Normalize(Vector3Subtract(cam.target, cam.position)), tg = Vector3Add(cam.position, Vector3Scale(f, 0.1f));
+      hero.p = Vector3Lerp(hero.q, tg, e); hero.p.y += 0.55f * sinf(PI * s) * (1 - s); hero.ang += dt * (11 + 12 * s);
+      if (s >= 0.97f) StartBlack();
+    }
   }
   void Pop(const std::string& s, Color c) { pop = s; popC = c; popT = 2.2f; }
   void NextTurn() {
@@ -149,17 +228,19 @@ struct Bowling : Classic {
     cur = order[ti]; roll = 0; Mine().pins.Reset(); frameNo = ti / N() + 1; AimPhase();
   }
   void AimPhase() {
+    bool cut = phase == "show";   // back to your own eyes: a straight cut, through a quick dip to black
     phase = "aim"; wait = P(cur).bot ? frand(1.8f, 2.8f) : 20; Mine().ball.on = false; camZ = -3.4f; shot = false; crash = false; startMask = Mine().pins.Mask();
+    if (cut) { rig.Cut(); fadeA = 0.8f; fadeSpd = 1.f / 0.4f; }
     bxn = bxs = baimN = bhookN = 0; bpowN = 0.7f; aimLive = false; aim = 0;
     for (int i = 0; i < N(); i++) if (!P(i).bot) Layout(i, BowlL(i == cur));
     Pop(P(cur).name + (roll == 0 ? " · FRAME " + I(frameNo) + "/" + I(frames) : " · 2ND BALL"), P(cur).color);
   }
   std::string BowlL(bool mine) {
-    char b[320]; snprintf(b, sizeof b, "{\"name\":\"bowl\",\"mine\":%s,\"who\":%s,\"frame\":%d,\"frames\":%d,\"ball\":%d,\"pins\":%d,\"ph\":\"aim\"}", mine ? "true" : "false", kit::Q(P(cur).name).c_str(), std::min(frameNo, frames), frames, roll + 1, Mine().pins.Mask());
+    char b[320]; snprintf(b, sizeof b, "{\"name\":\"bowl\",\"mine\":%s,\"who\":%s,\"frame\":%d,\"frames\":%d,\"ball\":%d,\"pins\":%d,\"bump\":%d,\"ph\":\"aim\"}", mine ? "true" : "false", kit::Q(P(cur).name).c_str(), std::min(frameNo, frames), frames, roll + 1, Mine().pins.Mask(), bumpers ? 1 : 0);
     return b;
   }
   void SendBowl(const char* ph, const std::string& msg = "") {   // every phone gets the lane live
-    Lane& L = Mine(); char b[260]; snprintf(b, sizeof b, "{\"t\":\"bowl\",\"ph\":\"%s\",\"x\":%.3f,\"z\":%.2f,\"pins\":%d,\"msg\":%s}", ph, -L.ball.x, L.ball.on ? L.ball.z : 0.3f, L.pins.Mask(), kit::Q(msg).c_str());
+    Lane& L = Mine(); char b[260]; snprintf(b, sizeof b, "{\"t\":\"bowl\",\"ph\":\"%s\",\"x\":%.3f,\"z\":%.2f,\"pins\":%d,\"bump\":%d,\"msg\":%s}", ph, -L.ball.x, L.ball.on ? L.ball.z : 0.3f, L.pins.Mask(), bumpers ? 1 : 0, kit::Q(msg).c_str());
     for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, b);
   }
   // The throw. xn: where on the foul line (-1..1, screen-right +) · aimN: the straight part of the line · hookN: how late it curves · power 0..1
@@ -170,8 +251,14 @@ struct Bowling : Classic {
     float xi = x + slope * Ln + AMAX * hk * HookI(Ln) / (vz * vz);
     // a gentle assist: a ball that would arrive near the head pin is nudged toward the nearest pocket
     if (fabsf(xi) < 0.26f) { float tgt = copysignf(0.075f, xi == 0 ? 1.f : xi); float xi2 = xi + (tgt - xi) * 0.4f; slope += (xi2 - xi) / Ln; }
-    L.ball = Ball(); L.ball.x = x; L.ball.z = 0.3f; L.ball.vx = slope * vz; L.ball.vz = vz; L.ball.on = true; L.ball.ax = AMAX * hk;
-    phase = "roll"; rollT = 0; Sfx("whoosh"); Shake(3); sendT = 0; SendBowl("roll");
+    // the bowler walks up and swings; the ball leaves their hand at W_REL (LetGo)
+    wx = x; wslope = slope; wvz = vz; whk = hk; wlet = false; windT = 0; camFrom = { rig.p, rig.t, rig.f };
+    L.ball = Ball(); L.ball.x = x; L.ball.z = 0.3f; L.ball.on = false;
+    phase = "windup"; rollT = 0; sendT = 0; SendBowl("roll");
+  }
+  void LetGo() {
+    Lane& L = Mine(); L.ball = Ball(); L.ball.bump = bumpers; L.ball.x = wx; L.ball.z = -0.1f; L.ball.vx = wslope * wvz; L.ball.vz = wvz; L.ball.on = true; L.ball.ax = AMAX * whk;
+    wlet = true; phase = "roll"; rollT = 0; Sfx("whoosh"); Shake(3); sendT = 0; SendBowl("roll");
   }
   void BotThrow() {
     float xn = Clamp(bxn, -0.6f, 0.6f), x = -xn * 0.42f, tgt = frand(0, 1) < 0.5f ? -0.075f : 0.075f;
@@ -179,8 +266,9 @@ struct Bowling : Classic {
     Throw(xn, aimN, frand(-0.25f, 0.25f), frand(0.4f, 1));
   }
   void Release(float power) { Throw(Clamp(aim, -1.f, 1.f), 0, 0, power); }
-  void Act(int p, const std::string& k, int, float pw) override {
+  void Act(int p, const std::string& k, int n, float pw) override {
     if (p != cur) return;
+    if (k == "bumpers") { if (phase == "aim") { bumpers = n != 0; SendBowl("aim"); Sfx("tink"); } return; }
     float a = 0, b = 0, c = 0;
     if (k.rfind("bowlaim:", 0) == 0) { if (sscanf(k.c_str() + 8, "%f|%f|%f", &a, &b, &c) == 3) { bxn = Clamp(a, -1.f, 1.f); baimN = Clamp(b, -1.f, 1.f); bhookN = Clamp(c, -1.f, 1.f); bpowN = pw; aimLive = true; } return; }
     if (k.rfind("bowl:", 0) == 0) { if (sscanf(k.c_str() + 5, "%f|%f|%f", &a, &b, &c) == 3) Throw(a, b, c, Clamp(pw, 0.18f, 1.f)); return; }
@@ -189,7 +277,7 @@ struct Bowling : Classic {
   void StrikeShot(bool st) { cine::Shot s; s.kind = cine::STRIKE; s.at = { 0, 0.25f, 19.0f }; s.size = 0.55f; s.c = st ? Hex(0xffd43b) : Hex(0x51cf66); s.caption = st ? "STRIKE!" : "SPARE!"; s.sub = P(cur).name; s.floorY = 0; s.face = { 0, 0, 1 }; s.elev = 0.2f; cine::Play(s); }
   void DebugShot(int k) override {   // debug: a ball straight into the pocket
     if (k != cine::STRIKE) return;
-    Lane& L = Mine(); phase = "roll"; roll = 0; shot = false; crash = false; rollT = 0; startMask = 1023; firstDown = 0; L.pins.Reset(); L.ball = Ball(); L.ball.x = 0.07f; L.ball.z = 15.5f; L.ball.vz = 9; L.ball.on = true;
+    Lane& L = Mine(); phase = "roll"; roll = 0; shot = false; crash = false; rollT = 0.7f; windT = 2; wx = 0; wlet = true; startMask = 1023; firstDown = 0; L.pins.Reset(); L.ball = Ball(); L.ball.x = 0.07f; L.ball.z = 15.5f; L.ball.vz = 9; L.ball.on = true;
   }
   void Score() {
     Lane& L = Mine(); ts = 1; int endMask = L.pins.Mask(), newly = 0; for (int i = 0; i < 10; i++) if (((startMask >> i) & 1) && !((endMask >> i) & 1)) newly++;
@@ -205,7 +293,10 @@ struct Bowling : Classic {
   // ---------------------------------------------------------------- update
   void Update(float dt) override {
     time += dt; fx.Update(dt); conf.Update(dt); popT -= dt;
+    if (phase != "intro" && fadeA > 0) fadeA = fmaxf(0.f, fadeA - dt * fadeSpd);
+    if (hideHud && phase != "intro" && fadeA < 0.3f) hideHud = false;
     UpdateWorld(dt);
+    if (phase == "intro") { UpdateIntro(dt); return; }
     if (phase == "end") { wait -= dt; if (wait <= 0 && !fin) { fin = true; FinishOrder(Sorted([&](int i) { return pts[i] * 10.f + strikes[i]; }), [&](int i) { return I(pts[i]) + " pts" + (strikes[i] ? " · " + I(strikes[i]) + " strikes" : ""); }); } return; }
     Lane& L = Mine();
     if (phase == "aim") {
@@ -216,8 +307,9 @@ struct Bowling : Classic {
       wait -= dt; if (wait <= 0) { if (P(cur).bot) BotThrow(); else Throw(bxn, baimN, bhookN, 0.55f); }
       return;
     }
+    if (phase == "windup") { windT += dt; if (windT >= W_REL) LetGo(); return; }
     if (phase == "roll") {
-      rollT += dt; float sdt = dt * ts; Ball& b = L.ball;
+      rollT += dt; windT += dt; float sdt = dt * ts; Ball& b = L.ball;
       RollStep(b, L.pins, sdt, P(cur).bot ? 0.f : P(cur).stick.x);
       if (b.bumped) { b.bumped = false; Sfx("tink"); }
       if (L.pins.hits > 0) { if (!crash && L.pins.bigHit > 1.2f) { crash = true; Sfx("strike"); Shake(6); } else Sfx("bonk"); if (L.pins.hits > 1 && frand(0, 1) < 0.5f) fx.Burst({ LaneX(0) + frand(-0.3f, 0.3f), 0.3f, 18.8f }, 3, WHITE, 2, 0.4f, 0.03f, 3); L.pins.hits = 0; L.pins.bigHit = 0; }
@@ -226,7 +318,7 @@ struct Bowling : Classic {
       bool near = b.z > 16.5f && b.z < 19.5f && roll == 0; ts += ((near ? 0.4f : 1.f) - ts) * fminf(1.f, dt * 8);
       if ((b.z > PIT_Z + 0.4f && !L.pins.Moving()) || rollT > 9) Score();
     }
-    if (phase == "show") { wait -= dt; if (wait <= 0) { if (again) AimPhase(); else NextTurn(); } }
+    if (phase == "show") { windT += dt; wait -= dt; if (wait <= 0) { if (again) AimPhase(); else NextTurn(); } }
   }
   // the whole alley carries on: the pins on every lane, and the other bowlers
   void UpdateWorld(float dt) {
@@ -247,7 +339,7 @@ struct Bowling : Classic {
           float tgt = frand(0, 1) < 0.5f ? -0.075f : 0.075f; L.slope = (tgt - L.sx - AMAX * L.hookN * HookI(HEAD_Z) / (L.vz * L.vz)) / HEAD_Z + frand(-0.007f, 0.007f); } break;
       case 1: L.nz = Lerp(-3.9f, -0.7f, Clamp(L.t / 1.7f, 0.f, 1.f)); if (L.t > 1.7f) { L.ph = 2; L.t = 0; } break;
       case 2:
-        if (!L.rel && L.t > 0.3f) { L.rel = true; L.ball = Ball(); L.ball.x = L.sx; L.ball.z = -0.1f; L.ball.vx = L.slope * L.vz; L.ball.vz = L.vz; L.ball.on = true; L.ball.ax = AMAX * L.hookN; }
+        if (!L.rel && L.t > 0.3f) { L.rel = true; L.ball = Ball(); L.ball.bump = bumpers; L.ball.x = L.sx; L.ball.z = -0.1f; L.ball.vx = L.slope * L.vz; L.ball.vz = L.vz; L.ball.on = true; L.ball.ax = AMAX * L.hookN; }
         if (L.t > 0.7f) { L.ph = 3; L.t = 0; } break;
       case 3:
         if ((L.ball.z > PIT_Z + 0.4f && !L.pins.Moving()) || L.t > 8) {
@@ -277,9 +369,9 @@ struct Bowling : Classic {
     rlTexCoord2f(0, 0); rlVertex3f(x0, y, z0); rlTexCoord2f(0, (z1 - z0) / tile); rlVertex3f(x0, y, z1); rlTexCoord2f((x1 - x0) / tile, (z1 - z0) / tile); rlVertex3f(x1, y, z1); rlTexCoord2f((x1 - x0) / tile, 0); rlVertex3f(x1, y, z0);
     rlEnd(); rlSetTexture(0);
   }
-  void DrawPins(const PinSet& ps, float lx, bool casters) {
+  void DrawPins(const PinSet& ps, float lx, bool casters, bool skip0 = false) {
     for (int i = 0; i < 10; i++) {
-      const PinB& q = ps.p[i]; if (q.st == 3) continue;
+      const PinB& q = ps.p[i]; if (q.st == 3 || (skip0 && i == 0)) continue;
       float wob = 0; if (q.st == 0 && q.wobT > 0) { float a = 1.4f - q.wobT; wob = q.wobA * sinf(40 * a) * expf(-2.2f * a); }
       float tl = q.st == 0 ? wob : q.tilt; Vector3 ax = { q.dz, 0, -q.dx }; if (q.st == 0 && q.wobT <= 0) ax = { 1, 0, 0 };
       Matrix m = MatrixMultiply(MatrixRotate(ax, tl), MatrixTranslate(lx + q.x, q.y + (q.st == 0 ? 0.f : 0.058f * sinf(q.tilt)), q.z));
@@ -297,7 +389,7 @@ struct Bowling : Classic {
   int slotN = 4;   // every person in the alley gets their own mesh, in the order they are drawn
   void Person(float x, float z, float yaw, const char* clip, float t, unsigned hsh, Color shirt, const char* clip2 = nullptr, float t2 = 0, float mix = 0, bool scrub2 = false, Color hat = BLANK, const Ball* carry = nullptr, Color ballCol = WHITE, bool scrub = false) {
     if (g_dbg == 37) return;   // debug: no people (to time them)
-    PersonPose q; q.slot = std::min(slotN++, 63); q.lowRate = true; q.pos = { x, 0, z }; q.yaw = yaw; q.c = shirt; q.hsh = hsh; q.height = 1.72f + (hsh % 5) * 0.025f; q.clip = clip; q.t = t; q.scrub = scrub; q.clip2 = clip2; q.t2 = t2; q.scrub2 = scrub2; q.mix = mix;
+    PersonPose q; q.slot = heroDraw ? 62 : std::min(slotN++, 61); q.lowRate = !heroDraw; q.pos = { x, 0, z }; q.yaw = yaw; q.c = shirt; q.hsh = hsh; q.height = 1.72f + (hsh % 5) * 0.025f; q.clip = clip; q.t = t; q.scrub = scrub; q.clip2 = clip2; q.t2 = t2; q.scrub2 = scrub2; q.mix = mix;
     Matrix wm = MatrixIdentity(), hm = MatrixIdentity(); q.wrist = &wm; q.headM = &hm;
     if (!DrawPersonPose(q)) return;
     if (hat.a) { Vector3 o = { hm.m12, hm.m13, hm.m14 }; lit.Draw(prim.cone, TRS({ o.x, o.y + 0.07f, o.z }, { 0, 0, 0 }, { 0.15f, 0.27f, 0.15f }), hat); lit.Draw(prim.sphere, TRS({ o.x, o.y + 0.35f, o.z }, { 0, 0, 0 }, { 0.05f, 0.05f, 0.05f }), WHITE); }
@@ -313,6 +405,67 @@ struct Bowling : Classic {
     }
   }
 
+  // a real bumper: a grey rail with a chrome top bar over each gutter on a dark base, with posts. The ball meets its inner face at BUMP_IN: that is the edge the physics uses.
+  void DrawBumper(float lx, int sd, bool posts) {
+    float cx = lx + sd * (BUMP_IN + 0.045f), zc = BUMP_END / 2;
+    lit.Draw(prim.cube, TRS({ cx, 0.07f, zc }, { 0, 0, 0 }, { 0.09f, 0.14f, BUMP_END }), Hex(0x9aa2b0));                           // the rail
+    lit.Draw(prim.cyl, TRS({ cx, 0.145f, zc }, { PI / 2, 0, 0 }, { 0.05f, BUMP_END, 0.05f }), Hex(0xeef1f6));                       // the chrome bar on top
+    if (!posts) return;   // the far lanes are only a rail and a bar
+    lit.Draw(prim.cube, TRS({ cx, -0.035f, zc }, { 0, 0, 0 }, { 0.13f, 0.06f, BUMP_END }), Hex(0x1c1e26));                           // the base, down in the gutter
+    lit.Draw(prim.cube, TRS({ lx + sd * (BUMP_IN - 0.002f), 0.045f, zc }, { 0, 0, 0 }, { 0.008f, 0.04f, BUMP_END }), Hex(0x23262f));   // a dark band along its inner face
+    if (std::abs((lx / PITCH)) <= 2.1f) for (float z = 0.5f; z < BUMP_END; z += 3.0f) lit.Draw(prim.cube, TRS({ cx, 0.07f, z }, { 0, 0, 0 }, { 0.105f, 0.15f, 0.06f }), Hex(0x2f333d));   // the posts
+  }
+  void RackBall(float x, float y, float z, Color c, bool holes) {
+    lit.Draw(prim.sphere, TRS({ x, y, z }, { 0, 0, 0 }, { BALL_R * 2, BALL_R * 2, BALL_R * 2 }), c);
+    if (holes) for (const Vector3 h : { Vector3{ 0.03f, 0.06f, -0.085f }, Vector3{ -0.03f, 0.06f, -0.085f }, Vector3{ 0, 0.0f, -0.1f } }) lit.Draw(prim.sphere, TRS({ x + h.x, y + h.y, z + h.z }, { 0, 0, 0 }, { 0.03f, 0.03f, 0.03f }), Hex(0x111111));
+  }
+  // the ball return: a beige hood with a dark mouth where the balls come out, and a rack of two purple tubes that holds them, with a chrome hand rail beside it
+  void DrawBallReturn(float bx, int k) {
+    const float hz = -0.95f, rz = hz - 0.36f; const Color hood = Hex(0xdcd6c6), rim = Hex(0xc4bdab), dark = Hex(0x17151c), tube = Hex(0x7d2b86), chrome = Hex(0xe3e7ee);
+    lit.Draw(prim.cube, TRS({ bx, 0.37f, hz }, { 0, 0, 0 }, { 0.52f, 0.74f, 0.66f }), hood);
+    lit.Draw(prim.cube, TRS({ bx, 0.755f, hz }, { 0, 0, 0 }, { 0.55f, 0.03f, 0.69f }), rim);
+    lit.Draw(prim.cube, TRS({ bx, 0.5f, hz - 0.335f }, { 0, 0, 0 }, { 0.38f, 0.34f, 0.015f }), dark);
+    for (int sd = -1; sd <= 1; sd += 2) {
+      lit.Draw(prim.cyl, TRS({ bx + sd * 0.215f, 0.56f, rz - 0.45f }, { PI / 2, 0, 0 }, { 0.055f, 0.9f, 0.055f }), tube);       // the rack tubes
+      lit.Draw(prim.cyl, TRS({ bx + sd * 0.215f, 0.28f, rz - 0.88f }, { 0, 0, 0 }, { 0.04f, 0.56f, 0.04f }), Hex(0x2a2a33));  // their legs
+    }
+    lit.Draw(prim.cyl, TRS({ bx, 0.56f, rz - 0.9f }, { 0, 0, PI / 2 }, { 0.055f, 0.48f, 0.055f }), tube);                        // the curved end of the rack
+    lit.Draw(prim.cube, TRS({ bx, 0.5f, rz - 0.45f }, { 0, 0, 0 }, { 0.38f, 0.03f, 0.9f }), dark);
+    const unsigned BC[] = { 0xc92a2a, 0x2b8a3e, 0x1c7ed6, 0x20c997, 0xd6336c, 0x7048e8, 0xf08c00 };
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) RackBall(bx + (j ? 0.1085f : -0.1085f), 0.625f, rz - 0.13f - i * 0.25f, Hex(BC[(k + 8 + i * 2 + j) % 7]), std::abs(k) <= 1);
+    lit.Draw(prim.cyl, TRS({ bx + 0.3f, 0.45f, hz + 0.25f }, { 0, 0, 0 }, { 0.03f, 0.9f, 0.03f }), chrome);                       // the hand rail
+    lit.Draw(prim.cyl, TRS({ bx + 0.3f, 0.9f, hz - 0.22f }, { PI / 2, 0, 0 }, { 0.03f, 0.95f, 0.03f }), chrome);
+  }
+  // behind the approach (the flyover shows it): tables with red bases and cream tops, navy benches with green backs, score consoles on posts, and round racks of balls
+  void DrawSeating() {
+    const Color navy = Hex(0x232c47), green = Hex(0x8ec63f), cream = Hex(0xf1e9d8), red = Hex(0xb3262e), steel = Hex(0x30343f), black = Hex(0x15151b);
+    for (int j = -2; j <= 3; j++) {
+      float gx = -PITCH / 2 + 3.1f * j, gz = -9.0f;
+      lit.Draw(prim.cube, TRS({ gx, 0.34f, gz }, { 0, 0, 0 }, { 0.5f, 0.68f, 0.25f }), red);
+      lit.Draw(prim.cube, TRS({ gx, 0.70f, gz }, { 0, 0, 0 }, { 1.3f, 0.04f, 0.84f }), red);
+      lit.Draw(prim.cube, TRS({ gx, 0.73f, gz }, { 0, 0, 0 }, { 1.24f, 0.03f, 0.78f }), cream);
+      for (int sd = -1; sd <= 1; sd += 2) {
+        float bx = gx + sd * 1.05f;
+        lit.Draw(prim.cube, TRS({ bx, 0.2f, gz }, { 0, 0, 0 }, { 0.46f, 0.4f, 1.15f }), steel);
+        lit.Draw(prim.cube, TRS({ bx, 0.44f, gz }, { 0, 0, 0 }, { 0.5f, 0.1f, 1.2f }), navy);
+        lit.Draw(prim.cube, TRS({ bx + sd * 0.27f, 0.72f, gz }, { 0, 0, 0 }, { 0.12f, 0.6f, 1.2f }), navy);
+        lit.Draw(prim.cube, TRS({ bx + sd * 0.27f, 1.04f, gz }, { 0, 0, 0 }, { 0.14f, 0.07f, 1.2f }), green);
+        lit.Draw(prim.cube, TRS({ bx - sd * 0.255f, 0.44f, gz }, { 0, 0, 0 }, { 0.03f, 0.11f, 1.2f }), green);
+      }
+      float cz = -6.3f; lit.Draw(prim.cyl, TRS({ gx, 0.5f, cz }, { 0, 0, 0 }, { 0.07f, 1.0f, 0.07f }), black);   // a score console on its post
+      lit.Draw(prim.cube, TRS({ gx, 1.05f, cz }, { -0.5f, 0, 0 }, { 0.46f, 0.3f, 0.08f }), black);
+      lit.Draw(prim.cube, TRS({ gx, 1.05f, cz + 0.045f }, { -0.5f, 0, 0 }, { 0.38f, 0.22f, 0.01f }), Hex(0x3aa0ff));
+    }
+    for (int sd = -1; sd <= 1; sd += 2) {   // a tall round rack of balls at each end
+      float rx = sd * 10.2f, rz = -8.5f; const unsigned BC[] = { 0xc92a2a, 0x2b8a3e, 0x1c7ed6, 0x20c997, 0xd6336c, 0x7048e8, 0xf08c00 };
+      lit.Draw(prim.cyl, TRS({ rx, 0.75f, rz }, { 0, 0, 0 }, { 0.12f, 1.5f, 0.12f }), steel);
+      for (int t = 0; t < 3; t++) {
+        lit.Draw(prim.cyl, TRS({ rx, 0.35f + 0.45f * t, rz }, { 0, 0, 0 }, { 0.95f, 0.04f, 0.95f }), Hex(0xe9ecef));
+        for (int b = 0; b < 7; b++) { float a = b * 0.8976f + t * 0.4f; RackBall(rx + cosf(a) * 0.34f, 0.35f + 0.45f * t + 0.02f + BALL_R, rz + sinf(a) * 0.34f, Hex(BC[(b + t + (sd > 0)) % 7]), false); }
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- the building
   void DrawHall(Color) {
     // the floor outside the lanes is carpet with neon shapes; the approaches are polished wood
@@ -324,15 +477,13 @@ struct Bowling : Classic {
       lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ lx, -0.01f, 9.85f }, { 0, 0, 0 }, { 1.05f, 0.02f, 19.7f }), Hex(0xf2d29c)); lit.Pattern(PAT_NONE);
       for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ lx + s * 0.65f, -0.07f, 9.85f }, { 0, 0, 0 }, { 0.25f, 0.02f, 19.7f }), Hex(0x14141c));   // gutters
       lit.Draw(prim.cube, TRS({ lx, 0.003f, 0.0f }, { 0, 0, 0 }, { 1.05f, 0.012f, 0.05f }), Hex(0xd7263d));   // foul line
+      if (bumpers) for (int sd = -1; sd <= 1; sd += 2) DrawBumper(lx, sd, std::abs(k) <= 3);
       for (int i = -3; i <= 3; i++) lit.Draw(prim.cone, TRS({ lx + i * 0.12f, 0.005f, 4.6f + fabsf((float)i) * 0.3f }, { PI / 2, 0, 0 }, { 0.04f, 0.12f, 0.01f }), Hex(0x5b2d7a));   // the arrows
       lit.Draw(prim.cube, TRS({ lx, -0.25f, 20.3f }, { 0, 0, 0 }, { 1.5f, 0.5f, 1.6f }), Hex(0x07070c));   // the pit
       lit.Draw(prim.cube, TRS({ lx, 1.2f, 21.2f }, { 0, 0, 0 }, { 1.5f, 2.6f, 0.2f }), Hex(0x15122b));      // kickback
       lit.Draw(prim.cube, TRS({ lx, 3.3f, 21.4f }, { 0, 0, 0 }, { 1.5f, 1.2f, 0.3f }), Hex(0x0f0c22));      // the masking unit over the pins
       lit.Draw(prim.cube, TRS({ lx, 3.7f, 3.02f }, { 0, 0, 0 }, { 0.98f, 0.56f, 0.04f }), Hex(0x2a2a36));   // overhead monitor frame
-      if (k < LMAX) {   // a ball return between this lane and the next, with a few balls on it
-        float bx = lx + PITCH / 2; lit.Draw(prim.cube, TRS({ bx, 0.28f, -1.6f }, { 0, 0, 0 }, { 0.5f, 0.56f, 1.7f }), Hex(0x1b1f3a)); lit.Draw(prim.cube, TRS({ bx, 0.58f, -1.6f }, { 0, 0, 0 }, { 0.52f, 0.05f, 1.72f }), Hex(0x2fd1ff));
-        const unsigned BC[] = { 0xd6336c, 0x1c7ed6, 0x2f9e44, 0xf08c00, 0x9c36b5 }; for (int i = 0; i < 3; i++) lit.Draw(prim.sphere, TRS({ bx, 0.7f, -2.1f + i * 0.5f }, { 0, 0, 0 }, { 0.2f, 0.2f, 0.2f }), Hex(BC[(k + 7 + i) % 5]));
-      }
+      if (k < LMAX) DrawBallReturn(lx + PITCH / 2, k);   // a ball return between this lane and the next
     }
     // walls and ceiling
     lit.Draw(prim.cube, TRS({ 0, 5.3f, 6 }, { 0, 0, 0 }, { 50, 0.3f, 44 }), Hex(0x0b0918));
@@ -392,7 +543,7 @@ struct Bowling : Classic {
     for (auto& L : lanes) {
       if (L.k == 0 || L.kind == 1 || std::abs(L.k) == 5) continue; float lx = LaneX(L.k);
       if (L.kind == 0 && std::abs(L.k) == 1) {   // a friend watching
-        Person(lx + 1.0f, -1.9f, -2.5f, "Idle_Neutral", time + L.k, L.hsh + 3, Hex(0x37474f), L.cheerT > 0 ? "Wave" : nullptr, time * 1.2f, L.cheerT > 0 ? 1.f : 0.f);
+        { float sd = L.k < 0 ? -1.f : 1.f; Person(lx + sd * 1.0f, -1.9f, sd * -2.5f, "Idle_Neutral", time + L.k, L.hsh + 3, Hex(0x37474f), L.cheerT > 0 ? "Wave" : nullptr, time * 1.2f, L.cheerT > 0 ? 1.f : 0.f); }
       }
       float bx = lx + L.sx; Color hat = L.kind == 2 ? Hex(0xffd43b) : BLANK;
       bool carry = L.ph <= 2 && !L.rel;
@@ -410,25 +561,37 @@ struct Bowling : Classic {
   void DrawScene() {
     LoadTex();
     Lane& M = Mine();
-    // the camera is your eyes: standing at the back of the approach, looking down your lane; it follows the ball once it's thrown
-    float bxw = -Clamp(bxs, -1.f, 1.f) * 0.42f; Vector3 wp, wt; float wf = 58, k = 3.0f;
-    if (phase == "roll") { float tz = fminf(M.ball.z - 3.2f, 14.6f); camZ += (tz - camZ) * 0.08f; wp = { M.ball.x * 0.45f, 1.05f, camZ }; wt = { M.ball.x * 0.3f, 0.12f, camZ + 12 }; wf = 52; k = 5; }
-    else if (phase == "show") { wp = { 1.3f, 1.2f, 16.0f }; wt = { -0.05f, 0.2f, 19.3f }; wf = 38; k = 2.4f; }
-    else { wp = { bxw * 0.85f, 1.62f, -5.5f }; wt = { bxw * 0.35f, 0.5f, 15.0f }; wf = 56; }
-    if (g_dbg == 31) { wp = { LaneX(BIRTHDAY) + 2.6f, 1.55f, -5.2f }; wt = { LaneX(BIRTHDAY) - 0.2f, 1.1f, -1.2f }; wf = 50; k = 9; }      // debug: the birthday lane
-    if (g_dbg == 32) { wp = { LaneX(FOOD) - 2.6f, 1.55f, -5.2f }; wt = { LaneX(FOOD) + 0.2f, 1.0f, -1.5f }; wf = 50; k = 9; }               // debug: the buffet
-    if (g_dbg == 33) { wp = { LaneX(1) + 0.9f, 1.55f, -5.5f }; wt = { LaneX(1), 1.0f, 2.0f }; wf = 50; k = 9; }                              // debug: a neighbour bowling
-    { Camera3D rc = rig.Go(wp, wt, wf, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
+    // the camera is your eyes while you line the ball up: standing at the back of the approach, looking down your lane.
+    // Then you step out of your head: the bowler walks up and throws, and the camera tracks the ball down the lane
+    float bxw = -Clamp(bxs, -1.f, 1.f) * 0.42f, k = 3.0f, bank = 0; Shot S; bool direct = true;
+    if (phase == "intro") S = introT < I_REL ? (introT < 3.0f ? IntroKey(introT) : WindShot(0, introT - I_WALK)) : RollShot(M.ball, introT - I_REL, 0, introT - I_WALK, bank);
+    else if (phase == "windup") { Shot w = WindShot(wx, windT); S = ShotLerp(camFrom, w, EaseOut(windT / 0.5f)); }
+    else if (phase == "roll") S = RollShot(M.ball, rollT, wx, windT, bank);
+    else { direct = false; if (phase == "show") { S = DECK; k = 2.4f; } else S = { { bxw * 0.85f, 1.62f, -5.5f }, { bxw * 0.35f, 0.5f, 15.0f }, 56 }; }
+    if (g_dbg == 31) { S = { { LaneX(BIRTHDAY) + 2.6f, 1.55f, -5.2f }, { LaneX(BIRTHDAY) - 0.2f, 1.1f, -1.2f }, 50 }; k = 9; direct = false; }      // debug: the birthday lane
+    if (g_dbg == 32) { S = { { LaneX(FOOD) - 2.6f, 1.55f, -5.2f }, { LaneX(FOOD) + 0.2f, 1.0f, -1.5f }, 50 }; k = 9; direct = false; }               // debug: the buffet
+    if (g_dbg == 33) { S = { { LaneX(1) + 0.9f, 1.55f, -5.5f }, { LaneX(1), 1.0f, 2.0f }, 50 }; k = 9; direct = false; }                              // debug: a neighbour bowling
+    if (direct) { rig.p = S.p; rig.t = S.t; rig.f = S.f; rig.vp = rig.vt = {}; rig.vf = 0; rig.on = true; cam.position = S.p; cam.target = S.t; cam.fovy = S.f; }   // scripted: the rig follows along so a cut back to a spring shot is seamless
+    else { Camera3D rc = rig.Go(S.p, S.t, S.f, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
+    cam.up = { sinf(bank), cosf(bank), 0 };
     UI::Sky(Hex(0x0b0620), Hex(0x1a0b3a));
     lit.Begin(cam, { 0.05f, 0.04f, 0.11f }, 0.011f);
     BeginMode3D(cam);
     lit.noRec = true; DrawHall(WHITE);   // the alley around you is a backdrop: it doesn't need to cast shadows
-    for (auto& L : lanes) { float lx = LaneX(L.k); lit.noRec = L.k != 0; DrawPins(L.pins, lx, L.k == 0); if (L.k != 0 && L.ball.on) DrawBall(L.ball, lx, L.ballCol, false); }
+    if (phase == "intro") DrawSeating();   // the seats behind the approach are only in view during the flyover
+    for (auto& L : lanes) { float lx = LaneX(L.k); lit.noRec = L.k != 0; DrawPins(L.pins, lx, L.k == 0, L.k == 0 && hero.on); if (L.k != 0 && L.ball.on) DrawBall(L.ball, lx, L.ballCol, false); }
     lit.noRec = false;
-    // your ball: on the foul line while you line it up, then rolling
+    // your ball: on the foul line while you line it up, in the bowler's hand while they walk up, then rolling
     Color bc = P(cur).color;
     if (phase == "aim") { Ball b; b.x = bxw; b.z = 0.35f; b.y = BALL_R; DrawBall(b, 0, bc, true); }
     else if (M.ball.on || phase == "roll") DrawBall(M.ball, 0, bc, true);
+    // the bowler you are watching: walks up with the ball, swings, lets go
+    if (phase == "windup" || phase == "roll" || phase == "show") DrawBowler(cur, wx, windT, !wlet, bc);
+    else if (phase == "intro" && introT >= I_WALK - 0.05f && !introBlack) DrawBowler(introWho, 0, introT - I_WALK, !introThrown, P(introWho).color);
+    if (hero.on) {   // the pin that comes for the lens
+      Vector3 ax = Vector3Normalize({ 0.8f, 0.25f, 0.55f });
+      DrawProp(props.pin, MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -0.19f, 0), MatrixRotate(ax, hero.ang)), MatrixTranslate(hero.p.x, hero.p.y, hero.p.z)));
+    }
     if (phase == "aim") for (int i = 0; i < 24; i++) {   // the plan: the line your ball will follow, curve and all
       float z = 0.9f + i * 0.74f, vz = 6.5f + bpowN * 4.5f, px = bxw - baimN * 0.035f * z - AMAX * bhookN * HookI(z) / (vz * vz) * 1.f;
       lit.Draw(prim.cyl, TRS({ px, 0.006f, z }, { 0, 0, 0 }, { 0.05f, 0.005f, 0.05f }), Fade(bc, 0.9f * (1 - i / 28.f) * (0.6f + 0.4f * sinf(time * 8 - i * 0.6f))));
@@ -436,21 +599,47 @@ struct Bowling : Classic {
     slotN = 4; lit.noRec = true; DrawBowlers();
     for (auto& L : lanes) { if (L.kind == 2) DrawParty(L); if (L.kind == 1) DrawFood(L); }
     lit.noRec = false;
-    // everyone else at your lane: your friends wait beside you, ball in hand
-    { int n = 0; for (int i = 0; i < N(); i++) { if (i == cur && phase != "end") continue; float s = (n % 2) ? 1.f : -1.f; float x = s * (1.45f + 0.7f * (n / 2)); n++;
-        Person(x, -6.6f, s > 0 ? -0.5f : 0.5f, "Idle_Neutral", time + i * 0.9f, PersonHash(P(i).color), P(i).color); } }
+    // (the players waiting for their turn are not in the picture: you only ever see whoever is bowling)
     if (phase == "end") DrawToon({ 0, 0, -1.7f }, 0, P(cur).color, time, 0, 1, 1.0f);
     fx.Draw(); conf.Draw();
     DrawGlow();
     EndMode3D();
-    Board("FRAME " + I(std::min(frameNo, frames)) + "/" + I(frames), Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return I(pts[i]); });
-    if (popT > 0) {
+    if (phase == "intro") DrawIntroHud();
+    else if (!hideHud) Board("FRAME " + I(std::min(frameNo, frames)) + "/" + I(frames), Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return I(pts[i]); });
+    if (phase != "intro" && !hideHud && popT > 0) {
       float a = fminf(1.f, popT * 2), kk = EaseBack(fminf(1.f, (2.2f - popT) * 3)), fs = 44, w = Measure(pop, fs, TS_DISPLAY) + 90;
       UI::Box({ 800 - w / 2, 96 - 8 * (1 - kk), w, 76 }, 38, Hex(0x0b1020, (unsigned char)(200 * a)));
       DrawCircle((int)(800 - w / 2 + 40), (int)(134 - 8 * (1 - kk)), 12, Fade(popC, a));
       Text(800 + 14, 134 - 8 * (1 - kk), fs, Fade(WHITE, a), pop, 0, TS_DISPLAY | TS_SHADOW);
     }
-    if (phase == "aim") Hint(P(cur).bot ? P(cur).name + " is aiming…" : P(cur).name + ": slide the ball, flick it up, curve the flick for a hook!", P(cur).color);
+    if (phase != "intro" && !hideHud) {   // is the lane's bumper rail up?
+      UI::Box({ 1340, 24, 236, 46 }, 23, Hex(0x0b1020, 190)); DrawCircle(1368, 47, 8, bumpers ? Hex(0xffd43b) : Hex(0x6b7280));
+      Text(1462, 48, 24, bumpers ? WHITE : Hex(0xaab2c5), bumpers ? "BUMPERS ON" : "BUMPERS OFF", 0, TS_DISPLAY | TS_SHADOW);
+    }
+    if (phase == "aim" && !hideHud) Hint(P(cur).bot ? P(cur).name + " is aiming…" : P(cur).name + ": slide the ball, flick it up, curve the flick for a hook!", P(cur).color);
+    if (fadeA > 0.001f) DrawRectangle(0, 0, W, H, Fade(BLACK, Clamp(fadeA, 0.f, 1.f)));   // the black of the intro (and a quick dip when the view cuts back to your eyes)
+  }
+  // the broadcast graphics of the intro: cinema bars, the line-up, the title
+  void DrawIntroHud() {
+    float t = introT, bar = 62 * EaseOut(t / 0.45f) * (introBlack ? 0.f : 1.f);
+    DrawRectangle(0, 0, W, (int)bar, BLACK); DrawRectangle(0, H - (int)bar, W, (int)bar + 1, BLACK);
+    if (introBlack) return;
+    if (t > 0.35f && t < 2.8f) {   // tonight's line-up
+      float a = fminf(1.f, (t - 0.35f) * 4) * fminf(1.f, (2.8f - t) * 4); std::string s; for (int i = 0; i < N(); i++) s += (i ? "   ·   " : "") + P(i).name;
+      Text(800, H - bar - 40, 34, Fade(Hex(0xffd43b), a), "TONIGHT'S BOWLERS", 0, TS_DISPLAY | TS_SHADOW | TS_SPACED);
+      Text(800, H - bar - 4, 40, Fade(WHITE, a), s, 0, TS_DISPLAY | TS_SHADOW);
+    }
+    if (t > 2.85f && t < 4.6f) {   // the title slams in on "STRIKE NIGHT!"
+      float u = t - 2.85f, a = fminf(1.f, u * 8) * fminf(1.f, (4.6f - t) * 5), sc = 1 + 0.55f * (1 - EaseBack(u * 3.2f));
+      Text(800, 250, 150 * sc, Fade(WHITE, a), "STRIKE NIGHT", 0, TS_DISPLAY | TS_GOLD | TS_SHADOW);
+    }
+  }
+  // a bowler: walks up with the ball in hand, swings, and the ball leaves at W_REL (it follows the hand until then)
+  void DrawBowler(int who, float x, float wt, bool carry, Color ballCol) {
+    heroDraw = true; Color sh = P(who).color; unsigned h = PersonHash(sh); Ball dummy;
+    if (wt < W_WALK) Person(x, Lerp(-3.1f, -0.9f, Clamp(wt / W_WALK, 0.f, 1.f)), 0, "Walk", wt * 2.1f + 0.3f, h, sh, nullptr, 0, 0, false, BLANK, carry ? &dummy : nullptr, ballCol);
+    else Person(x, -0.9f, 0, "Walk", 0.2f, h, sh, "Sword_Slash", 0.22f + Clamp((wt - W_WALK) / W_SWING, 0.f, 1.f) * 0.5f, 1.f, true, BLANK, carry ? &dummy : nullptr, ballCol);
+    heroDraw = false;
   }
 };
 }  // namespace
