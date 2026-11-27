@@ -395,6 +395,7 @@ body.home { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transpar
 .vvShort .songStages,.vvShort .songTop{display:none}.vvShort .songStat{padding:8px;font-size:16px}.vvShort .songUI{gap:7px;padding-top:6px}
 .songSug button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:11px 14px;border-radius:14px;border:0;background:#2a1f5c;color:#fff;font:inherit}
 .songSug button:active{background:#cc5de8;transform:scale(.98)}
+.songSug button:first-child{box-shadow:0 0 0 2px #ffd43b inset}   /* the top match: Enter on the keyboard picks this one */
 .songSug b{font-size:18px}
 .songSug small{font-size:14px;color:#b197fc;font-weight:700}
 .sgNone{text-align:center;padding:8px}

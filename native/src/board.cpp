@@ -373,7 +373,7 @@ struct Blackjack : Table {
   int ViewSeat() override { return phase == "play" && cur >= 0 ? cur : -1; }
   bool Focus(Vector3& p, float& w) override { if (phase == "dealer" || phase == "settle") { p = { 0, 0.3f, 2.9f }; w = 0.8f; return true; } return false; }
   std::vector<Card> deck; std::vector<std::vector<Card>> hand; std::vector<Card> dealer;
-  std::vector<int> pts, state, delta;  // state: 0 playing, 1 stand, 2 bust, 3 blackjack
+  std::vector<int> pts, state, delta, dbl;  // state: 0 playing, 1 stand, 2 bust, 3 blackjack · dbl: 1 = doubled down (one more card, the stake counts twice)
   std::string phase = "deal"; float t = 0, botT = 0; int hno = 0, HANDS = 6; bool holeUp = false;
   int Val(const std::vector<Card>& h) { int v = 0, aces = 0; for (auto& c : h) { int r = c.r + 1; if (r == 1) { aces++; v += 11; } else v += r > 10 ? 10 : r; } while (v > 21 && aces) { v -= 10; aces--; } return v; }
   Card Pull() { if (deck.empty()) deck = Deck(2); Card c = deck.back(); deck.pop_back(); return c; }
@@ -381,7 +381,7 @@ struct Blackjack : Table {
   void Deal() {
     hno++; phase = "deal"; t = 1.4f; holeUp = false;
     if ((int)deck.size() < 40) deck = Deck(2);
-    hand.assign(N(), {}); state.assign(N(), 0); delta.assign(N(), 0); dealer.clear();
+    hand.assign(N(), {}); state.assign(N(), 0); delta.assign(N(), 0); dbl.assign(N(), 0); dealer.clear();
     for (int k = 0; k < 2; k++) { for (int i = 0; i < N(); i++) hand[i].push_back(Pull()); dealer.push_back(Pull()); }
     for (int i = 0; i < N(); i++) if (Val(hand[i]) == 21) state[i] = 3;
     for (int i = 0; i < N(); i++) if (state[i] == 3) { Vector3 st = Seat(i); cine::Shot s; s.kind = cine::STRIKE; s.at = Front(i, 4.2f, 0.4f); s.size = 1.3f; s.c = Hex(0xffd43b); s.caption = "BLACKJACK!"; s.sub = P(i).name; s.elev = 0.75f; s.floorY = 0.02f; s.face = { -st.x, 0, -st.z }; s.yaw = -1.0f; cine::Play(s); break; }
@@ -390,9 +390,9 @@ struct Blackjack : Table {
   std::string Panel(int i) {
     std::string cs; for (size_t k = 0; k < hand[i].size(); k++) { Card c = hand[i][k]; cs += std::string(k ? "," : "") + "{\"label\":" + Q(RANK[c.r]) + ",\"icon\":" + Q(SUIT[c.s]) + ",\"color\":" + Q(Red(c) ? "#e03131" : "#343a40") + ",\"ok\":false}"; }
     int v = Val(hand[i]); bool my = phase == "play" && state[i] == 0 && i == cur;
-    std::string sub = state[i] == 2 ? "💥 BUST! Over 21" : state[i] == 3 ? "⭐ BLACKJACK!" : state[i] == 1 ? "✋ Standing — waiting for the dealer" : phase == "play" ? (my ? "Your turn! HIT = another card · STAND = keep it" : (cur >= 0 ? P(cur).name + " is playing…" : "")) : "";
+    std::string sub = state[i] == 2 ? "💥 BUST! Over 21" : state[i] == 3 ? "⭐ BLACKJACK!" : state[i] == 1 ? "✋ Standing — waiting for the dealer" : phase == "play" ? (my ? (hand[i].size() == 2 ? "Your turn! HIT · STAND · or DOUBLE: one more card, win or lose twice as much" : "Your turn! HIT = another card · STAND = keep it") : (cur >= 0 ? P(cur).name + " is playing…" : "")) : "";
     if (phase == "settle") sub = delta[i] > 0 ? "🎉 You beat the dealer! +" + std::to_string(delta[i]) : delta[i] < 0 ? "😬 Dealer wins this one" : "🤝 Push — tie";
-    std::string btn = my ? "{\"id\":\"hit\",\"label\":\"👆 HIT\",\"color\":\"#2f9e44\",\"big\":true},{\"id\":\"stand\",\"label\":\"✋ STAND\",\"color\":\"#e03131\",\"big\":true}" : "";
+    std::string btn = my ? "{\"id\":\"hit\",\"label\":\"👆 HIT\",\"color\":\"#2f9e44\",\"big\":true},{\"id\":\"stand\",\"label\":\"✋ STAND\",\"color\":\"#e03131\",\"big\":true}" + std::string(hand[i].size() == 2 ? ",{\"id\":\"double\",\"label\":\"✌️ DOUBLE ×2\",\"color\":\"#f08c00\",\"big\":true}" : "") : "";
     return "{\"t\":\"panel\",\"title\":" + Q("Hand " + std::to_string(hno) + " / " + std::to_string(HANDS) + "  ·  " + std::to_string(pts[i]) + " pts") + ",\"info\":" + Q("Total: " + std::to_string(v)) + ",\"sub\":" + Q(sub) + ",\"myTurn\":" + B(my) + ",\"cards\":[" + cs + "],\"buttons\":[" + btn + "]}";
   }
   void SyncAll() { for (int i = 0; i < N(); i++) if (!P(i).bot) Send(i, Panel(i)); }
@@ -407,6 +407,11 @@ struct Blackjack : Table {
     if (phase != "play" || p != cur || state[p] != 0) return;
     if (k == "btn:hit") { hand[p].push_back(Pull()); Sfx("card"); t = 15; int v = Val(hand[p]); if (v > 21) { state[p] = 2; Sfx("buzz"); Buzz(p, 300); } else if (v == 21) state[p] = 1; }
     else if (k == "btn:stand") state[p] = 1;
+    else if (k == "btn:double" && hand[p].size() == 2) {   // double down: exactly one more card, and the hand then counts twice (win or lose)
+      dbl[p] = 1; hand[p].push_back(Pull()); Sfx("card"); int v = Val(hand[p]); state[p] = v > 21 ? 2 : 1;
+      if (v > 21) { Sfx("buzz"); Buzz(p, 300); } else Sfx("ding");
+      Banner("✌️ " + P(p).name + " DOUBLES DOWN!", 1300, "#ffd43b");
+    }
     else return;
     if (state[p] != 0) NextActor(); else SyncAll();
   }
@@ -415,7 +420,7 @@ struct Blackjack : Table {
     if (over) { endT -= dt; if (endT <= 0 && !fin) { fin = true; FinishOrder(Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return std::to_string(pts[i]) + " pts"; }); } return; }
     if (phase == "deal" && t <= 0) { phase = "play"; NextActor(); }
     else if (phase == "play") {
-      if (cur >= 0 && P(cur).bot) { botT -= dt; if (botT <= 0) { botT = frand(0.9f, 1.5f); int v = Val(hand[cur]), up = dealer[0].r + 1; bool weak = up >= 2 && up <= 6; Act(cur, (v < 12 || (v < 17 && !weak) || (v < 13 && weak)) ? "btn:hit" : "btn:stand", 0, 0); } }
+      if (cur >= 0 && P(cur).bot) { botT -= dt; if (botT <= 0) { botT = frand(0.9f, 1.5f); int v = Val(hand[cur]), up = dealer[0].r + 1; bool weak = up >= 2 && up <= 6; if (hand[cur].size() == 2 && (v == 11 || (v == 10 && up < 10)) && frand(0, 1) < 0.7f) { Act(cur, "btn:double", 0, 0); return; } Act(cur, (v < 12 || (v < 17 && !weak) || (v < 13 && weak)) ? "btn:hit" : "btn:stand", 0, 0); } }
       else if (cur >= 0 && t <= 0) { state[cur] = 1; Send(cur, Panel(cur)); NextActor(); }   // out of time: stand
     } else if (phase == "dealer" && t <= 0) {
       bool anyAlive = false; for (int s : state) anyAlive |= s == 1;
@@ -426,6 +431,7 @@ struct Blackjack : Table {
           int v = Val(hand[i]);
           if (state[i] == 2) delta[i] = -10; else if (state[i] == 3) delta[i] = dbj ? 0 : 15;
           else if (d > 21 || v > d) delta[i] = 10; else if (v < d) delta[i] = -10; else delta[i] = 0;
+          if (dbl[i] && state[i] != 3) delta[i] *= 2;
           pts[i] += delta[i];
           if (delta[i] > 0) fx.Burst(Front(i, 4.2f, 0.5f), 18, Hex(0xffd43b), 4, 0.7f, 0.1f);
         }
@@ -442,13 +448,13 @@ struct Blackjack : Table {
     for (size_t k = 0; k < dealer.size(); k++) CardAt({ (k - (dealer.size() - 1) / 2.f) * 1.05f, 0.05f, 2.9f }, 0, k != 1 || holeUp, dealer[k], 1.25f);
     for (int i = 0; i < N(); i++) { Vector3 f = Front(i, 4.4f); float a = SeatA(i); for (size_t k = 0; k < hand[i].size(); k++) { float o = (k - (hand[i].size() - 1) / 2.f) * 0.55f; CardAt({ f.x - sinf(a) * o * 1.25f, 0.05f + k * 0.01f, f.z + cosf(a) * o * 0.98f }, -a - PI / 2, true, hand[i][k], 1.05f); } }
     End3D();
-    SeatNames([&](int i) { int v = Val(hand[i]); return state[i] == 2 ? std::string("💥 BUST") : state[i] == 3 ? std::string("⭐ 21!") : phase == "settle" ? (delta[i] > 0 ? "+" + std::to_string(delta[i]) : delta[i] < 0 ? std::to_string(delta[i]) : std::string("push")) : std::to_string(v); });
+    SeatNames([&](int i) { int v = Val(hand[i]); return state[i] == 2 ? std::string("💥 BUST") + (dbl[i] ? " ×2" : "") : state[i] == 3 ? std::string("⭐ 21!") : phase == "settle" ? (delta[i] > 0 ? "+" + std::to_string(delta[i]) : delta[i] < 0 ? std::to_string(delta[i]) : std::string("push")) : std::to_string(v) + (dbl[i] ? " ×2" : ""); });
     Vector2 dp = GetWorldToScreen({ 0, 0.05f, 5.2f }, cam);
     Text(dp.x, dp.y + 6, 26, Hex(0xffd43b), holeUp ? "Dealer: " + std::to_string(Val(dealer)) : std::string("Dealer"), 0, TS_HEAVY);
     Board("🃏 POINTS", Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return std::to_string(pts[i]); });
     Title("Hand " + std::to_string(hno) + " of " + std::to_string(HANDS));
     if (phase == "play") { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(fmaxf(0, t))); Text(1540, 50, 34, t < 6 ? Hex(0xff4d6d) : WHITE, b); Hint(cur >= 0 ? P(cur).name + ": HIT for another card or STAND · over 21 is a bust" : "", Hex(0xffd43b)); }
-    else Hint("Beat the dealer: +10 · Blackjack: +15 · lose: −10");
+    else Hint("Beat the dealer: +10 · Blackjack: +15 · lose: −10 · DOUBLE DOWN: ×2");
   }
 };
 

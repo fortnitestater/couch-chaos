@@ -75,6 +75,7 @@ struct Elf : Show {
   }
   void Draw() override {
     Stage([&](int i) { return (phase == "clue" && ready[i]) || (phase == "vote" && votes[i] >= 0); });
+    Glass(78, 14, 330, 76, 20);   // the heading sits on glass: the neon frame no longer cuts through it
     Text(110, 42, 17, Hex(0xc9d3f2), "ROUND " + I(std::min(round, R)) + " OF " + I(R), -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
     Text(110, 70, 26, WHITE, "ODD ELF OUT", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (phase == "clue" || phase == "vote" || phase == "guess") Timer(t, tMax, 1490, 66);
@@ -161,6 +162,7 @@ struct CopyCat : Show {
   }
   void Draw() override {
     Stage([&](int i) { return phase == "input" && res.size() == (size_t)N() && res[i] >= 0; });
+    Glass(78, 14, 450, 76, 20);   // the heading sits on glass: the neon frame no longer cuts through it
     Text(110, 42, 17, Hex(0xc9d3f2), "ROUND " + I(std::min(std::max(round, 1), R)) + " OF " + I(R) + " · " + I(len) + " COLOURS", -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
     Text(110, 70, 26, WHITE, "COPY CAT", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (phase == "intro") { Glass(400, 230, 800, 240, 34); Text(800, 300, 20, Hex(0xc9d3f2), "WATCH · REMEMBER · REPEAT", 0, TS_PLAIN | TS_HEAVY | TS_SPACED); Text(800, 370, 80, WHITE, "COPY CAT", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD); PodiumLabels(); return; }
@@ -186,7 +188,7 @@ struct Doodle : Show {
   struct Stroke { std::string id; Color c; float w; std::vector<Vector2> p; };
   std::vector<Stroke> strokes; std::vector<int> drawers; std::vector<std::string> words, opts; std::string word, phase = "intro";
   int R = 0, round = 0, drawer = -1; float t = 3, tMax = 1; std::vector<int> guess; std::vector<float> botAt;
-  const float CX = 420, CY = 104, CW = 760, CH = 760 * 690.f / 1100;
+  const float CX = 470, CY = 100, CW = 660, CH = 660 * 690.f / 1100;   // small enough that the players on their podiums stay in view under it
   void Start() override {
     InitStage(); tint = Hex(0xff8f3c); words = data::DOODLE; Shuffle(words);
     for (int i = 0; i < N(); i++) if (!P(i).bot) drawers.push_back(i);
@@ -246,6 +248,7 @@ struct Doodle : Show {
         if (k) { Vector2 b = { CX + s.p[k - 1].x * CW, CY + s.p[k - 1].y * CH }; DrawLineEx(b, a, w, s.c); }
       }
     }
+    Glass(78, 14, 330, 76, 20);   // the heading sits on glass: the neon frame no longer cuts through it
     Text(110, 42, 17, Hex(0xc9d3f2), "ROUND " + I(std::min(std::max(round, 1), std::max(R, 1))) + " OF " + I(R), -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
     Text(110, 70, 26, WHITE, "DOODLE DASH", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (phase == "draw") {

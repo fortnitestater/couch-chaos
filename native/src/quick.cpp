@@ -42,6 +42,7 @@ struct Reflex : Show {
   void Draw() override {
     if (phase == "go") tint = Hex(0x34c77b); else tint = Hex(0x3d8bff);
     Stage([&](int i) { return locked.size() == (size_t)N() && locked[i] && !bad[i]; });
+    Glass(78, 14, 330, 76, 20);   // the heading sits on glass: the neon frame no longer cuts through it
     Text(110, 42, 17, Hex(0xc9d3f2), "ROUND " + I(std::min(std::max(1, round), R)) + " OF " + I(R), -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
     Text(110, 70, 26, WHITE, "REFLEX RUSH", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     Glass(300, 110, 1000, 420, 34, phase == "go" ? 170 : 215);
@@ -93,6 +94,7 @@ struct Meter : Show {
   }
   void Draw() override {
     Stage([&](int i) { return mark.size() == (size_t)N() && mark[i] >= 0; });
+    Glass(78, 14, 330, 76, 20);   // the heading sits on glass: the neon frame no longer cuts through it
     Text(110, 42, 17, Hex(0xc9d3f2), "ROUND " + I(std::min(std::max(1, round), R)) + " OF " + I(R), -1, TS_PLAIN | TS_HEAVY | TS_SPACED);
     Text(110, 70, 26, WHITE, "STOP THE METER", -1, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     if (phase == "intro") { Glass(400, 230, 800, 240, 34); Text(800, 330, 76, WHITE, "STOP THE METER", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD); Text(800, 410, 26, Hex(0xdfe6ff), "Press STOP when the needle is in the gold", 0, TS_HEAVY | TS_PLAIN); PodiumLabels(); return; }
