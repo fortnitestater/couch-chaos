@@ -559,7 +559,7 @@ EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {
   Player& p = players[pid]; p.stick = { x, y }; p.a = (a & 1) != 0; p.b = b; p.touch = (a & 2) != 0;
 }
 EMSCRIPTEN_KEEPALIVE void cc_emote(int pid, int k) { if (pid >= 0 && pid < 8) { g_emoteT[pid] = 3.2f; g_emoteK[pid] = k & 7; } }
-EMSCRIPTEN_KEEPALIVE void cc_act(int pid, const char* kind, int i, float pw) { if (game) game->Act(pid, kind, i, pw); }
+EMSCRIPTEN_KEEPALIVE void cc_act(int pid, const char* kind, int i, float pw) { if (!game) return; if (strncmp(kind, "cheat:", 6) == 0) game->Cheat(pid, kind + 6); else game->Act(pid, kind, i, pw); }
 EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   if (!game) return;
   dt = fminf(dt, 0.05f);

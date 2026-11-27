@@ -281,6 +281,7 @@ struct Game {
   virtual void Update(float dt) = 0;
   virtual void Draw() = 0;
   virtual void Act(int pid, const std::string& kind, int i, float p) {}
+  virtual void Cheat(int pid, const std::string& name) {}   // an owner cheat (only the TV lets one through)
   virtual void DebugShot(int kind) {}   // debug: play this game's own cinematic moment of that kind
 };
 std::unique_ptr<Game> MakeSkyBrawl();

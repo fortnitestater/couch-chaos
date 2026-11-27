@@ -1304,6 +1304,33 @@
     else if (e.code === 'KeyD') sendMsg({ t: 'act', a: 'draw' }); else if (e.code === 'KeyP') sendMsg({ t: 'act', a: 'pass' });
   }
 
+  // ---------- owner cheats: a hidden door (tap your own name 7 times), a code only the owner knows, and a panel. The TV checks the code; nothing here can skip that. ----------
+  const OW = { ok: false, taps: 0, t0: 0, pending: '' };
+  const ownerKey = () => { try { return localStorage.getItem('cc_owner') || ''; } catch (e) { return ''; } };
+  const ownerAuto = () => { const c = ownerKey(); if (c) { OW.pending = ''; sendMsg({ t: 'owner', code: c }); } };
+  function ownerPrompt() {
+    if ($('#owBox')) return; const d = document.createElement('div'); d.id = 'owBox'; d.className = 'owBox';
+    d.innerHTML = '<div class="owCard"><b>👑</b><input id="owIn" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="code"><div class="owRow"><button id="owNo">Cancel</button><button id="owGo">Go</button></div></div>';
+    document.body.appendChild(d); const inp = $('#owIn'); inp.focus();
+    const close = () => d.remove(), go = () => { const v = inp.value.trim(); close(); if (v) { OW.pending = v; sendMsg({ t: 'owner', code: v }); } };
+    $('#owNo').onclick = close; $('#owGo').onclick = go; inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  }
+  function ownerShow(on) {
+    OW.ok = on; let b = $('#owCrown'); if (!on) { if (b) b.remove(); const p = $('#owPanel'); if (p) p.remove(); return; }
+    if (b) return; b = document.createElement('button'); b.id = 'owCrown'; b.className = 'owCrown'; b.textContent = '👑'; b.onclick = ownerPanel; document.body.appendChild(b);
+  }
+  function ownerPanel() {
+    const old = $('#owPanel'); if (old) { old.remove(); return; }
+    const gid = window.__gid || '', U = [['win', '🏆 Win this game'], ['end', '⏭ End the game'], ['speed', '🐢 Slow-mo', 0.4], ['speed', '⏱ Normal speed', 1], ['speed', '⚡ Fast', 1.8], ['confetti', '🎉 Confetti']];
+    const G = { bowling: [['n:strike', '🎳 Next ball is a strike']], tennis: [['n:point', '🎾 Win this point'], ['n:freeze', '🧊 Freeze the others'], ['n:super', '⚡ Super speed + reach']] }[gid] || [];
+    const p = document.createElement('div'); p.id = 'owPanel'; p.className = 'owPanel';
+    p.innerHTML = '<div class="owHead"><b>👑 Owner</b><button id="owX">✕</button></div><div class="owGrid">' + G.concat(U).map((c, i) => `<button data-i="${i}">${c[1]}</button>`).join('') + '</div>';
+    document.body.appendChild(p); const all = G.concat(U);
+    $('#owX').onclick = () => p.remove();
+    p.querySelectorAll('.owGrid button').forEach(b => b.onclick = () => { const c = all[+b.dataset.i]; sendMsg({ t: 'cheat', c: c[0], a: c[2] }); navigator.vibrate?.(15); b.classList.add('done'); setTimeout(() => b.classList.remove('done'), 500); });
+  }
+  $('#meName').addEventListener('pointerdown', () => { const n = Date.now(); if (n - OW.t0 > 3500) OW.taps = 0; if (!OW.taps) OW.t0 = n; if (++OW.taps >= 7) { OW.taps = 0; OW.ok ? ownerPanel() : ownerPrompt(); } });
+
   // ---------- connection ----------
   let lastSeen = 0, tries = 0, joinTries = 0, gotPing = false;
   function netBanner(on, text) {
@@ -1315,14 +1342,15 @@
     if (!m || typeof m !== 'object') return;
     lastSeen = Date.now();
     if (m.t === 'ping') { gotPing = true; try { conn && conn.send({ t: 'pong', ts: m.ts }); } catch (e) {} return; }
+    if (m.t === 'owner') { if (m.ok) { if (OW.pending) { try { localStorage.setItem('cc_owner', OW.pending); } catch (e) {} OW.pending = ''; } ownerShow(true); } else { if (OW.pending) toast(m.wait ? 'Wait ' + m.wait + ' s' : 'Nope'); else { try { localStorage.removeItem('cc_owner'); } catch (e) {} } OW.pending = ''; ownerShow(false); } return; }
     if (m.t === 'welcome') {
-      setupReacts();
+      setupReacts(); ownerAuto();
       joined = true; me = m; document.body.style.setProperty('--me', m.color || '#3b7bff'); document.body.classList.add('inGame'); tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
       $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden');
       $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });
-    } else if (m.t === 'ch') applyCh(m.id);
+    } else if (m.t === 'ch') { applyCh(m.id); window.__gid = m.id; }
     else if (m.t === 'layout') { if (m.layout && m.layout.name === 'intro') applyCh(m.layout.id); else if (m.layout && m.layout.name === 'lobby') applyCh(null); render(m.layout); }
     else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') { renderPanel(m); updateIdleDock(); } if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }

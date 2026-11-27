@@ -29,6 +29,34 @@ struct Tennis : Classic {
   float Reach() { return Pvp() ? fminf(H_REACH[level], 5.4f) : H_REACH[level]; }
   float Good() { return Pvp() ? fminf(H_GOOD[level], 3.2f) : H_GOOD[level]; }
   float matchT = 0; bool timeUp = false;
+  // ball kids: they wait by the net; after each point the nearest one runs out, picks the ball up and carries it back
+  struct Kid { Vector3 pos, home; int mode = 0; float yaw = 0; };   // 0 waiting, 1 fetching, 2 carrying it back
+  std::vector<Kid> kids; bool kidSent = false;
+  void UpdateKids(float dt) {
+    if (kids.empty()) { const Vector3 H[4] = { { DW + 1.4f, 0, 3.2f }, { DW + 1.4f, 0, -3.2f }, { -DW - 1.5f, 0, 5.5f }, { -DW - 1.5f, 0, -5.5f } }; for (auto& h : H) { Kid k; k.pos = k.home = h; k.yaw = atan2f(-h.x, -h.z); kids.push_back(k); } }
+    if (phase != "point") kidSent = false;
+    if (phase == "point" && !kidSent) { kidSent = true; int b = 0; float bd = 1e9f; for (int i = 0; i < (int)kids.size(); i++) { float d = Vector3Distance(kids[i].pos, bp); if (d < bd) { bd = d; b = i; } } kids[b].mode = 1; }
+    for (auto& k : kids) {
+      Vector3 goal = k.mode == 1 ? Vector3{ Clamp(bp.x, -DW - 1.2f, DW + 1.2f), 0, Clamp(bp.z, -HL - 2.5f, HL + 2.5f) } : k.home, d = Vector3Subtract(goal, k.pos); d.y = 0; float l = Vector3Length(d);
+      if (k.mode == 1 && l < 0.5f) k.mode = 2;
+      if (k.mode == 2 && l < 0.15f) { k.mode = 0; k.yaw = atan2f(-k.home.x, -k.home.z); }
+      if (l > 0.12f && k.mode != 0) { float sp = k.mode == 1 ? 6.0f : 3.2f; k.pos = Vector3Add(k.pos, Vector3Scale(d, fminf(sp * dt, l) / l)); k.yaw = atan2f(d.x, d.z); }
+    }
+  }
+  void DrawKids() {
+    int n = 0; for (auto& k : kids) {
+      PersonPose q; q.pos = k.pos; q.yaw = k.yaw; q.c = Hex(0xff922b); q.hsh = 7 + n * 5; q.height = 1.32f; q.clip = k.mode == 1 ? "Run" : k.mode == 2 ? "Walk" : "Idle_Neutral"; q.t = time * (k.mode == 1 ? 1.3f : 1.f) + n; Matrix wm = MatrixIdentity(); q.wrist = &wm; n++;
+      if (DrawPersonPose(q) && k.mode == 2) lit.Draw(prim.sphere, TRS({ wm.m12, wm.m13 - 0.04f, wm.m14 }, { 0, 0, 0 }, { 0.067f, 0.067f, 0.067f }), Hex(0xd6f03c));   // the ball in their hand
+    }
+  }
+  float freezeT = 0, superT = 0; int cheatTeam = -1;   // owner cheats: the other team stands frozen / your team runs and reaches far
+  float RM(int team) const { return superT > 0 && team == cheatTeam ? 1.8f : 1.f; }
+  void Cheat(int pid, const std::string& n) override {
+    int tm = -1; for (auto& q : on) if (q.pid == pid) tm = q.team; if (tm < 0) return;
+    if (n == "point") { if (phase == "rally" || phase == "serve") { live = false; Point(tm, "WINNER!"); } }
+    else if (n == "freeze") { freezeT = 25; cheatTeam = tm; }
+    else if (n == "super") { superT = 30; cheatTeam = tm; }
+  }
   float TimeLimit() const { return level == 0 ? 150.f : level == 1 ? 240.f : 0.f; }
   Vector3 bp{}, bv{}; bool live = false, bounced = false, smashLive = false; int lastHitTeam = -1, bounces = 0; float spin = 0;
   int pts[2] = { 0, 0 }, games[2] = { 0, 0 }, server = 0, serveTeam = 0, GAMES = 2, ptTeam = -1;
@@ -238,7 +266,7 @@ struct Tennis : Classic {
       if (smashLive) { call = "TOO FAST!"; callT = 0.8f; return; }   // a smash can't be returned
       // generous: anywhere near the ball counts; closer to the ideal moment = better shot
       Vector3 rk = RacketPt(p); float d = Vector3Distance(rk, bp);
-      if (d < Reach() && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, aimW, d < Good(), shot); if (d < (level == 0 ? 2.2f : 1.3f)) { call = "PERFECT!"; callT = 0.8f; } return; }
+      if (d < Reach() * RM(p.team) && bp.z * Side(p.team) > -0.5f) { Hit((int)i, power, aimW, d < Good() * RM(p.team), shot); if (d < (level == 0 ? 2.2f : 1.3f)) { call = "PERFECT!"; callT = 0.8f; } return; }
       if (!smashLive) { qPid = pid; qT = 2.0f; qPow = power; qAim = aimW; qShot = shot; if (callT > 0 && call == "WAIT FOR IT…") callT = 0; return; }   // flick as soon as you see the ball coming: the swing is held and goes the moment it's in reach
       call = "WAIT FOR IT…"; callT = 0.6f;
     }
@@ -286,12 +314,13 @@ struct Tennis : Classic {
   std::string TeamName(int tm) { if (teamQ[tm].empty()) return "MACHINE"; if (teamQ[tm].size() == 1) return P(teamQ[tm][0]).name; return tm ? "BLUE TEAM" : "RED TEAM"; }
   std::string Score(int tm) { if (Quick()) return I(pts[tm]); int a = pts[tm], b = pts[1 - tm]; if (a >= 3 && b >= 3) return a == b ? "40" : a > b ? "AD" : "40"; const char* S[] = { "0", "15", "30", "40" }; return S[std::min(3, a)]; }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt); callT -= dt; radarT -= dt; t -= dt;
+    time += dt; fx.Update(dt); conf.Update(dt); callT -= dt; radarT -= dt; t -= dt; freezeT -= dt; superT -= dt;
     tnT -= dt; if (tnT <= 0) { tnT = 0.066f; SendTn(); }
     talkT -= dt; judgeT -= dt; squeakT -= dt; spinA += spinR * dt; squash = fmaxf(0, squash - dt * 9);
     for (auto& m : marks) m.life -= dt;
     for (int i = 0; i < N(); i++) if (!P(i).bot && P(i).a && !P(i).pa) Swing(i, 0.65f);
     for (auto& p : on) { p.sw = fmaxf(0, p.sw - dt * 3); p.cool -= dt; }
+    UpdateKids(dt);
     if (phase == "intro") { if (t <= 0) phase = "serve"; return; }
     if (phase != "end") {
       matchT += dt; float lim = TimeLimit();
@@ -316,11 +345,13 @@ struct Tennis : Classic {
     // Real-ish footwork: accelerate up to ~7 m/s, brake smoothly, always facing the net.
     for (size_t i = 0; i < on.size(); i++) {
       Pl& p = on[i]; bool netMan = Doubles() && fabsf(p.pos.z) < 6 && (int)i != recv;
+      if (freezeT > 0 && p.team != cheatTeam) { p.vel = { 0, 0, 0 }; continue; }
+      float mul = (superT > 0 && p.team == cheatTeam) ? 2.2f : 1.f;
       if (phase == "rally" && (int)i == recv) p.goal = { Clamp(hitPt.x - HandSide(p.team), -DW - 1.2f, DW + 1.2f), 0, Clamp(hitPt.z, -HL - 1.5f, HL + 1.5f) };
       else if (phase == "rally") { float bx2 = live ? bp.x : 0; p.goal = { Clamp(bx2 * 0.35f + (netMan ? (p.goal.x > 0 ? 1.2f : -1.2f) : 0), -3, 3), 0, Side(p.team) * (netMan ? 3.5f : HL + 0.4f) }; }
       Vector3 d = Vector3Subtract(p.goal, p.pos); d.y = 0; float l = Vector3Length(d);
-      Vector3 want = l > 0.02f ? Vector3Scale(d, fminf((p.pid < 0 || P(p.pid).bot) ? AI_RUN[level] : 7.0f, l * 4.0f) / l) : Vector3{ 0, 0, 0 };
-      Vector3 dv = Vector3Subtract(want, p.vel); float dl = Vector3Length(dv), acc = 28 * dt;
+      Vector3 want = l > 0.02f ? Vector3Scale(d, fminf(((p.pid < 0 || P(p.pid).bot) ? AI_RUN[level] : 7.0f) * mul, l * 4.0f) / l) : Vector3{ 0, 0, 0 };
+      Vector3 dv = Vector3Subtract(want, p.vel); float dl = Vector3Length(dv), acc = 28 * dt * mul;
       if (dl > acc) dv = Vector3Scale(dv, acc / dl);
       if (dl > 5.5f && Vector3Length(p.vel) > 1.8f && squeakT <= 0) { Sfx("squeak"); squeakT = 0.4f; }   // shoes on the hard court
       p.vel = Vector3Add(p.vel, dv); p.pos = Vector3Add(p.pos, Vector3Scale(p.vel, dt));
@@ -413,6 +444,7 @@ struct Tennis : Classic {
     }
     { Camera3D rc = rig.Go(wp, wt, wf, k); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     if (smashLive && live) cine::Follow(bp);
+    if (g_dbg == 23) { cam.position = { 1.0f, 8.5f, -19.0f }; cam.target = { 0, 0, 1.0f }; cam.fovy = 55; }   // debug: the whole court, from above the baseline
     if ((g_dbg == 7 || g_dbg == 22) && !on.empty()) { Pl& q = on[0]; cam.position = { q.pos.x + 2.2f, 1.6f, q.pos.z + (q.team ? -2.6f : 2.6f) }; cam.target = { q.pos.x + 0.3f, 1.0f, q.pos.z }; cam.fovy = 40; }
     UI::Sky(Hex(0x4a90e2), Hex(0xcfe8ff));
     lit.Begin(cam, { 0.75f, 0.85f, 0.95f }, 0.004f);
@@ -606,6 +638,7 @@ struct Tennis : Classic {
         else lit.Draw(prim.cube, TRS({ copysignf(Doubles() ? DW : HW, var.at.x), 0.02f, var.at.z }, { 0, 0, 0 }, { 0.055f, 0.006f, 1.6f }), lc);
       }
     }
+    DrawKids();
     fx.Draw(); conf.Draw();
     EndMode3D();
     // scoreboard

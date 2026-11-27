@@ -463,6 +463,15 @@ body.landing { overflow: auto; touch-action: auto; user-select: auto; -webkit-us
 .bwBump { appearance: none; border: 0; border-radius: 14px; padding: 5px 11px; font: 800 12px/1 system-ui, sans-serif; letter-spacing: .04em; color: #cfd6ee; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .18); -webkit-tap-highlight-color: transparent; }
 .bwBump.on { color: #1b1236; background: #ffd43b; box-shadow: none; }
 .bwBump:disabled { opacity: .5; }
+/* ===== owner cheats ===== */
+.owBox { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(5, 5, 20, .72); }
+.owCard { width: min(300px, 86vw); padding: 18px; border-radius: 22px; background: #16173a; box-shadow: 0 0 0 2px rgba(255, 212, 59, .5); text-align: center; }
+.owCard b { font-size: 34px; } .owCard input { width: 100%; margin: 10px 0; padding: 12px; border-radius: 12px; border: 0; font: 700 18px system-ui; text-align: center; letter-spacing: .1em; box-sizing: border-box; }
+.owRow { display: flex; gap: 10px; } .owRow button { flex: 1; padding: 11px; border: 0; border-radius: 12px; font: 800 15px system-ui; background: rgba(255, 255, 255, .14); color: #fff; } .owRow #owGo { background: #ffd43b; color: #1b1236; }
+.owCrown { position: fixed; left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 60; width: 40px; height: 40px; border-radius: 50%; border: 0; font-size: 20px; background: rgba(255, 212, 59, .22); backdrop-filter: blur(6px); opacity: .6; }
+.owPanel { position: fixed; left: 8px; right: 8px; bottom: calc(56px + env(safe-area-inset-bottom)); z-index: 70; padding: 12px; border-radius: 22px; background: rgba(18, 16, 48, .96); box-shadow: 0 10px 34px rgba(0, 0, 0, .5), inset 0 0 0 1.5px rgba(255, 212, 59, .45); }
+.owHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; } .owHead b { color: #ffd43b; letter-spacing: .08em; } .owHead button { border: 0; background: none; color: #fff; font-size: 18px; }
+.owGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .owGrid button { padding: 12px 6px; border: 0; border-radius: 14px; font: 800 14px system-ui; color: #fff; background: rgba(255, 255, 255, .12); } .owGrid button.done { background: #51cf66; color: #0b2a12; }
 .bwWrap { position: relative; flex: 1; min-height: 0; border-radius: 20px; overflow: hidden; background: #17102e; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .14), 0 8px 24px rgba(0, 0, 0, .35); touch-action: none; }
 .bowlPad:not(.mine) .bwWrap { opacity: .92; }
 .bwWrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

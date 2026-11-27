@@ -74,6 +74,8 @@
       }
       case 'act': if (S.state === 'game' && S.game && S.game.onAct) S.game.onAct(p, m); break;
       case 'react': reactFx(p, String(m.e || '').slice(0, 4)); break;
+      case 'owner': ownerTry(p, m); break;
+      case 'cheat': if (p.owner) runCheat(p, m); break;
       case 'pump': if (S.state === 'game' && S.game && S.game.onPump) S.game.onPump(p, +m.n || 1); break;
       case 'ready': if (S.state === 'intro') { S.ready.add(p); renderReady(); if (humans().filter(h => !h.cam).every(h => S.ready.has(h))) launchSoon(0.8); } break;
       case 'camOn': p.isCam = true; p.input = { x: 0, y: 0, a: false, b: false }; banner('📷 AI camera is ON — step into view!', 2200, '#a5d8ff'); renderPlayers(); if (S.state === 'home') sendLobby(); break;
@@ -323,7 +325,7 @@
     const TR = { show: 'party', cards: 'lounge' };
     const tr = S.def.id === 'song' || S.def.id === 'chairs' ? null : TR[S.def.cat];
     if (SFX.setTrack) { SFX.setTrack(tr || (S.def.id === 'chairs' ? 'party' : 'menu')); if (tr) setTimeout(() => S.state === 'game' && SFX.musicOn(), 900); }
-    S.state = 'game'; show('game');
+    S.state = 'game'; S.speed = 1; show('game');
     try { S.game = S.def.make(makeCtx()); S.game.start(); }
     catch (e) { console.error(e); banner('Oops — that game crashed', 2000, '#ff4d6d'); toHome(); }
   }
@@ -343,6 +345,26 @@
       shake(a) { shakeAmt = Math.max(shakeAmt, a); },
       finish(results) { endGame(results); },
     };
+  }
+
+  // ---------- owner cheats: the code is checked here, on the TV (see owner.js: only a slow salted fingerprint of it is in the source) ----------
+  function ownerTry(p, m) {
+    const now = Date.now(); if ((p.ownerBlock || 0) > now) { send(p, { t: 'owner', ok: false, wait: Math.ceil((p.ownerBlock - now) / 1000) }); return; }
+    Promise.resolve().then(() => ownerCheck(m.code)).catch(() => false).then(ok => {
+      if (ok) { p.owner = true; p.ownerFails = 0; send(p, { t: 'owner', ok: true }); }
+      else { p.owner = false; p.ownerFails = (p.ownerFails || 0) + 1; if (p.ownerFails >= 5) { p.ownerBlock = Date.now() + 60000; p.ownerFails = 0; } send(p, { t: 'owner', ok: false }); }   // five wrong codes: a minute's wait
+    });
+  }
+  function runCheat(p, m) {
+    const c = String(m.c || ''), g = S.game, ps = (g && g.ps) || humans(), done = () => send(p, { t: 'cheatok', c });
+    if (c === 'speed') { S.speed = [0.4, 1, 1.8].includes(+m.a) ? +m.a : 1; return done(); }
+    if (c === 'confetti') { confettiDom(120); SFX.cheer && SFX.cheer(1.6); return done(); }
+    if (S.state !== 'game' || !g) return;
+    if (c === 'win') { endGame([{ p, stat: '👑' }, ...ps.filter(q => q !== p).map(q => ({ p: q, stat: '' }))]); return; }   // you finish first
+    if (c === 'end') { endGame(ps.map(q => ({ p: q, stat: '' }))); return; }
+    if (c.startsWith('n:') && g.ready && typeof NATIVE !== 'undefined' && NATIVE.mod) {   // a cheat that one of the C++ games knows (bowling, tennis)
+      const i = ps.indexOf(p); if (i >= 0) { NATIVE.mod.ccall('cc_act', null, ['number', 'string', 'number', 'number'], [i, 'cheat:' + c.slice(2), +m.a || 0, 0]); done(); }
+    }
   }
 
   // ---------- results / party flow ----------
@@ -472,6 +494,7 @@
     const film = window.CCFILM;   // debug recording only: the frame advances when asked, by a fixed step
     if (film) { if (!film.pending) { requestAnimationFrame(frame); return; } film.pending--; dt = film.dt; film.done++; }
     else { perfTick(Math.min(0.25, (t - (frame.pt || t)) / 1000)); frame.pt = t; }
+    if (S.state === 'game' && S.speed && S.speed !== 1) dt = Math.min(0.09, dt * S.speed);   // an owner cheat: slow motion or fast forward
     g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
     if (S.state === 'home' || S.state === 'intro' || S.state === 'boot') {
       sg.clearRect(0, 0, snowCv.width, snowCv.height); sg.fillStyle = 'rgba(255,255,255,.75)';
