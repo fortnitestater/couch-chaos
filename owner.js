@@ -1,6 +1,6 @@
 /* Owner cheats: the code is NOT in this file, only a salted, slow (PBKDF2) fingerprint of it, so reading the source does not reveal it.
    The TV is the one that checks the code and decides who is the owner; a phone cannot skip that check. */
-const OWNER = { salt: '7fe7840f42bd7a776e466be40ae5cea8', iter: 150000, hash: '79e15979d14daa973141ea4818318ff0f050cb71b0bfebf5d41549e624f8bee1' };
+const OWNER = { salt: '23359d01925b4df8cd87fa50930da574', iter: 600000, hash: '3b5e317b2710b8d53b6b65fa946efd2202494c25fdeaa76d065d9e09bb7ecdca' };
 async function ownerCheck(code) {
   const norm = String(code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if (norm.length < 8) return false;

@@ -31,7 +31,7 @@ struct GameNight : Table {
     Vector3 f = Front(i, 4.9f); float a = SeatA(i); int m = std::min(n, 12);
     for (int k = 0; k < m; k++) { float o = (k - (m - 1) / 2.f) * 0.32f; BigCard({ f.x - sinf(a) * o, 0.05f + k * 0.012f, f.z + cosf(a) * o * 0.8f }, -a - PI / 2 + (k - (m - 1) / 2.f) * 0.05f, BLANK, "", 0.62f, true, backC); }
   }
-  void LogBar() { if (!log.empty()) { float w = Measure(log, 24, TS_HEAVY) + 70; RRect(800 - w / 2, 92, w, 48, 24, Hex(0x0a1230, 210), Hex(0x0a1230, 210), Hex(0xffffff, 150), 1.5f, false, true); Text(800, 116, 24, WHITE, log, 0, TS_HEAVY | TS_PLAIN); } }
+  void LogBar() { if (!log.empty()) { float w = Measure(log, 24, TS_HEAVY) + 70; RRect(800 - w / 2, 130, w, 48, 24, Hex(0x0a1230, 210), Hex(0x0a1230, 210), Hex(0xffffff, 150), 1.5f, false, true); Text(800, 154, 24, WHITE, log, 0, TS_HEAVY | TS_PLAIN); } }
 };
 
 // ===================================================================================== COLOR STORM
@@ -149,6 +149,15 @@ struct Storm : GameNight {
     SeatNames([&](int i) { return std::to_string(hand[i].size()) + " cards" + (lcP == i ? (lcSafe ? " · ☝" : " · ⚠️ 1!") : ""); });
     Board("🌪️ CARDS LEFT", Sorted([&](int i) { return -(float)hand[i].size(); }), [&](int i) { return std::to_string(hand[i].size()); });
     Title("COLOR STORM", Hex(0xffe066));
+    if (!over && !pile.empty()) {   // the card to match, big enough to read from the couch
+      const SCard& t = Top(); float cx = 1470, cy = 400, w = 150, h = 214;
+      Text(cx, cy - h / 2 - 20, 20, WHITE, "MATCH THIS", 0, TS_HEAVY | TS_SHADOW);
+      RRect(cx - w / 2 + 6, cy - h / 2 + 8, w, h, 20, Hex(0, 90), Hex(0, 90), BLANK, 0);
+      RRect(cx - w / 2, cy - h / 2, w, h, 20, Hex(0xfbfbf6), Hex(0xe6e6dc), BLANK, 0);
+      RRect(cx - w / 2 + 9, cy - h / 2 + 9, w - 18, h - 18, 14, cc, Shade(cc, -0.25f), BLANK, 0);
+      std::string sy = SSym(t); Text(cx, cy + 4, sy.size() > 3 ? 60 : 84, WHITE, sy, 0, TS_DISPLAY | TS_SHADOW);
+      Text(cx, cy + h / 2 + 22, 22, cc, SC_N[color], 0, TS_HEAVY | TS_SHADOW);
+    }
     LogBar();
     if (!over && !P(turn).bot) { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(fmaxf(0, timer))); Text(1540, 50, 34, timer < 8 ? Hex(0xff4d6d) : WHITE, b, 0, TS_DISPLAY | TS_SHADOW); }
     Hint(std::string("Colour now: ") + SC_N[color] + "  ·  match colour or symbol  ·  +2 stacks  ·  ⛔ skip  ·  ↺ reverse", cc);
@@ -346,7 +355,7 @@ struct Tycoon : GameNight {
   void Act(int p, const std::string& k, int, float) override {
     if (over || p != turn || k.rfind("btn:", 0) != 0) return;
     std::string id = k.substr(4); St& s = st[p];
-    if (state == "roll" && id == "roll") { dice[0] = irand(1, 6); dice[1] = irand(1, 6); state = "moving"; rollAnim = 0.9f; steps = dice[0] + dice[1]; stepT = 0.25f; Sfx("dice"); Sync(); return; }
+    if (state == "roll" && id == "roll") { dice[0] = irand(1, 6); dice[1] = irand(1, 6); state = "moving"; rollAnim = 0.9f; steps = dice[0] + dice[1]; stepT = 0.25f; log = "🎲 " + P(p).name + " rolled " + std::to_string(steps) + "!"; Sfx("dice"); Sync(); return; }
     if (state == "roll" && id.rfind("build_", 0) == 0) { int i = atoi(id.c_str() + 6); auto b = Buildable(p); if (std::find(b.begin(), b.end(), i) == b.end()) return; s.cash -= TB[i].p / 2; cab[i]++; log = std::string("🏠 ") + P(p).name + " built a cabin on " + TB[i].n + "!"; Sfx("pickup"); Sync(); return; }
     if (state == "buy" && id == "buy") { const Sq& b = TB[s.pos]; if (s.cash < b.p) return; s.cash -= b.p; own[s.pos] = p; log = "💰 " + P(p).name + " bought " + b.n + "!"; Sfx("win"); fx.Burst(Cell3(s.pos, 0.6f), 20, P(p).color, 4, 0.7f, 0.1f); if (b.g >= 0 && HasSet(p, b.g)) Banner("⭐ " + P(p).name + " owns all " + TYN[b.g] + "!", 1600, Hx(Hex(TYC[b.g])).c_str()); EndTurn(); return; }
     if (state == "buy" && id == "pass") { log = P(p).name + " passed on " + TB[s.pos].n; EndTurn(); return; }
@@ -437,12 +446,12 @@ struct Tycoon : GameNight {
         if (side == 0) o.z = -c * 0.34f; else if (side == 2) o.z = c * 0.34f; else { sc = { bandD, 0.02f, bandW }; o.x = side == 1 ? c * 0.34f : -c * 0.34f; }
         lit.Draw(prim.cube, TRS({ p.x + o.x, p.y + 0.04f, p.z + o.z }, { 0, 0, 0 }, sc), Hex(TYC[b.g])); }
       for (int k = 0; k < cab[i]; k++) { Vector3 q = { p.x - 0.35f + k * 0.35f, p.y + 0.15f, p.z }; lit.Draw(prim.cube, TRS(q, { 0, 0, 0 }, { 0.26f, 0.22f, 0.26f }), Hex(0xc0703a)); lit.Draw(prim.cone, TRS({ q.x, q.y + 0.11f, q.z }, { 0, PI / 4, 0 }, { 0.26f, 0.2f, 0.26f }), Hex(0xe03131)); }
-      Label({ p.x, p.y + 0.06f, p.z + (b.i[0] ? 0.18f : 0) }, c * 0.8f, b.n, Hex(0x0a1024), 0.36f);
-      if (b.i[0]) Label({ p.x, p.y + 0.07f, p.z - 0.25f }, c * 0.8f, b.i, WHITE, 0.6f);
-      else if (b.p) Label({ p.x, p.y + 0.07f, p.z + 0.48f }, c * 0.8f, own[i] >= 0 ? "rent $" + std::to_string(Rent(i)) : "$" + std::to_string(b.p), own[i] >= 0 ? Hex(0xc92a2a) : Hex(0x495057), 0.32f);
+      if (b.i[0]) { Label({ p.x, p.y + 0.06f, p.z + 0.3f }, c * 0.8f, b.n, Hex(0x0a1024), 0.36f); Label({ p.x, p.y + 0.07f, p.z - 0.3f }, c * 0.8f, b.i, WHITE, 0.6f); }
+      else if (b.p) Label({ p.x, p.y + 0.06f, p.z + 0.1f }, c * 0.8f, std::string(b.n) + "\n" + (own[i] >= 0 ? "rent $" + std::to_string(Rent(i)) : "$" + std::to_string(b.p)), own[i] >= 0 ? Hex(0x7a1010) : Hex(0x0a1024), 0.44f);   // name over price, on one label: they can no longer collide
+      else Label({ p.x, p.y + 0.06f, p.z }, c * 0.8f, b.n, Hex(0x0a1024), 0.36f);
     }
     // dice in the middle
-    for (int k = 0; k < 2; k++) Die({ -0.9f + k * 1.8f, -0.15f, 0.6f }, rollAnim > 0 ? irand(1, 6) : dice[k], rollAnim, 0.95f);
+    for (int k = 0; k < 2; k++) Die({ -0.5f + k * 1.0f, -0.15f, 1.0f }, rollAnim > 0 ? irand(1, 6) : dice[k], rollAnim, 0.5f);   // real dice size: they used to be nearly as big as a square
     // tokens: little characters hopping round the board
     for (int i = 0; i < N(); i++) {
       if (st[i].out) continue; Vector3 p = Cell3(st[i].pos, -0.1f); float ox = ((i % 3) - 1) * 0.42f, oz = (i / 3 - 0.5f) * 0.42f;

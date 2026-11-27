@@ -159,7 +159,7 @@ struct Bowling : Classic {
   std::vector<Lane> lanes; Texture2D carpet{}, banner{}, neon{}, ads{};
   // the phone's plan for this ball: where it starts (bxn, -1..1 screen-right), its slope (baimN), its late curve (bhookN), how hard (bpowN)
   float bxn = 0, bxs = 0, baimN = 0, bhookN = 0, bpowN = 0.7f, sendT = 0; bool aimLive = false; std::string res;
-  std::vector<int> order, pts, strikes; int ti = -1, cur = 0, roll = 0, firstDown = 0, frames = 3, frameNo = 1, startMask = 1023;
+  std::vector<int> order, pts, strikes, streak; int ti = -1, cur = 0, roll = 0, firstDown = 0, frames = 3, frameNo = 1, startMask = 1023;
   std::string phase = "aim", pop; Color popC = WHITE; float wait = 0, rollT = 0, aim = 0, camZ = -3, ts = 1, popT = 0, partyT = 3; bool again = false, fin = false, shot = false, crash = false;
   // a throw in progress: the bowler walks up and swings (windT), and lets go at W_REL
   float windT = 0, wx = 0, wslope = 0, wvz = 8, whk = 0; bool wlet = false, bumpers = true; Shot camFrom{};   // bumpers: up on every lane (any bowler can switch them with the button on their phone)
@@ -173,7 +173,7 @@ struct Bowling : Classic {
   ~Bowling() { for (Texture2D* t : { &carpet, &banner, &neon, &ads }) if (t->id) UnloadTexture(*t); Sfx("bowlRollOff"); Sfx("bowlGutterOff"); Sfx("bowlAmbienceOff"); }
 
   void Start() override {
-    InitCam(58); g_cineK = 0; frames = N() > 4 ? 2 : 3; pts.assign(N(), 0); strikes.assign(N(), 0);
+    InitCam(58); g_cineK = 0; frames = N() > 4 ? 2 : 3; pts.assign(N(), 0); strikes.assign(N(), 0); streak.assign(N(), 0);
     for (int f = 0; f < frames; f++) for (int i = 0; i < N(); i++) order.push_back(i);
     for (int k = LMIN; k <= LMAX; k++) {
       Lane L; L.k = k; L.kind = k == BIRTHDAY ? 2 : k == FOOD ? 1 : 0; L.pins.Reset(); L.hsh = 5 + (unsigned)(k + 9) * 7; L.wait = frand(0.5f, 6.0f);
@@ -280,7 +280,7 @@ struct Bowling : Classic {
     if (k.rfind("bowl:", 0) == 0) { if (sscanf(k.c_str() + 5, "%f|%f|%f", &a, &b, &c) == 3) Throw(a, b, c, Clamp(pw, 0.18f, 1.f)); return; }
     if (k.rfind("swing", 0) == 0) Release(Clamp(pw > 0 ? pw : 0.6f, 0.25f, 1.f));
   }
-  void StrikeShot(bool st) { cine::Shot s; s.kind = cine::STRIKE; s.at = { 0, 0.25f, 19.0f }; s.size = 0.55f; s.c = st ? Hex(0xffd43b) : Hex(0x51cf66); s.caption = st ? "STRIKE!" : "SPARE!"; s.sub = P(cur).name; s.floorY = 0; s.face = { 0, 0, 1 }; s.elev = 0.2f; cine::Play(s); }
+  void StrikeShot(bool st) { cine::Shot s; s.kind = cine::STRIKE; s.at = { 0, 0.25f, 19.0f }; s.size = 0.55f; s.c = st ? Hex(0xffd43b) : Hex(0x51cf66); s.caption = !st ? "SPARE!" : streak[cur] == 1 ? "DOUBLE!" : streak[cur] >= 2 ? "TURKEY!" : "STRIKE!"; s.sub = P(cur).name; s.floorY = 0; s.face = { 0, 0, 1 }; s.elev = 0.2f; cine::Play(s); }
   void DebugShot(int k) override {   // debug: a ball straight into the pocket
     if (k != cine::STRIKE) return;
     Lane& L = Mine(); phase = "roll"; roll = 0; shot = false; crash = false; rollT = 0.7f; windT = 2; wx = 0; wlet = true; startMask = 1023; firstDown = 0; L.pins.Reset(); L.ball = Ball(); L.ball.x = 0.07f; L.ball.z = 15.5f; L.ball.vz = 9; L.ball.on = true;
@@ -288,9 +288,13 @@ struct Bowling : Classic {
   void Score() {
     Lane& L = Mine(); ts = 1; int endMask = L.pins.Mask(), newly = 0; for (int i = 0; i < 10; i++) if (((startMask >> i) & 1) && !((endMask >> i) & 1)) newly++;
     int before = roll == 0 ? 0 : firstDown, down = before + newly, gain = newly; again = false; res = "";
-    if (roll == 0 && down == 10) { res = "STRIKE!"; gain = 20; Pop("STRIKE  +20", Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120, 1.5f, 4); Shake(10); }
-    else if (roll == 1 && down == 10) { res = "SPARE!"; gain = 15 - before; Pop("SPARE  +" + I(gain), Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
-    else { res = newly == 0 ? "MISS" : I(newly) + (newly == 1 ? " PIN" : " PINS"); Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } if (newly == 0) Sfx("ooh"); }
+    if (roll == 0 && down == 10) {   // strikes in a row pay more: a DOUBLE (+10), then a TURKEY (+15)
+      streak[cur]++; int bonus = streak[cur] == 2 ? 10 : streak[cur] >= 3 ? 15 : 0; res = streak[cur] == 2 ? "DOUBLE!" : streak[cur] >= 3 ? "TURKEY!" : "STRIKE!"; gain = 20 + bonus;
+      Pop(res + "  +" + I(gain), Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120 + 30 * (streak[cur] - 1), 1.5f, 4); Shake(10 + 3 * (streak[cur] - 1));
+      if (streak[cur] >= 3) { Banner(P(cur).name + ": TURKEY! Three strikes in a row", 2200, "#ffd43b"); Sfx("applause"); }
+    }
+    else if (roll == 1 && down == 10) { streak[cur] = 0; res = "SPARE!"; gain = 15 - before; Pop("SPARE  +" + I(gain), Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
+    else {   streak[cur] = 0; res = newly == 0 ? "MISS" : I(newly) + (newly == 1 ? " PIN" : " PINS"); Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } if (newly == 0) Sfx("ooh"); }
     if (g_dbg == 36) fprintf(stderr, "BOWL ball=%d newly=%d down=%d%c", roll, newly, down, 10);   // debug: print every result
     pts[cur] += gain; if (again) roll = 1;
     Sfx("bowlRollOff"); Sfx("bowlGutterOff"); Sfx("bowlReturn");   // the rumble stops and the ball comes back up the return

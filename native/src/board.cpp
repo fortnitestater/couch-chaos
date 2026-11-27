@@ -443,8 +443,8 @@ struct Blackjack : Table {
     for (int i = 0; i < N(); i++) { Vector3 f = Front(i, 4.4f); float a = SeatA(i); for (size_t k = 0; k < hand[i].size(); k++) { float o = (k - (hand[i].size() - 1) / 2.f) * 0.55f; CardAt({ f.x - sinf(a) * o * 1.25f, 0.05f + k * 0.01f, f.z + cosf(a) * o * 0.98f }, -a - PI / 2, true, hand[i][k], 1.05f); } }
     End3D();
     SeatNames([&](int i) { int v = Val(hand[i]); return state[i] == 2 ? std::string("💥 BUST") : state[i] == 3 ? std::string("⭐ 21!") : phase == "settle" ? (delta[i] > 0 ? "+" + std::to_string(delta[i]) : delta[i] < 0 ? std::to_string(delta[i]) : std::string("push")) : std::to_string(v); });
-    Vector2 dp = GetWorldToScreen({ 0, 0, 3.9f }, cam);
-    Text(dp.x, dp.y + 10, 26, Hex(0xffd43b), holeUp ? "Dealer: " + std::to_string(Val(dealer)) : std::string("Dealer"), 0, TS_HEAVY);
+    Vector2 dp = GetWorldToScreen({ 0, 0.05f, 5.2f }, cam);
+    Text(dp.x, dp.y + 6, 26, Hex(0xffd43b), holeUp ? "Dealer: " + std::to_string(Val(dealer)) : std::string("Dealer"), 0, TS_HEAVY);
     Board("🃏 POINTS", Sorted([&](int i) { return (float)pts[i]; }), [&](int i) { return std::to_string(pts[i]); });
     Title("Hand " + std::to_string(hno) + " of " + std::to_string(HANDS));
     if (phase == "play") { char b[8]; snprintf(b, sizeof b, "%d", (int)ceilf(fmaxf(0, t))); Text(1540, 50, 34, t < 6 ? Hex(0xff4d6d) : WHITE, b); Hint(cur >= 0 ? P(cur).name + ": HIT for another card or STAND · over 21 is a bust" : "", Hex(0xffd43b)); }

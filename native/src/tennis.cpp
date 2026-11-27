@@ -647,12 +647,13 @@ struct Tennis : Classic {
     if (!Quick()) { Text(930, 37, 22, Hex(0xffe066), I(games[0]), 0, TS_DISPLAY); Text(930, 64, 22, Hex(0xffe066), I(games[1]), 0, TS_DISPLAY); }
     Text(1010, 37, 22, WHITE, Score(0), 0, TS_DISPLAY); Text(1010, 64, 22, WHITE, Score(1), 0, TS_DISPLAY);
     if (!Quick()) Text(930, 20, 11, Hex(0xc9d3f2), "GAMES", 0, TS_PLAIN | TS_SPACED); Text(1010, 20, 11, Hex(0xc9d3f2), "PTS", 0, TS_PLAIN | TS_SPACED);
-    { static const char* LV[] = { "😊 EASY · first to 3 points", "🎾 NORMAL · first to 5 points", "🔥 HARD · classic: deuce, first to 2 games" }; Text(800, 100, 16, Hex(level == 0 ? 0x8ce99a : level == 1 ? 0xffe066 : 0xff8787), LV[level], 0, TS_HEAVY | TS_PLAIN); }
+    { static const char* LV[] = { "😊 EASY · first to 3 points", "🎾 NORMAL · first to 5 points", "🔥 HARD · classic: deuce, first to 2 games" }; float lw = Measure(LV[level], 16, TS_HEAVY | TS_PLAIN) + 34; RRect(800 - lw / 2, 87, lw, 27, 13.5f, Color{ 8, 14, 36, 185 }, Color{ 8, 14, 36, 185 }, BLANK, 0); Text(800, 101, 16, Hex(level == 0 ? 0x8ce99a : level == 1 ? 0xffe066 : 0xff8787), LV[level], 0, TS_HEAVY | TS_PLAIN); }
     if (TimeLimit() > 0 && phase != "end" && phase != "intro") {   // the match clock
       float left = fmaxf(0.f, TimeLimit() - matchT); char tb[48]; if (timeUp) snprintf(tb, sizeof tb, "OVERTIME · first to lead wins"); else snprintf(tb, sizeof tb, "⏱ %d:%02d", (int)left / 60, (int)left % 60);
-      Text(800, 122, 15, Hex(timeUp || left < 20 ? 0xff8787 : 0xc9d3f2), tb, 0, TS_HEAVY | TS_PLAIN);
+      float cw = Measure(tb, 15, TS_HEAVY | TS_PLAIN) + 30; RRect(800 - cw / 2, 116, cw, 24, 12, Color{ 8, 14, 36, 185 }, Color{ 8, 14, 36, 185 }, BLANK, 0);
+      Text(800, 128, 15, Hex(timeUp || left < 20 ? 0xff8787 : 0xc9d3f2), tb, 0, TS_HEAVY | TS_PLAIN);
     }
-    for (auto& p : on) if (p.pid >= 0) { Vector2 s = GetWorldToScreen({ p.pos.x, 2.2f, p.pos.z }, cam); Text(s.x, s.y, 18, P(p.pid).color, P(p.pid).name, 0, TS_HEAVY); }
+    for (auto& p : on) if (p.pid >= 0) { Vector2 s = GetWorldToScreen({ p.pos.x, 2.2f, p.pos.z }, cam); if (s.y < 150 && s.x > 480 && s.x < 1120) continue; Text(s.x, s.y, 18, P(p.pid).color, P(p.pid).name, 0, TS_HEAVY); }
     if (phase == "serve" && server >= 0 && tossT < 0) { Pl& s = on[server]; Vector2 sp = GetWorldToScreen({ s.pos.x, 2.7f, s.pos.z }, cam); if (camShot == 1) sp = { 800, 760 }; /* the close-up: under the server, clear of the umpire's caption */ Text(sp.x, sp.y, 26, Hex(0xffe066), s.pid >= 0 && !P(s.pid).bot ? "SWING TO SERVE!" : "serving…", 0, TS_DISPLAY | TS_SHADOW); }
     if (talkT > 0 && !talk.empty()) {   // who is talking: a bubble over their head
       Vector3 hp = talker == 0 ? Vector3{ -DW - 1.6f, 4.25f, 0 } : Vector3Add(JudgePos(talker - 1), { 0, 2.05f, 0 });

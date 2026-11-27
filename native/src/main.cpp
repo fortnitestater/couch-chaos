@@ -63,10 +63,10 @@ uniform sampler2D shadowMap; uniform mat4 lightVP; uniform float shOn; uniform f
 float unpackD(vec4 c) { return dot(c, vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0)); }
 float sunShadow(vec3 p, vec3 n, float nd) {
   if (shOn < 0.5) return 1.0;
-  vec4 lp = lightVP * vec4(p + n * 0.035, 1.0);
+  vec4 lp = lightVP * vec4(p + n * (0.035 + 0.075 * (1.0 - clamp(nd, 0.0, 1.0))), 1.0);
   vec3 q = lp.xyz * 0.5 + 0.5;
   if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0) return 1.0;
-  float bias = 0.0005 + 0.0016 * (1.0 - clamp(nd, 0.0, 1.0));
+  float bias = 0.0006 + 0.0022 * (1.0 - clamp(nd, 0.0, 1.0));
   float s = 0.0;
   for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
     vec2 o = vec2(float(x), float(y)) * shTex * 1.5;

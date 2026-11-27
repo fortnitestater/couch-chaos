@@ -3,6 +3,7 @@
 
 #include "classic.h"
 #include "kit.h"
+#include "rlgl.h"
 
 namespace {
 
@@ -450,7 +451,8 @@ struct Tug : Classic {
 // =====================================================================================
 struct Hockey : Classic {
   struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; };
-  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0, pspin = 0, pang = 0; int score[2] = { 0, 0 }, last = -1; bool over = false;
+  std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0, pspin = 0, pang = 0, flash = 0; int score[2] = { 0, 0 }, last = -1, flashSide = 1; bool over = false, sudden = false; Color flashCol = WHITE; Texture2D tabTex{};
+  ~Hockey() { if (tabTex.id) UnloadTexture(tabTex); }
   const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 125, MR = 46, PR = 26;
   void Start() override {
     InitCam(40); sc.Init(26, 17, true);
@@ -461,6 +463,23 @@ struct Hockey : Classic {
     pause = 0.6f; px = 800 + (rand() % 2 ? 150.f : -150.f);
   }
   float snapT = 0;
+  // the table top is drawn once into a texture: air-hockey holes, the red and blue halves, goal creases, the centre circle and face-off dots
+  void BuildTable() {
+    if (tabTex.id) return;
+    const int TW = 1024, TH = 512; const float kx = TW / 1100.f, ky = TH / 600.f;
+    Image im = GenImageColor(TW, TH, Color{ 150, 178, 214, 255 });
+    ImageDrawRectangle(&im, 0, 0, TW / 2, TH, Color{ 196, 160, 184, 255 }); ImageDrawRectangle(&im, TW / 2, 0, TW / 2, TH, Color{ 146, 176, 226, 255 });
+    for (int gy = 7; gy < TH; gy += 14) for (int gx = 7 + ((gy / 14) & 1) * 7; gx < TW; gx += 14) ImageDrawCircle(&im, gx, gy, 1, Color{ 96, 120, 160, 255 });
+    for (int r = -3; r <= 3; r++) {   // creases in front of each goal and the centre circle, a few pixels thick
+      ImageDrawCircleLines(&im, 0, TH / 2, (int)(190 * kx) + r, Color{ 255, 120, 140, 255 }); ImageDrawCircleLines(&im, TW, TH / 2, (int)(190 * kx) + r, Color{ 90, 180, 255, 255 });
+      ImageDrawCircleLines(&im, TW / 2, TH / 2, (int)(125 * kx) + r, Color{ 225, 235, 255, 255 });
+    }
+    ImageDrawRectangle(&im, TW / 2 - 3, 0, 6, TH, Color{ 255, 90, 110, 255 });
+    ImageDrawCircle(&im, TW / 2, TH / 2, 12, Color{ 240, 76, 90, 255 });
+    for (int sx = 0; sx < 2; sx++) for (int sy = 0; sy < 2; sy++) ImageDrawCircle(&im, (int)(TW * (sx ? 0.75f : 0.25f)), (int)(TH * (sy ? 0.75f : 0.25f)), 8, sx ? Color{ 70, 150, 235, 255 } : Color{ 238, 96, 112, 255 });
+    tabTex = LoadTextureFromImage(im); UnloadImage(im);
+    if (tabTex.id) { GenTextureMipmaps(&tabTex); SetTextureFilter(tabTex, TEXTURE_FILTER_TRILINEAR); }
+  }
   // the phone shows the table from your own end: your goal at the bottom, theirs at the top
   Vector2 ToPhone(int tm, float x, float y) { float u = (x - 800) / 550, v = (y - CY) / 300; return tm == 0 ? Vector2{ (v + 1) / 2, (1 - u) / 2 } : Vector2{ (1 - v) / 2, (1 + u) / 2 }; }
   Vector2 FromPhone(int tm, Vector2 s) { float u = tm == 0 ? 1 - 2 * s.y : 2 * s.y - 1, v = tm == 0 ? 2 * s.x - 1 : 1 - 2 * s.x; return { 800 + u * 550, CY + v * 300 }; }
@@ -471,7 +490,7 @@ struct Hockey : Classic {
       std::vector<TouchObj> o; int tm = m[i].team;
       Vector2 p = ToPhone(tm, px, py); o.push_back({ p.x, p.y, PR / 600.f, Hex(0x212529), 0 });
       for (int j = 0; j < N(); j++) { Vector2 q = ToPhone(tm, m[j].x, m[j].y); o.push_back({ q.x, q.y, MR / 600.f, P(j).color, j == i ? 1 : m[j].team == tm ? 2 : 3 }); }
-      char b[48]; snprintf(b, sizeof b, "YOU %d - %d THEM", score[tm], score[1 - tm]);
+      char b[64]; snprintf(b, sizeof b, "YOU %d - %d THEM%s", score[tm], score[1 - tm], sudden ? " · GOLDEN GOAL" : "");
       SendSnap(i, o, b);
     }
   }
@@ -489,11 +508,12 @@ struct Hockey : Classic {
   void DebugShot(int k) override { if (k == cine::GOAL) GoalShot(0); else if (k == cine::WIN) { score[0]++; WinShotH(); score[0]--; } }
   void Goal(int tm) {
     score[tm]++; if (last >= 0 && m[last].team == tm) m[last].goals++;
+    flash = 1; flashSide = tm == 0 ? 1 : -1; flashCol = tm == 0 ? Hex(0xff6b6b) : Hex(0x4dabf7);
     Sfx("boom"); Sfx("cheer"); Shake(10);
     float gx = tm == 0 ? R : L; conf.Spawn(W3(gx, CY, 2), 100, 2, 4); fx.Burst(W3(gx, CY, 0.5f), 30, tm == 0 ? Hex(0xff6b6b) : Hex(0x4dabf7), 8, 0.7f, 0.2f);
     GoalShot(tm);
     px = tm == 0 ? 800 + 160 : 800 - 160; py = CY; pvx = pvy = 0; pause = 1.3f; last = -1;
-    if (score[tm] >= 7) endIn = 2.6f;
+    if (score[tm] >= 7 || sudden) endIn = 2.6f;
   }
   void End() {
     over = true; int w = score[0] == score[1] ? -1 : score[0] > score[1] ? 0 : 1;
@@ -501,13 +521,18 @@ struct Hockey : Classic {
     FinishOrder(o, [&](int i) { return std::to_string(score[m[i].team]) + "-" + std::to_string(score[1 - m[i].team]) + (m[i].goals ? " · " + std::to_string(m[i].goals) + " goals" : std::string("")); });
   }
   void Update(float dt) override {
-    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt);
+    time += dt; fx.Update(dt); conf.Update(dt); Snap(dt); flash = fmaxf(0, flash - dt * 0.7f);
     if (Counting(dt, "FACE OFF!")) return;
     if (over) return;
     if (endIn > 0) { endIn -= dt; if (endIn <= 0) End(); return; }
-    T -= dt; pause -= dt; sndT -= dt;
+    if (!sudden) T -= dt; pause -= dt; sndT -= dt;
     stuckT = hypotf(pvx, pvy) < 140 ? stuckT + dt : 0; if (stuckT > 2.2f) stuckT = 0;
-    if (T <= 0) { WinShotH(); endIn = 3.4f; return; }
+    if (g_dbg == 91 && !sudden && T > 2) T = 2;                                       // debug: jump to the end of the clock
+    if (g_dbg == 92 && sudden && pause <= 0 && endIn <= 0) Goal(0);                  // debug: score the golden goal
+    if (T <= 0 && !sudden) {
+      if (score[0] == score[1]) { sudden = true; T = 0; Banner("GOLDEN GOAL! Next goal wins", 2400, "#ffd43b"); Sfx("alarm"); px = 800; py = CY; pvx = pvy = 0; pause = 1.4f; }   // a tie is never the end: the next goal wins
+      else { WinShotH(); endIn = 3.4f; return; }
+    }
     for (int i = 0; i < N(); i++) {
       M& q = m[i]; Vector2 in;
       if (P(i).bot) {
@@ -581,7 +606,7 @@ struct Hockey : Classic {
   void Draw() override {
     { // lower and closer than a top-down view (the phone shows the whole table); the camera leans with the puck
       Vector3 pw = W3(px, py); float sw = sinf(time * 0.1f);
-      Camera3D rc = rig.Go({ pw.x * 0.12f + 1.2f * sw, 13.0f, 19.8f }, { pw.x * 0.25f, 0, 0.7f }, 42, 1.6f); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
+      Camera3D rc = rig.Go({ pw.x * 0.1f + 1.0f * sw, 15.6f, 24.6f }, { pw.x * 0.2f, 0, 0.9f }, 42, 1.6f); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     UI::Sky(Hex(0x0d0826), Hex(0x24124f));
     lit.Begin(cam, { 0.06f, 0.04f, 0.14f }, 0.005f);
     BeginMode3D(cam);
@@ -597,32 +622,45 @@ struct Hockey : Classic {
       DrawCube({ cx, 9.5f + (od ? 0.8f : 0), -15.2f }, 3.6f, 0.16f, 0.1f, nc);
     }
     for (int sd = -1; sd <= 1; sd += 2) DrawCube({ sd * 19.f, 0.03f, 0.8f }, 0.2f, 0.02f, 24, sd < 0 ? Hex(0xff4d8d) : Hex(0x3dd6ff));
+    BuildTable();
     float w = (R - L) * SC, d = (BOT - TOP) * SC; Vector3 c = W3(800, CY);
     for (int lg = 0; lg < 4; lg++) lit.Draw(prim.cube, TRS({ c.x + (lg % 2 ? 1 : -1) * (w / 2 - 0.6f), -1.6f, c.z + (lg / 2 ? 1 : -1) * (d / 2 - 0.6f) }, { 0, 0, 0 }, { 0.6f, 3.2f, 0.6f }), Hex(0x343a40));
     lit.Draw(prim.cube, TRS({ c.x, -0.35f, c.z }, { 0, 0, 0 }, { w + 1.2f, 0.6f, d + 1.2f }), Hex(0x1c2541));
     lit.Draw(prim.cube, TRS({ c.x, -0.05f, c.z }, { 0, 0, 0 }, { w, 0.1f, d }), Hex(0xf1f8ff));
-    lit.Draw(prim.cube, TRS({ c.x, 0.01f, c.z }, { 0, 0, 0 }, { 0.12f, 0.02f, d }), Hex(0xfa5252));
-    DrawCircle3D({ c.x, 0.02f, c.z }, 2.2f, { 1, 0, 0 }, 90, Hex(0x339af0));
-    for (int s = -1; s <= 1; s += 2) DrawCircle3D({ c.x + s * w / 2, 0.02f, c.z }, 3.0f, { 1, 0, 0 }, 90, Hex(0x339af0));
+    if (tabTex.id) {   // the playing surface
+      rlSetTexture(tabTex.id); rlBegin(RL_QUADS); rlColor4ub(255, 255, 255, 255);
+      rlTexCoord2f(0, 0); rlVertex3f(c.x - w / 2, 0.006f, c.z - d / 2); rlTexCoord2f(0, 1); rlVertex3f(c.x - w / 2, 0.006f, c.z + d / 2);
+      rlTexCoord2f(1, 1); rlVertex3f(c.x + w / 2, 0.006f, c.z + d / 2); rlTexCoord2f(1, 0); rlVertex3f(c.x + w / 2, 0.006f, c.z - d / 2);
+      rlEnd(); rlSetTexture(0);
+    } else lit.Draw(prim.cube, TRS({ c.x, 0.01f, c.z }, { 0, 0, 0 }, { 0.12f, 0.02f, d }), Hex(0xfa5252));
     // rails (with gaps for the goals)
     float gh = GH * SC, rail = 0.45f;
     for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ c.x, 0.2f, c.z + s * (d / 2 + 0.3f) }, { 0, 0, 0 }, { w + 1.2f, rail, 0.6f }), Hex(0xdee2e6));
     for (int s = -1; s <= 1; s += 2) for (int u = -1; u <= 1; u += 2) { float seg = (d / 2 - gh); lit.Draw(prim.cube, TRS({ c.x + s * (w / 2 + 0.3f), 0.2f, c.z + u * (gh + seg / 2) }, { 0, 0, 0 }, { 0.6f, rail, seg }), s < 0 ? Hex(0xff8787) : Hex(0x74c0fc)); lit.Draw(prim.cube, TRS({ c.x + s * (w / 2 + 0.3f), 0.0f, c.z }, { 0, 0, 0 }, { 0.62f, 0.12f, gh * 2 }), Hex(0x0b1020)); }
+    {   // neon along the rails (red half, blue half) and a light in each goal mouth: they all flash in the scorer's colour when a goal goes in
+      float pulse = 0.5f + 0.15f * sinf(time * 2.4f) + flash * 0.5f; Color rc = Fade(Hex(0xff5d73), fminf(1.f, pulse)), bc = Fade(Hex(0x4dabf7), fminf(1.f, pulse));
+      if (flash > 0.01f) { Color fc = Fade(flashCol, fminf(1.f, 0.4f + flash)); if (flashSide > 0) bc = fc; else rc = fc; }
+      for (int sd = -1; sd <= 1; sd += 2) { DrawCube({ c.x - w / 4, 0.31f, c.z + sd * (d / 2 - 0.02f) }, w / 2, 0.06f, 0.05f, rc); DrawCube({ c.x + w / 4, 0.31f, c.z + sd * (d / 2 - 0.02f) }, w / 2, 0.06f, 0.05f, bc); }
+      for (int sd = -1; sd <= 1; sd += 2) for (int u = -1; u <= 1; u += 2) { float seg = d / 2 - gh; DrawCube({ c.x + sd * (w / 2 - 0.02f), 0.31f, c.z + u * (gh + seg / 2) }, 0.05f, 0.06f, seg, sd < 0 ? rc : bc); }
+      for (int sd = -1; sd <= 1; sd += 2) { bool hot = flash > 0.01f && sd == flashSide; Color gc = sd < 0 ? Hex(0xff5d73) : Hex(0x4dabf7); DrawCube({ c.x + sd * (w / 2 + 0.3f), 0.075f, c.z }, 0.5f, 0.02f, gh * 2 - 0.2f, Fade(hot ? WHITE : gc, hot ? fminf(1.f, 0.3f + flash) : 0.3f + 0.1f * sinf(time * 3 + sd))); }
+    }
     // players stand at their end
     int j[2] = { 0, 0 };
     for (int i = 0; i < N(); i++) { int tm = m[i].team; Vector3 pos = W3(tm == 0 ? L - 95 : R + 95, CY + (j[tm]++ - 0.5f) * 170 * (N() > 2 ? 1 : 0) + (N() <= 2 ? 0 : 0)); Shadow(pos, 1.3f); DrawToon(pos, tm == 0 ? PI / 2 : -PI / 2, P(i).color, time + i, 0, 0.3f, 1.4f); }
     for (int i = 0; i < N(); i++) {
       Vector3 p = W3(m[i].x, m[i].y);
+      lit.Draw(prim.cyl, TRS({ p.x, 0.03f, p.z }, { 0, 0, 0 }, { MR * SC * 2.9f, 0.01f, MR * SC * 2.9f }), Fade(P(i).color, 0.2f));   // a glow in the player's colour under the mallet
       lit.Draw(prim.cyl, TRS(p, { 0, 0, 0 }, { MR * SC * 2, 0.28f, MR * SC * 2 }), P(i).color);
       lit.Draw(prim.cyl, TRS({ p.x, 0.28f, p.z }, { 0, 0, 0 }, { MR * SC * 1.3f, 0.06f, MR * SC * 1.3f }), Shade(P(i).color, 0.3f));
       lit.Draw(prim.cyl, TRS({ p.x, 0.28f, p.z }, { 0, 0, 0 }, { 0.75f, 0.6f, 0.75f }), Shade(P(i).color, -0.2f));
       lit.Draw(prim.sphere, TRS({ p.x, 0.9f, p.z }, { 0, 0, 0 }, { 0.8f, 0.6f, 0.8f }), Shade(P(i).color, -0.1f));
     }
     Vector3 pp = W3(px, py);
+    { float sp0 = hypotf(pvx, pvy); lit.Draw(prim.cyl, TRS({ pp.x, 0.03f, pp.z }, { 0, 0, 0 }, { PR * SC * 3.6f, 0.01f, PR * SC * 3.6f }), Hex(0xffd43b, (unsigned char)(45 + 110 * fminf(1.f, sp0 / 1100.f)))); }   // the puck glows, more the faster it goes
     lit.Draw(prim.cyl, TRS(pp, { 0, 0, 0 }, { PR * SC * 2, 0.16f, PR * SC * 2 }), Hex(0x212529));
     lit.Draw(prim.cyl, TRS({ pp.x, 0.16f, pp.z }, { 0, 0, 0 }, { PR * SC * 1.3f, 0.01f, PR * SC * 1.3f }), Hex(0xffd43b));
     lit.Draw(prim.cyl, TRS({ pp.x + cosf(pang) * PR * SC * 0.45f, 0.168f, pp.z + sinf(pang) * PR * SC * 0.45f }, { 0, 0, 0 }, { PR * SC * 0.35f, 0.006f, PR * SC * 0.35f }), Hex(0x212529));   // a mark on the puck: you can see it spin
-    if (hypotf(pvx, pvy) > 700) fx.Puff({ pp.x, 0.1f, pp.z }, Hex(0xffd43b, 120), 0.15f, 0.25f);
+    if (hypotf(pvx, pvy) > 450) fx.Puff({ pp.x, 0.1f, pp.z }, Hex(0xffd43b, 120), 0.15f, 0.25f);
     fx.Draw(); conf.Draw();
     EndMode3D();
     for (int i = 0; i < N(); i++) NameTag(Vector3Add(W3(m[i].x, m[i].y), { 0, 1.6f, 0 }), i, 17);
@@ -631,8 +669,9 @@ struct Hockey : Classic {
     UI::Box({ 560, 10, 240, 86 }, 30, Hex(0xff6b6b), Hex(0xc92a2a)); UI::Box({ 800, 10, 240, 86 }, 30, Hex(0x4dabf7), Hex(0x1864ab));
     Text(690, 54, 60, WHITE, std::to_string(score[0]), 0, TS_DISPLAY | TS_SHADOW); Text(910, 54, 60, WHITE, std::to_string(score[1]), 0, TS_DISPLAY | TS_SHADOW);
     Text(600, 54, 18, Fade(WHITE, 0.85f), "RED", 0, TS_HEAVY | TS_PLAIN); Text(1000, 54, 18, Fade(WHITE, 0.85f), "BLUE", 0, TS_HEAVY | TS_PLAIN);
-    Clock(T, 1500);
-    Text(800, 118, 18, Hex(0x495057), "First to 7", 0, TS_HEAVY | TS_PLAIN);
+    if (sudden) { UI::Box({ 1290, 14, 290, 70 }, 30, Hex(0xffd43b), Hex(0xf08c00)); Text(1435, 50, 30, Hex(0x3b2a00), "GOLDEN GOAL", 0, TS_DISPLAY | TS_PLAIN); }
+    else Clock(T, 1500);
+    Text(800, 118, 20, Fade(WHITE, 0.9f), sudden ? "Next goal wins!" : "First to 7", 0, TS_HEAVY | TS_SHADOW);
     DrawCount();
   }
 };
