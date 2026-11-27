@@ -386,7 +386,7 @@ struct Fight : Classic {
       // the damage the body has taken: head, body, legs
       const char* LB[3] = { "HEAD", "BODY", "LEGS" }; float dv[3] = { x.dH, x.dB, x.dL };
       for (int k = 0; k < 3; k++) { float px = right ? bx + bw - 76.f - k * 80.f : bx + bw * 0.62f + 14 + k * 80.f; Color dc = dv[k] > 66 ? Hex(0xff4d4d) : dv[k] > 33 ? Hex(0xff922b) : Hex(0xffd43b);
-        Text(px + 34, 90, 12, Hex(0xc9d3f2), LB[k], 0, TS_PLAIN | TS_HEAVY | TS_SPACED); RRect(px, 98, 68, 9, 4.5f, Color{ 10, 12, 28, 210 }, Color{ 10, 12, 28, 210 }, BLANK, 0); if (dv[k] > 1) RRect(px + 1, 99, fmaxf(5.f, 66 * dv[k] / 100.f), 7, 3.5f, dc, dc, BLANK, 0); }
+        Text(px + 34, 89, 14, Hex(0xdfe4f2), LB[k], 0, TS_PLAIN | TS_HEAVY | TS_SPACED); RRect(px, 98, 68, 9, 4.5f, Color{ 10, 12, 28, 210 }, Color{ 10, 12, 28, 210 }, BLANK, 0); if (dv[k] > 1) RRect(px + 1, 99, fmaxf(5.f, 66 * dv[k] / 100.f), 7, 3.5f, dc, dc, BLANK, 0); }
       if (x.bleed > 0.1f) Text(right ? bx + bw - 120 : bx + 120, by + 4, 22, Hex(0xff4d4d), "🩸", 0, TS_PLAIN);
       for (int k = 0; k < x.knockdowns; k++) Text(right ? bx + 22 + k * 26 : bx + bw - 22 - k * 26, 114, 18, Hex(0xff8787), "↓", 0, TS_HEAVY | TS_PLAIN);
     }
@@ -405,8 +405,8 @@ struct Fight : Classic {
     if (phase == "intro") { RRect(380, 230, 840, 280, 36, Color{ 8, 10, 26, 200 }, Color{ 8, 10, 26, 200 }, Color{ 255, 255, 255, 80 }, 2); Text(800, 290, 20, Hex(0xc9d3f2), "FIGHT NIGHT", 0, TS_PLAIN | TS_HEAVY | TS_SPACED); Text(800, 370, 90, WHITE, "CAGE FIGHT", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD); Text(800, 450, 26, Hex(0xdfe6ff), "Punches, kicks, blocks, blood — win by KO or by the judges", 0, TS_HEAVY | TS_PLAIN, 780); }
     if (phase == "result") { RRect(430, 180, 740, 190, 30, Color{ 8, 10, 26, 205 }, Color{ 8, 10, 26, 205 }, Color{ 255, 255, 255, 90 }, 2); Text(800, 250, 56, winner >= 0 ? f[winner].col : WHITE, verdict, 0, TS_DISPLAY | TS_SHADOW, 700);
       char sb[64]; snprintf(sb, sizeof sb, "Judges: %d – %d", judgeA, judgeB); if (method == "DECISION") Text(800, 320, 26, Hex(0xc9d3f2), sb, 0, TS_HEAVY | TS_PLAIN); }
-    if (phase == "fight" && time < 12) Text(800, 880, 18, Fade(WHITE, 0.8f), "Move with the stick · strike · BLOCK stops punches and high kicks, DODGE slips them (then counter) · low kicks cannot be blocked", 0, TS_HEAVY | TS_PLAIN);
-    Text(800, 140, 16, Fade(Hex(0xc9d3f2), 0.8f), std::string("FIGHT ") + I(bout) + " OF " + I(BOUTS), 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
+    if (phase == "fight" && time < 12) Text(800, 876, 21, Fade(WHITE, 0.92f), "BLOCK stops punches and high kicks  ·  DODGE slips a strike, then counter  ·  low kicks cannot be blocked", 0, TS_HEAVY | TS_PLAIN);
+    Text(800, 142, 20, Hex(0xdfe4f2), std::string("FIGHT ") + I(bout) + " OF " + I(BOUTS), 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
   }
 };
 }  // namespace

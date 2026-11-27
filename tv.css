@@ -70,7 +70,7 @@ body.tv { background: radial-gradient(ellipse at 20% -10%, #1f4e8c 0, transparen
 .introBody { padding: 5vh 4vw; display: flex; flex-direction: column; gap: 2vh; justify-content: center; }
 .introBody h1 { font-family: 'Bungee', Impact, sans-serif; font-weight: 400; font-size: 7vh; line-height: 1; }
 .how { list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 1.4vh; }
-.how li { counter-increment: s; display: flex; align-items: center; gap: 1.4vw; font-size: 3vh; font-weight: 800; }
+.how li { flex: none; line-height: 1.22; counter-increment: s; display: flex; align-items: center; gap: 1.4vw; font-size: 3vh; font-weight: 800; }
 .how li::before { content: counter(s); flex: none; width: 5vh; height: 5vh; border-radius: 50%; background: #ffd43b; color: #0a1024; display: grid; place-items: center; font-family: 'Bungee', Impact, sans-serif; }
 .readyRow { display: flex; flex-wrap: wrap; gap: .8vw; margin-top: 1vh; }
 .rchip { padding: .8vh 1.2vw; border-radius: 999px; font-size: 2vh; background: rgba(255,255,255,.08); border: 2px solid var(--c); }

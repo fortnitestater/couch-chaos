@@ -718,19 +718,19 @@ struct Tennis : Classic {
     Text(560, 37, 22, Hex(0xff8787), TeamName(0), -1, TS_HEAVY | TS_PLAIN); Text(560, 64, 22, Hex(0x74c0fc), TeamName(1), -1, TS_HEAVY | TS_PLAIN);
     if (!Quick()) { Text(930, 37, 22, Hex(0xffe066), I(games[0]), 0, TS_DISPLAY); Text(930, 64, 22, Hex(0xffe066), I(games[1]), 0, TS_DISPLAY); }
     Text(1010, 37, 22, WHITE, Score(0), 0, TS_DISPLAY); Text(1010, 64, 22, WHITE, Score(1), 0, TS_DISPLAY);
-    if (!Quick()) Text(930, 20, 11, Hex(0xc9d3f2), "GAMES", 0, TS_PLAIN | TS_SPACED); Text(1010, 20, 11, Hex(0xc9d3f2), "PTS", 0, TS_PLAIN | TS_SPACED);
-    { static const char* LV[] = { "😊 EASY · first to 5 points", "🎾 NORMAL · first to 7 points", "🔥 HARD · classic: deuce, first to 2 games" }; float lw = Measure(LV[level], 16, TS_HEAVY | TS_PLAIN) + 34; RRect(800 - lw / 2, 87, lw, 27, 13.5f, Color{ 8, 14, 36, 185 }, Color{ 8, 14, 36, 185 }, BLANK, 0); Text(800, 101, 16, Hex(level == 0 ? 0x8ce99a : level == 1 ? 0xffe066 : 0xff8787), LV[level], 0, TS_HEAVY | TS_PLAIN); }
+    if (!Quick()) Text(930, 21, 13, Hex(0xdfe4f2), "GAMES", 0, TS_PLAIN | TS_SPACED); Text(1010, 21, 13, Hex(0xdfe4f2), "PTS", 0, TS_PLAIN | TS_SPACED);
+    { static const char* LV[] = { "😊 EASY · first to 5 points", "🎾 NORMAL · first to 7 points", "🔥 HARD · classic: deuce, first to 2 games" }; float lw = Measure(LV[level], 20, TS_HEAVY | TS_PLAIN) + 38; RRect(800 - lw / 2, 86, lw, 32, 16.f, Color{ 8, 14, 36, 185 }, Color{ 8, 14, 36, 185 }, BLANK, 0); Text(800, 102, 20, Hex(level == 0 ? 0x8ce99a : level == 1 ? 0xffe066 : 0xff8787), LV[level], 0, TS_HEAVY | TS_PLAIN); }
     if (TimeLimit() > 0 && phase != "end" && phase != "intro") {   // the match clock
       float left = fmaxf(0.f, TimeLimit() - matchT); char tb[48]; if (timeUp) snprintf(tb, sizeof tb, "OVERTIME · first to lead wins"); else snprintf(tb, sizeof tb, "⏱ %d:%02d", (int)left / 60, (int)left % 60);
-      float cw = Measure(tb, 15, TS_HEAVY | TS_PLAIN) + 30; RRect(800 - cw / 2, 116, cw, 24, 12, Color{ 8, 14, 36, 185 }, Color{ 8, 14, 36, 185 }, BLANK, 0);
-      Text(800, 128, 15, Hex(timeUp || left < 20 ? 0xff8787 : 0xc9d3f2), tb, 0, TS_HEAVY | TS_PLAIN);
+      float cw = Measure(tb, 20, TS_HEAVY | TS_PLAIN) + 34; RRect(800 - cw / 2, 121, cw, 30, 15, Color{ 8, 14, 36, 185 }, Color{ 8, 14, 36, 185 }, BLANK, 0);
+      Text(800, 136, 20, Hex(timeUp || left < 20 ? 0xff8787 : 0xdfe4f2), tb, 0, TS_HEAVY | TS_PLAIN);
     }
-    for (auto& p : on) if (p.pid >= 0) { Vector2 s = GetWorldToScreen({ p.pos.x, 2.2f, p.pos.z }, cam); if (s.y < 150 && s.x > 480 && s.x < 1120) continue; Text(s.x, s.y, 18, P(p.pid).color, P(p.pid).name, 0, TS_HEAVY);
+    for (auto& p : on) if (p.pid >= 0) { Vector2 s = GetWorldToScreen({ p.pos.x, 2.2f, p.pos.z }, cam); if (s.y < 150 && s.x > 480 && s.x < 1120) continue; Text(s.x, s.y - 4, 23, P(p.pid).color, P(p.pid).name, 0, TS_HEAVY | TS_SHADOW);
       float sm = Stam(p), hv = Heat(p); Color bc = sm > 0.5f ? Hex(0x51cf66) : sm > 0.25f ? Hex(0xffd43b) : Hex(0xff4d6d), bg = Color{ 8, 14, 36, 200 };   // stamina (green > yellow > red) and the POWER meter
       RRect(s.x - 31, s.y + 13, 62, 9, 4.5f, bg, bg, BLANK, 0); RRect(s.x - 30, s.y + 14, fmaxf(7.f, 60 * sm), 7, 3.5f, bc, bc, BLANK, 0);
       RRect(s.x - 31, s.y + 24, 62, 7, 3.5f, bg, bg, BLANK, 0); RRect(s.x - 30, s.y + 25, fmaxf(0.f, 60 * hv), 5, 2.5f, hv >= 1.f ? Hex(0xffd43b) : Hex(0xff922b), hv >= 1.f ? Hex(0xff3b1f) : Hex(0xff7b1a), BLANK, 0);
       if (hv >= 1.f) Text(s.x + 46, s.y + 20, 22, Hex(0xff7b1a), "🔥", 0, TS_PLAIN); }
-    if (phase == "serve" || phase == "rally" || phase == "point") { std::string tip = "🎯 ring = 2 points  ·  🔥 full POWER = FIREBALL  ·  LOB beats the net man  ·  DROP beats the deep player  ·  DRIVE tires  ·  SLICE is safe"; float tw = Measure(tip, 16, TS_HEAVY | TS_PLAIN) + 36; RRect(800 - tw / 2, 862, tw, 28, 14, Color{ 8, 14, 36, 175 }, Color{ 8, 14, 36, 175 }, BLANK, 0); Text(800, 877, 16, Hex(0xe9ecff), tip, 0, TS_HEAVY | TS_PLAIN); }
+    if ((phase == "serve" || phase == "rally" || phase == "point") && matchT < 30.f) { std::string tip = "🎯 ring = 2 points  ·  🔥 full POWER = FIREBALL  ·  LOB beats the net  ·  DROP beats deep  ·  DRIVE tires  ·  SLICE is safe"; float tw = Measure(tip, 19, TS_HEAVY | TS_PLAIN) + 40; RRect(800 - tw / 2, 858, tw, 34, 17, Color{ 8, 14, 36, 175 }, Color{ 8, 14, 36, 175 }, BLANK, 0); Text(800, 875, 19, Hex(0xe9ecff), tip, 0, TS_HEAVY | TS_PLAIN); }
     if (phase == "serve" && server >= 0 && tossT < 0) { Pl& s = on[server]; Vector2 sp = GetWorldToScreen({ s.pos.x, 2.7f, s.pos.z }, cam); if (camShot == 1) sp = { 800, 760 }; /* the close-up: under the server, clear of the umpire's caption */ Text(sp.x, sp.y, 26, Hex(0xffe066), s.pid >= 0 && !P(s.pid).bot ? "SWING TO SERVE!" : "serving…", 0, TS_DISPLAY | TS_SHADOW); }
     if (talkT > 0 && !talk.empty()) {   // who is talking: a bubble over their head
       Vector3 hp = talker == 0 ? Vector3{ -DW - 1.6f, 4.25f, 0 } : Vector3Add(JudgePos(talker - 1), { 0, 2.05f, 0 });

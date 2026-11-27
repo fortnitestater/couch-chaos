@@ -991,7 +991,23 @@
     };
     FI.raf = requestAnimationFrame(draw);
   }
-  function renderMsg(L) { stage.innerHTML = `<div class="center"><div class="bigEm">${icoSplit(L.emoji || '').icon || esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
+  // ---------- the VIP can always end the game from the phone (a TV has no keyboard); it asks first, because it ends it for everyone ----------
+  let ROLE = { vip: false, st: 'home' };
+  function quitChip() {
+    let b = $('#quitBtn'); const on = ROLE.vip && (ROLE.st === 'game' || ROLE.st === 'intro');
+    if (!b) { b = document.createElement('button'); b.id = 'quitBtn'; b.className = 'chip quitBtn noRb'; b.setAttribute('aria-label', 'End game'); b.textContent = '✕'; const tb = document.querySelector('#ctrlScr .topbar'); if (tb) tb.appendChild(b); b.addEventListener('click', quitAsk); }
+    b.classList.toggle('hidden', !on); if (!on) { const s = $('#quitSheet'); if (s) s.remove(); }
+  }
+  function quitAsk() {
+    if ($('#quitSheet')) return; const d = document.createElement('div'); d.id = 'quitSheet'; d.className = 'sheetBg';
+    d.innerHTML = '<div class="sheet"><h3>End this game?</h3><p>It ends for everyone and goes back to the menu.</p><button id="qsNo" class="sheetMain">Keep playing</button><button id="qsYes" class="sheetDanger">End game</button></div>';
+    document.body.appendChild(d); const close = () => d.remove();
+    d.addEventListener('click', e => { if (e.target === d) close(); }); $('#qsNo').onclick = close;
+    $('#qsYes').onclick = () => { close(); sendMsg({ t: 'nav', d: 'back' }); navigator.vibrate?.(30); };
+  }
+  function renderMsg(L) { if (L.btns && L.btns.length) { stage.innerHTML = `<div class="center"><div class="bigEm">${icoSplit(L.emoji || '').icon || esc(L.emoji || '📺')}</div><h2>${esc(L.text || '')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}<div class="msgBtns">${L.btns.map(b => `<button data-b="${esc(b.id)}" class="${b.main ? 'main' : ''}">${esc(b.label)}</button>`).join('')}</div></div>`;
+      stage.querySelectorAll('.msgBtns button').forEach(b => b.onclick = () => { sendMsg({ t: 'res', a: b.dataset.b }); navigator.vibrate?.(20); stage.querySelectorAll('.msgBtns button').forEach(x => { x.disabled = true; }); }); return; }
+    stage.innerHTML = `<div class="center"><div class="bigEm">${icoSplit(L.emoji || '').icon || esc(L.emoji || '📺')}</div><h2>${esc(L.text || 'Look at the TV!')}</h2>${L.sub ? `<p class="muted">${esc(L.sub)}</p>` : ''}</div>`; }
   const COVER = id => id ? `covers/sm/${String(id).replace(/^_/, 'q-')}.jpg` : '';
   const ARROW = { up: 'M6 15l6-6 6 6', down: 'M6 9l6 6 6-6', left: 'M15 6l-6 6 6 6', right: 'M9 6l6 6-6 6' };
   const arrowSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="${ARROW[d]}"/></svg>`;
@@ -1433,7 +1449,7 @@
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });
     } else if (m.t === 'ch') { applyCh(m.id); window.__gid = m.id; }
-    else if (m.t === 'layout') { if (m.layout && m.layout.name === 'intro') applyCh(m.layout.id); else if (m.layout && m.layout.name === 'lobby') applyCh(null); render(m.layout); }
+    else if (m.t === 'layout') { if (m.role) { ROLE = m.role; quitChip(); } if (m.layout && m.layout.name === 'intro') applyCh(m.layout.id); else if (m.layout && m.layout.name === 'lobby') applyCh(null); render(m.layout); }
     else if (m.t === 'panel') { const was = lastPanel && lastPanel.myTurn; lastPanel = m; if (layout && layout.name === 'panel') { renderPanel(m); updateIdleDock(); } if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'hand') { const was = lastHand && lastHand.myTurn; renderHand(m); if (m.myTurn && !was) navigator.vibrate?.([60, 40, 60]); }
     else if (m.t === 'focus') { vipFocus = m; showFocus(); }
@@ -1505,6 +1521,10 @@
   $('#joinBtn').onclick = doJoin;
   // returning player with the room link: join straight away
   if ($('#roomIn').value.length === 4 && store.get('cc_name')) doJoin();
+  // keep the phone's screen on while you are in the room: a screen that dims and locks drops you out of the game
+  let wake = null; const keepAwake = async () => { try { if (navigator.wakeLock && joined && !document.hidden && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { wake = null; } };
+  document.addEventListener('visibilitychange', () => { keepAwake(); });
+  document.addEventListener('pointerdown', () => { keepAwake(); }, { passive: true });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden || !joined) return;
     // back from a locked screen / other app: links are often dead, check right away

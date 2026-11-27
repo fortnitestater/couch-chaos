@@ -293,7 +293,7 @@ struct Aval : GameNight {
     // danger meter
     float mw = 420; RRect(800 - mw / 2, 190, mw, 40, 20, Hex(0x0a1230, 210), Hex(0x0a1230, 210), Hex(0xffffff, 120), 1.5f, false, true);
     RRect(800 - mw / 2 + 4, 194, fmaxf(32, (mw - 8) * fminf(1, d * 2.2f)), 32, 16, d > 0.3f ? Hex(0xff4d5e) : d > 0.15f ? Hex(0xff9f43) : Hex(0x34c77b), d > 0.3f ? Hex(0xc92a3a) : d > 0.15f ? Hex(0xe8590c) : Hex(0x2b8a3e), BLANK, 0, true);
-    Text(800, 210, 18, WHITE, std::to_string(deck.size()) + " CARDS  ·  DANGER " + std::to_string((int)(d * 100)) + "%", 0, TS_HEAVY | TS_SHADOW);
+    Text(800, 210, 20, WHITE, std::to_string(deck.size()) + " CARDS  ·  DANGER " + std::to_string((int)(d * 100)) + "%", 0, TS_HEAVY | TS_SHADOW);
     LogBar();
     if (pa.by >= 0) {
       RRect(560, 210, 480, 110, 24, Hex(0x14204a, 230), Hex(0x0a1230, 230), Hex(0xffffff, 200), 3, true, true);
@@ -462,7 +462,7 @@ struct Tycoon : GameNight {
     Vector2 m = GetWorldToScreen({ 0, 0, -1.6f }, cam);
     Text(m.x, m.y, 40, Hex(0xffe066), "SNOW TYCOON", 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
     Text(m.x, m.y + 40, 20, Hex(0xa5d8ff), "Round " + std::to_string(std::min(round, ROUNDS)) + " / " + std::to_string(ROUNDS) + (pot ? " · 🛷 pot $" + std::to_string(pot) : ""), 0, TS_HEAVY | TS_PLAIN);
-    for (int i = 0; i < N(); i++) if (!st[i].out) { Vector3 p = Cell3(st[i].pos, 1.0f); Vector2 s = GetWorldToScreen({ p.x + ((i % 3) - 1) * 0.42f, p.y, p.z + (i / 3 - 0.5f) * 0.42f }, cam); if (i == turn) Text(s.x, s.y - 8, 18, P(i).color, P(i).name, 0, TS_HEAVY); }
+    for (int i = 0; i < N(); i++) if (!st[i].out) { Vector3 p = Cell3(st[i].pos, 1.0f); Vector2 s = GetWorldToScreen({ p.x + ((i % 3) - 1) * 0.42f, p.y, p.z + (i / 3 - 0.5f) * 0.42f }, cam); if (i == turn) Text(s.x, s.y - 10, 24, P(i).color, P(i).name, 0, TS_HEAVY | TS_SHADOW); }
     Board("💵 CASH (worth)", Sorted([&](int i) { return (float)Worth(i) - (st[i].out ? 100000.f : 0); }), [&](int i) { return st[i].out ? std::string("bankrupt") : "$" + std::to_string((int)st[i].shown); });
     LogBar();
     Hint("🎲 Roll · BUY spots · own a whole colour to build 🏠 cabins · richest after " + std::to_string(ROUNDS) + " rounds wins", Hex(0xffe066));

@@ -501,3 +501,80 @@ body.landing { overflow: auto; touch-action: auto; user-select: auto; -webkit-us
 .emoteDock .edRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .emoteDock .reactE { font-size: 28px; padding: 9px 0; }
 body.dockOn #stage { padding-bottom: 150px; box-sizing: border-box; }
+
+/* short phones (360x640 and the like): the hand of cards and the buttons must both fit without scrolling */
+@media (max-height: 720px) { .padBody .gpHand { max-height: 40%; } .padBody .gpBtns { flex: 0 0 auto; min-height: 0; gap: 10px; padding-bottom: 6px; } .padBody .pbtn2.big { min-height: 50px; } .padBody .gpanel { gap: 6px; padding-top: 8px; } }
+.padBody .gpHand { }
+@media (max-height: 720px) { .padBody .gpHand { grid-template-columns: repeat(auto-fill, minmax(60px, 98px)); justify-content: center; } }
+
+/* a phone held sideways: tennis puts the court on the left and the bars and shots in a column on the right; the fight keeps its stick and buttons on one row */
+@media (orientation: landscape) and (max-height: 520px) {
+  .tnPad { display: grid !important; grid-template-columns: minmax(0, 1fr) 190px; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 4px 8px; height: 100%; }
+  .tnPad > .bwTop { grid-column: 1 / -1; grid-row: 1; }
+  .tnPad > .bwWrap { grid-column: 1; grid-row: 2 / 5; min-height: 0; height: 100%; }
+  .tnPad > .tnBars { grid-column: 2; grid-row: 2; grid-template-columns: 1fr; gap: 4px; align-self: start; }
+  .tnPad > .tnAdv { grid-column: 2; grid-row: 3; font-size: 11px; min-height: 0; }
+  .tnPad > .tnShots { display: grid !important; grid-column: 2; grid-row: 4; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .tnPad > .tnShots button { padding: 5px 2px !important; min-height: 48px; justify-content: center; } .tnPad > .tnShots button b { font-size: 14px !important; }
+  .tnPad > .tnShots { gap: 8px !important; align-self: end; }
+  .tnPad > .tnShots button small { display: none; }
+  .tnPad > .rhint { display: none; }
+  .fiPad { gap: 3px; padding: 4px 10px 6px; }
+  .fiDmg, .fiMsg:empty { display: none; }
+  .fiBar { height: 16px; } .fiBar.sta, .fiBar.opp { height: 12px; } .fiBar span { font-size: 10px; }
+  .fiMsg { min-height: 18px; font-size: 15px; }
+  .fiCtl { align-items: stretch; }
+  .fiStick { width: auto; height: 100%; max-height: 200px; align-self: flex-end; }
+  .fiBtns { grid-template-rows: repeat(3, minmax(0, 1fr)); height: 100%; align-content: stretch; }
+  .fiBtns button { min-height: 0; height: 100%; }
+  .fiUp { min-height: 0; }
+}
+
+/* ---- measured against the touch rules: every control is at least 44 px tall, labels at least 12 px ---- */
+.padBody .reactBtn { min-height: 44px; min-width: 48px; }
+.quitBtn { min-height: 44px; min-width: 44px; margin-left: 6px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, .1); color: #cfd6ee; font: 800 17px system-ui, sans-serif; }
+.quitBtn.hidden { display: none; }
+.sheetBg { position: fixed; inset: 0; z-index: 60; display: grid; place-items: end center; background: rgba(4, 6, 18, .62); padding: 14px; animation: sheetIn .16s ease-out; }
+.sheet { width: min(420px, 100%); padding: 20px 18px calc(18px + env(safe-area-inset-bottom)); border-radius: 24px; background: #171a3c; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .14), 0 20px 50px rgba(0, 0, 0, .5); text-align: center; display: grid; gap: 10px; }
+.sheet h3 { margin: 0; font: 800 22px system-ui, sans-serif; } .sheet p { margin: 0 0 6px; color: #b9c2dc; font-size: 15px; }
+.sheet button { min-height: 54px; border: 0; border-radius: 16px; font: 800 18px system-ui, sans-serif; color: #fff; }
+.sheet .sheetMain.rb { --bc: #3b7bff; } .sheet .sheetDanger.rb { --bc: #e5484d; }
+@keyframes sheetIn { from { opacity: 0; } }
+.msgBtns { display: grid; gap: 12px; width: min(340px, 86vw); margin: 22px auto 0; }
+.msgBtns button { min-height: 60px; border: 0; border-radius: 18px; font: 800 20px system-ui, sans-serif; color: #fff; }
+.msgBtns button.rb { --bc: #2a3358; } .msgBtns button.main.rb { --bc: #2fbf71; }
+.bwBump { position: relative; min-height: 36px; padding: 8px 14px; font-size: 13px; }
+.bwBump::after { content: ''; position: absolute; inset: -6px -4px; }   /* the finger's target is 48 px tall even though the pill is slimmer */
+.drawTools button { width: 46px; height: 46px; }
+.padBody .tcard small, .tcard small { font-size: 12px; }
+.tnShots button small { font-size: 12px !important; } .tnBar span { font-size: 13px; }
+.fiDmg { font-size: 12px; } .fiDmg span { height: 20px; } .fiStick em { font-size: 12px; } .fiBtns button b { font-size: 13px; } .fiBtns button small { font-size: 12px; }
+/* a short phone: the cards shrink so that every button stays on the screen (the DOUBLE button was below the fold) */
+@media (max-height: 720px) { .padBody .gpHand.fan { max-height: 30%; } .padBody .gpHand.fan .pcard { max-height: 150px; } .padBody .gpBtns .pbtn2 { min-height: 48px; } .padBody .gpBtns .pbtn2.big { min-height: 52px; font-size: 17px; } .padBody .gpanel .gpSub { font-size: 13px; padding: 4px 8px; } }
+.bwPow span { font-size: 12.5px; } .nowCard .lbl { font-size: 12.5px !important; } .fiBtns button { font-size: 13px; }
+
+/* a phone held sideways (it happens a lot on a couch): the one button that matters stays on the screen */
+@media (orientation: landscape) and (max-height: 520px) {
+  /* how-to screen: the picture on the left, the steps on the right, I'M READY always in view */
+  .padBody .introC { display: grid !important; grid-template-columns: 38% minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 0 12px; padding: 0 10px 8px 0; overflow: hidden; }
+  .padBody .introC .introHero { grid-column: 1; grid-row: 1 / 3; height: 100% !important; min-height: 0; border-radius: 0 18px 18px 0; }
+  .padBody .introC .introBody2 { grid-column: 2; grid-row: 1; overflow-y: auto; min-height: 0; padding-top: 6px; }
+  .padBody .introC .introBody2 h2 { font-size: 22px; margin: 0 0 4px; } .padBody .introC ol.steps { font-size: 14px; gap: 4px; }
+  .padBody .introC .readyBtn { grid-column: 2; grid-row: 2; margin: 6px 0 0; padding: 10px 18px; font-size: 20px; min-height: 48px; }
+  /* card tables: the hand on the left, the buttons on the right */
+  .padBody .gpanel { display: grid !important; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr); gap: 4px 10px; padding: 6px 10px 8px; }
+  .padBody .gpanel > .gpTop, .padBody .gpanel > .gpSub, .padBody .gpanel > .rhint { grid-column: 1 / -1; }
+  .padBody .gpanel > .gpHand { grid-column: 1; grid-row: 4; max-height: none !important; min-height: 0; overflow-y: auto; }
+  .padBody .gpanel > .gpBtns { grid-column: 2; grid-row: 4; min-height: 0 !important; padding-bottom: 0 !important; gap: 8px !important; align-content: center; overflow-y: auto; }
+  .padBody .gpanel .pbtn2, .padBody .gpanel .pbtn2.big { min-height: 46px !important; font-size: 16px; }
+  .padBody .gpanel .gpHand.fan .pcard { max-height: 150px; }
+  .tnPad > .tnAdv { font-size: 12px !important; }
+  .fiBar { height: 18px !important; } .fiBar.sta, .fiBar.opp { height: 16px !important; } .fiBar span { font-size: 12px !important; }
+}
+@media (orientation: landscape) and (max-height: 520px) { .padBody .gpanel .pbtn2.big { flex: 1 1 42% !important; } }
+@media (orientation: landscape) and (max-height: 520px) {
+  .padBody .gpanel .pbtn2 { display: flex !important; flex-direction: row !important; align-items: center; justify-content: center; gap: 8px; height: auto !important; max-height: 64px; padding: 6px 10px !important; }
+  .padBody .gpanel .pbtn2 .kIco { width: 26px !important; height: 26px !important; font-size: 22px !important; flex: none; } .padBody .gpanel .pbtn2 .kIco svg, .padBody .gpanel .pbtn2 .kIco img { width: 26px !important; height: 26px !important; }
+  .padBody .gpanel .pbtn2 span { font-size: 18px !important; }
+  .padBody .gpanel > .gpBtns { align-content: center !important; align-items: center !important; }
+}

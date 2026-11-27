@@ -53,7 +53,7 @@ inline void Tile(float x, float y, float w, float h, Color c, float alpha = 1, f
 inline float TileTop(float y, float press = 0) { return y + 8 - 8 * (1 - press); }
 // a gold title with a small spaced kicker above it
 inline void Heading(const std::string& kicker, const std::string& title, float y = 60, float size = 46) {
-  if (!kicker.empty()) Text(800, y - size * 0.75f, 17, Hex(0xc9d3f2), kicker, 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
+  if (!kicker.empty()) Text(800, y - size * 0.75f, 20, Hex(0xdfe4f2), kicker, 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
   Text(800, y, size, WHITE, title, 0, TS_DISPLAY | TS_SHADOW | TS_GOLD);
 }
 // circular countdown in the top-right corner

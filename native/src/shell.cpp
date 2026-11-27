@@ -146,7 +146,7 @@ void JoinCard(float a) {
   UI::Shadow(r, 26, 30, A(Hex(0x000000, 150), a), 14);
   UI::Box(r, 26, A(Hex(0x1a2647, 235), a), A(Hex(0x0d1530, 240), a), 90, A(Hex(0xd9aa5a, 140), a), 1.4f);
   float cx = r.x + r.width / 2;
-  Text(cx, r.y + 30, 13, A(Hex(0xe6e9f5), a), "MORE PLAYERS?", 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
+  Text(cx, r.y + 30, 15, A(Hex(0xe6e9f5), a), "MORE PLAYERS?", 0, TS_PLAIN | TS_HEAVY | TS_SPACED);
   Rectangle qr = { cx - 74, r.y + 56, 148, 148 };
   UI::Box(qr, 18, A(WHITE, a));
   const J& q = D["qr"]; int n = q["n"].i(); const std::string& m = q["m"].str();
@@ -154,7 +154,7 @@ void JoinCard(float a) {
     float cell = 128.f / n, ox = qr.x + 10, oy = qr.y + 10;
     for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (m[y * n + x] == '1') DrawRectangleRec({ ox + x * cell, oy + y * cell, cell + 0.6f, cell + 0.6f }, A(Hex(0x0a1024), a));
   }
-  Text(cx, r.y + 232, 13, A(Hex(0xb9c2dc), a), "Scan or enter code", 0, TS_PLAIN);
+  Text(cx, r.y + 233, 17, A(Hex(0xdfe4f2), a), "Scan or enter code", 0, TS_PLAIN);
   std::string code = D["code"].str(), spaced; for (char ch : code) { spaced += ch; spaced += ' '; }
   Text(cx, r.y + 282, 34, A(CREAM, a), spaced, 0, TS_DISPLAY | TS_PLAIN);
 }
@@ -181,8 +181,8 @@ void ConnectPanel(float a) {
     for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (m[y * n + x] == '1') DrawRectangleRec({ ox + x * cell, oy + y * cell, cell + 0.6f, cell + 0.6f }, A(Hex(0x0a1024), a));
   } else Text(qr.x + 104, qr.y + 104, 18, A(Hex(0x445566), a), "…", 0, TS_PLAIN);
   Text(cx, r.y + 392, 21, A(WHITE, a), "/  SCAN TO JOIN!  /", 0, TS_PLAIN | TS_HEAVY | TS_GOLD);
-  Text(cx, r.y + 424, 15, A(Hex(0xdfe4f2), a), "Use your phone as a controller", 0, TS_PLAIN);
-  Text(cx, r.y + 446, 15, A(Hex(0xdfe4f2), a), "and motion sensor.", 0, TS_PLAIN);
+  Text(cx, r.y + 423, 17, A(Hex(0xdfe4f2), a), "Use your phone as a controller", 0, TS_PLAIN);
+  Text(cx, r.y + 447, 17, A(Hex(0xdfe4f2), a), "and motion sensor.", 0, TS_PLAIN);
   // room code in a little phone frame
   Rectangle ph = { r.x + 26, r.y + 476, r.width - 52, 98 };
   UI::Box(ph, 22, A(Hex(0x070d22, 230), a), A(Hex(0x070d22, 230), a), 90, A(Hex(0x3a4a78), a), 2);
@@ -207,14 +207,14 @@ void PlayerBar(float a) {
     Text(x, cy + 1, 30, A(WHITE, pa), p["cam"].yes() ? "📷" : p["av"].str(), 0, TS_PLAIN);
     if (!away) { DrawCircleV({ x + 24, cy - 24 }, 7, A(Hex(0x0a1129), a)); DrawCircleV({ x + 24, cy - 24 }, 5, A(Hex(0x8ce99a), a)); }
     if (vip) Text(x, cy - 44, 16, A(WHITE, a), "👑", 0, TS_PLAIN);
-    Text(x, 800, 15, A(vip ? CREAM : Hex(0xb9c2dc), pa), p["n"].str(), 0, TS_PLAIN | (vip ? TS_HEAVY : 0));
+    Text(x, 802, 20, A(vip ? CREAM : Hex(0xdfe4f2), pa), p["n"].str(), 0, TS_PLAIN | (vip ? TS_HEAVY : 0));
     x += 112;
   }
   // add player
   float cy = 752;
   for (int k = 0; k < 24; k++) { float a0 = k * PI / 12 + T * 0.15f; DrawRing({ x, cy }, 31, 33, a0 * RAD2DEG, a0 * RAD2DEG + 8, 4, A(Hex(0x8090b8), a)); }
   DrawLineEx({ x - 9, cy }, { x + 9, cy }, 2.6f, A(Hex(0xc9d2ea), a)); DrawLineEx({ x, cy - 9 }, { x, cy + 9 }, 2.6f, A(Hex(0xc9d2ea), a));
-  Text(x, 800, 15, A(Hex(0x8f9bbd), a), ps.size() ? "Add Player" : "Scan to join", 0, TS_PLAIN);
+  Text(x, 802, 18, A(Hex(0xb9c2dc), a), ps.size() ? "Add Player" : "Scan to join", 0, TS_PLAIN);
   // status icons + clock
   bool music = D["music"].yes();
   Icon(4, 1318, 762, 15, A(music ? Hex(0xdfe4f2) : Hex(0x6b7699), a));
@@ -227,9 +227,9 @@ void Cards(float a, float dt) {
   // ---- category tabs ----
   float tx = 120, ty = 262; float fx = 0, fw = 0;
   for (size_t r = 0; r < rows.size(); r++) {
-    std::string s = rows[r]["short"].str(); float w = Measure(s, 17, TS_PLAIN | TS_HEAVY);
+    std::string s = rows[r]["short"].str(); float w = Measure(s, 21, TS_PLAIN | TS_HEAVY);
     bool on = (int)r == fr;
-    Text(tx, ty, 17, on ? A(CREAM, a) : A(Hex(0x8592b5), a), s, -1, TS_PLAIN | TS_HEAVY | (on ? TS_GOLD : 0));
+    Text(tx, ty, 21, on ? A(CREAM, a) : A(Hex(0xa3aed0), a), s, -1, TS_PLAIN | TS_HEAVY | (on ? TS_GOLD : 0));
     hits.push_back({ { tx - 10, ty - 20, w + 20, 40 }, 500 + (int)r });
     if (on) { fx = tx; fw = w; }
     tx += w + 34;
@@ -287,13 +287,13 @@ void Cards(float a, float dt) {
     if (id != lastDescId) { lastDescId = id; descIn.x = 0; descIn.v = 0; }
     descIn.To(1, dt, 120, 22); float k = Clamp(descIn.x, 0, 1);
     std::string line = it["d"].str();
-    Text(120 + (1 - k) * 16, 682, 18, A(Hex(0xc3cbe3), a * k), line, -1, TS_PLAIN, 1060);
+    Text(120 + (1 - k) * 16, 684, 22, A(Hex(0xdfe4f2), a * k), line, -1, TS_PLAIN, 1100);
   }
 }
 void DrawHome(float a, float dt) {
   NightSky(a);
   Logo(120, 112, 1, a);
-  Text(1180, 112, 14, A(Hex(0x8f9bbd), a), "← → choose   ↑ ↓ category   OK play", 1, TS_PLAIN | TS_SPACED);
+  Text(1180, 112, 17, A(Hex(0xa3aed0), a), "← → choose   ↑ ↓ category   OK play", 1, TS_PLAIN | TS_SPACED);
   Cards(a, dt);
   ConnectPanel(a);
   PlayerBar(a);
@@ -307,7 +307,7 @@ void DrawBootGold(float a) {
   UI::Shadow(b, 32, 30, A(Hex(0xf2c66d, (unsigned char)(120 * p)), a), 0);
   UI::Box(b, 32, A(Hex(0xf7d98d), a), A(Hex(0xc9963f), a));
   Text(800, 653, 22, A(Hex(0x2a1a05), a), "▶  Press any key", 0, TS_PLAIN | TS_HEAVY);
-  Text(800, 730, 16, A(Hex(0x9aa6c8), a), "or click  ·  F = fullscreen  ·  phones join on the next screen", 0, TS_PLAIN | TS_LIGHT);
+  Text(800, 732, 20, A(Hex(0xb9c2dc), a), "or click  ·  F = fullscreen  ·  phones join on the next screen", 0, TS_PLAIN | TS_LIGHT);
 }
 
 // ---------------- INTRO ----------------
@@ -337,23 +337,25 @@ void DrawIntro(float a, float dt) {
   float x = card.x + 56, y = 120;
   Text(x, y, 72, A(INK, ca), in["n"].str(), -1, TS_DISPLAY); y += 70;
   Chip(x, y, in["ctrl"].str(), A(a1, 0.85f), WHITE, 18, ca); y += 62;
-  const J& how = in["how"];
+  const J& how = in["how"]; float howY = y;
   for (size_t i = 0; i < how.size(); i++) {
     float kk = EaseOut(Clamp((t - 0.35f - i * 0.12f) * 3, 0, 1)), ia = ca * kk;
-    float yy = y + i * 74;
+    std::string hs = how[i].str(); int lines = (int)ceilf(Measure(hs, 27, TS_PLAIN) / 540.f); if (lines < 1) lines = 1; if (lines > 4) lines = 4;
+    float yy = howY;
     UI::Box({ x + (1 - kk) * 40, yy - 24, 48, 48 }, 24, A(a1, ia), A(a2, ia));
     Text(x + 24 + (1 - kk) * 40, yy + 1, 24, A(WHITE, ia), std::to_string(i + 1), 0, TS_DISPLAY);
-    Text(x + 70 + (1 - kk) * 40, yy, 26, A(INK, ia), how[i].str(), -1, TS_PLAIN, 580);
+    Text(x + 70 + (1 - kk) * 40, yy, 27, A(INK, ia), hs, -1, TS_PLAIN, 580);
+    howY += fmaxf(70.f, lines * 35.f + 30.f);
   }
   // ready chips
-  float ry = 640; Text(x, ry, 18, A(MUTED, ca), "PLAYERS", -1, TS_PLAIN | TS_HEAVY); ry += 42;
+  float ry = 640; Text(x, ry, 20, A(MUTED, ca), "PLAYERS", -1, TS_PLAIN | TS_HEAVY); ry += 42;
   const J& rd = in["ready"]; float cx = x;
   for (size_t i = 0; i < rd.size(); i++) {
     const J& p = rd[i]; bool ok = p["ok"].yes(); std::string s = (ok ? "✓ " : "") + p["av"].str() + " " + p["n"].str();
-    float w = ChipW(s, 19); if (cx + w > card.x + card.width - 40) { cx = x; ry += 52; }
+    float w = ChipW(s, 21); if (cx + w > card.x + card.width - 40) { cx = x; ry += 52; }
     Color pc = C(p["c"]);
     UI::Box({ cx, ry - 20, w, 40 }, 20, ok ? A(pc, ca) : A(Hex(0xffffff, 18), ca), ok ? A(Shade(pc, -0.2f), ca) : A(Hex(0xffffff, 18), ca), 90, A(pc, ca), ok ? 0 : 2);
-    Text(cx + w / 2, ry + 1, 19, A(WHITE, ca), s, 0, TS_PLAIN | TS_HEAVY);
+    Text(cx + w / 2, ry + 1, 21, A(WHITE, ca), s, 0, TS_PLAIN | TS_HEAVY);
     cx += w + 12;
   }
   // countdown ring
@@ -362,7 +364,7 @@ void DrawIntro(float a, float dt) {
   DrawRing(rc, 46, 56, 0, 360, 64, A(Hex(0xffffff, 26), ca));
   DrawRing(rc, 46, 56, -90, -90 + 360 * Clamp(left / tot, 0, 1), 64, A(a1, ca));
   Text(rc.x, rc.y + 2, 40, A(INK, ca), std::to_string((int)ceilf(fmaxf(0, left))), 0, TS_DISPLAY);
-  Text(card.x + card.width / 2, 822, 19, A(MUTED, ca), "Tap  READY  on your phone  ·  OK to start now", 0, TS_PLAIN);
+  Text(card.x + card.width / 2, 822, 22, A(Hex(0xdfe4f2), ca), "Tap  READY  on your phone  ·  OK to start now", 0, TS_PLAIN);
 }
 
 // ---------------- RESULTS ----------------
@@ -381,13 +383,14 @@ void DrawResults(float a, float dt) {
   const J& pod = R["pod"];
   const float px[3] = { 0, -2.6f, 2.6f }, ph[3] = { 2.4f, 1.7f, 1.15f };
   const unsigned pc[3] = { 0xffd43b, 0xced4da, 0xe8a87c };
-  Vector3 heads[3]; bool have[3] = { false, false, false };
+  Vector3 heads[3]; bool have[3] = { false, false, false }; float podH[3] = { 0, 0, 0 };
   for (int i = 0; i < 3 && i < (int)pod.size(); i++) {
     float delay = (2 - i) * 0.35f; podS[i].To(t > delay ? 1 : 0, dt, 90, 12);
     float h = ph[i] * Clamp(podS[i].x, 0, 1.3f);
     lit.Draw(prim.cube, TRS({ px[i], h / 2, 0 }, { 0, 0, 0 }, { 2.3f, h, 2.3f }), Hex(0x4c3a9e));
     lit.Draw(prim.cube, TRS({ px[i], h - 0.08f, 0 }, { 0, 0, 0 }, { 2.36f, 0.18f, 2.36f }), Hex(pc[i]));
-    lit.Draw(prim.cube, TRS({ px[i], h * 0.5f, 1.16f }, { 0, 0, 0 }, { 1.0f, 0.9f * fminf(1, h), 0.04f }), Hex(pc[i]));
+    lit.Draw(prim.cube, TRS({ px[i], h * 0.22f, 1.16f }, { 0, 0, 0 }, { 0.8f, 0.38f * fminf(1, h), 0.04f }), Hex(pc[i]));
+    podH[i] = h;
     Color c = C(pod[i]["c"]);
     float hop = i == 0 ? fabsf(sinf(T * 4.5f)) * 0.6f : fabsf(sinf(T * 3.2f + i)) * 0.25f;
     if (podS[i].x > 0.5f) DrawToon({ px[i], h, 0 }, sinf(T + i) * 0.3f, c, T, hop, i == 0 ? 1 : 0.4f, 1.15f);
@@ -399,11 +402,14 @@ void DrawResults(float a, float dt) {
   if (t < dt * 2) conf.Spawn({ 0, 7, 0 }, 170, 5, 5);
   // labels
   for (int i = 0; i < 3; i++) if (have[i]) {
-    Vector2 s = GetWorldToScreen(heads[i], cam);
-    Text(s.x, s.y - 10, 30, A(INK, a), pod[i]["n"].str(), 0, TS_DISPLAY);
-    Text(s.x, s.y + 22, 17, A(Hex(0xffe8a3), a), pod[i]["sub"].str(), 0, TS_PLAIN | TS_HEAVY);
-    Vector2 b = GetWorldToScreen({ px[i], ph[i] * 0.5f, 1.2f }, cam);
-    Text(b.x, b.y, 44, A(Hex(0x2b1d5c), a), std::to_string(i + 1), 0, TS_DISPLAY | TS_PLAIN);
+    Vector2 s = GetWorldToScreen({ px[i], podH[i], 1.18f }, cam);
+    std::string nm = pod[i]["n"].str(), sb = pod[i]["sub"].str(); Color pcol = C(pod[i]["c"]);
+    float pw = Clamp(fmaxf(Measure(nm, 28, TS_DISPLAY), Measure(sb, 20, TS_PLAIN | TS_HEAVY)) + 40, 170.f, 258.f), phh = sb.empty() ? 44.f : 68.f;
+    RRect(s.x - pw / 2, s.y + 3, pw, phh, 16, A(Hex(0x120c2e, 235), a), A(Hex(0x120c2e, 235), a), A(pcol, a), 3);
+    Text(s.x, s.y + 3 + (sb.empty() ? 23 : 22), 28, A(INK, a), nm, 0, TS_DISPLAY);
+    if (!sb.empty()) Text(s.x, s.y + 3 + 50, 20, A(Hex(0xffe8a3), a), sb, 0, TS_PLAIN | TS_HEAVY);
+    Vector2 b = GetWorldToScreen({ px[i], podH[i] * 0.22f, 1.2f }, cam);
+    Text(b.x, b.y, 30, A(Hex(0x2b1d5c), a), std::to_string(i + 1), 0, TS_DISPLAY | TS_PLAIN);
   }
   float k = EaseOut(t * 2);
   Text(800, 48 - (1 - k) * 40, 20, A(Hex(0xffd43b), a * k), R["k"].str(), 0, TS_PLAIN | TS_HEAVY);
@@ -415,10 +421,10 @@ void DrawResults(float a, float dt) {
     Rectangle r = { lx + i * 230, ly + (1 - kk) * 30, 215, 64 };
     Glass(r, 20, a * kk);
     UI::Box({ r.x + 8, r.y + 8, 6, 48 }, 3, A(C(p["c"]), a * kk));
-    Text(r.x + 26, r.y + 22, 19, A(INK, a * kk), "#" + std::to_string(i + 4) + "  " + p["n"].str(), -1, TS_PLAIN | TS_HEAVY);
-    Text(r.x + 26, r.y + 46, 14, A(MUTED, a * kk), p["st"].str(), -1, TS_PLAIN);
+    Text(r.x + 26, r.y + 22, 21, A(INK, a * kk), "#" + std::to_string(i + 4) + "  " + p["n"].str(), -1, TS_PLAIN | TS_HEAVY);
+    Text(r.x + 26, r.y + 46, 17, A(Hex(0xdfe4f2), a * kk), p["st"].str(), -1, TS_PLAIN);
   }
-  Text(800, 868, 18, A(MUTED, a), R["foot"].str(), 0, TS_PLAIN);
+  Text(800, 866, 22, A(Hex(0xdfe4f2), a), R["foot"].str(), 0, TS_PLAIN | TS_HEAVY);
 }
 }  // namespace
 

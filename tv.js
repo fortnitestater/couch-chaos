@@ -7,6 +7,9 @@
   const S = { players: [], state: 'boot', game: null, def: null, code: null, party: null };
   let peer = null, view = { s: 1, ox: 0, oy: 0 }, shakeAmt = 0, timer = null;
   const cv = $('#cv'), g = cv.getContext('2d');
+  // keep the TV's screen on too: a screen saver in the middle of a game is the end of the party
+  let tvWake = null; const tvKeep = async () => { try { if (navigator.wakeLock && !document.hidden && !tvWake) { tvWake = await navigator.wakeLock.request('screen'); tvWake.addEventListener('release', () => { tvWake = null; }); } } catch (e) { tvWake = null; } };
+  addEventListener('keydown', tvKeep, { passive: true }); addEventListener('pointerdown', tvKeep, { passive: true }); document.addEventListener('visibilitychange', tvKeep); tvKeep();
 
   // ---------- networking ----------
   function makeCode() { let s = ''; for (let i = 0; i < 4; i++) s += CODE_LETTERS[(Math.random() * CODE_LETTERS.length) | 0]; return s; }
@@ -53,7 +56,7 @@
     if (window.QRCode) { const qc = new QRCode(q, { text: joinUrl(), width: 256, height: 256, colorDark: '#0a1024', colorLight: '#ffffff' });
       try { const m = qc._oQRCode, n = m.getModuleCount(); let bits = ''; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) bits += m.isDark(r, c) ? '1' : '0'; S.qr = { n, m: bits }; } catch (e) {} }
   }
-  function send(p, m) { if (p && !p.bot && p.conn && p.conn.open) { try { p.conn.send(m); } catch (e) {} } }
+  function send(p, m) { if (p && !p.bot && p.conn && p.conn.open) { if (m && m.t === 'layout') m.role = { vip: p === vip(), st: S.state }; try { p.conn.send(m); } catch (e) {} } }
   // players = connected phones + people seen by the AI camera (the camera phone itself is not a player)
   const humans = () => S.players.filter(p => p.connected && !p.isCam);
   const vip = () => humans().find(p => !p.cam) || null;
@@ -74,6 +77,7 @@
       }
       case 'act': if (S.state === 'game' && S.game && S.game.onAct) S.game.onAct(p, m); break;
       case 'react': reactFx(p, String(m.e || '').slice(0, 4)); break;
+      case 'res': if (isVip && S.state === 'results' && !S.party) { clearTimeout(timer); if (m.a === 'again' && S.def) { const d = S.def; S.game = null; startIntro(d, true); } else afterResults(); } break;   // rematch, or straight back to the menu
       case 'owner': ownerTry(p, m); break;
       case 'cheat': if (p.owner) runCheat(p, m); break;
       case 'pump': if (S.state === 'game' && S.game && S.game.onPump) S.game.onPump(p, +m.n || 1); break;
@@ -176,7 +180,7 @@
     const SHORT = { show: 'Showtime', cards: 'Cards & Board', sports: 'Sports' };
     rowsData = [{ name: '🔥 Quick Play', short: 'Quick Play', items: QUICK.concat(recommended()) }, ...CATEGORIES.map(c => ({ name: c.name, short: SHORT[c.id] || c.name, items: GAMES.filter(gm => gm.cat === c.id) }))];
     $('#rows').innerHTML = rowsData.map((row, r) => `<div class="row"><h3>${row.name}</h3><div class="track">${row.items.map((gm, c) =>
-      `<button class="tile ${gm.id[0] === '_' ? 'special' : ''}" data-r="${r}" data-c="${c}" style="--a1:${gm.art[0]};--a2:${gm.art[1]}"><span class="tc">${CTRL_LABEL[gm.ctrl] || ''}</span><span class="te">${gm.emoji}</span><span class="tn">${esc(gm.name)}</span></button>`).join('')}</div></div>`).join('');
+      `<button class="tile ${gm.id[0] === '_' ? 'special' : ''}" data-r="${r}" data-c="${c}" style="--a1:${gm.art[0]};--a2:${gm.art[1]}"><span class="tc">${ctrlOf(gm) || ''}</span><span class="te">${gm.emoji}</span><span class="tn">${esc(gm.name)}</span></button>`).join('')}</div></div>`).join('');
     $('#rows').querySelectorAll('.tile').forEach(t => {
       t.onclick = () => { focus = { r: +t.dataset.r, c: +t.dataset.c }; applyFocus(); activate(); };
       t.onmouseenter = () => { focus = { r: +t.dataset.r, c: +t.dataset.c }; applyFocus(true); };
@@ -203,7 +207,7 @@
     const hero = $('#hero'); hero.style.setProperty('--a1', d.art[0]); hero.style.setProperty('--a2', d.art[1]);
     $('#heroEmoji').textContent = d.emoji; $('#heroTitle').textContent = d.name; $('#heroDesc').textContent = d.desc;
     $('#heroCat').textContent = d.cat === 'quick' ? 'Quick Play' : (CATEGORIES.find(c => c.id === d.cat) || {}).name || '';
-    $('#heroCtrl').textContent = CTRL_LABEL[d.ctrl]; $('#heroPlayers').textContent = `👥 ${d.players} players`; $('#heroMins').textContent = `⏱️ ~${d.mins} min`;
+    $('#heroCtrl').textContent = ctrlOf(d); $('#heroPlayers').textContent = `👥 ${d.players} players`; $('#heroMins').textContent = `⏱️ ~${d.mins} min`;
     const em = $('#heroEmoji'); em.style.animation = 'none'; void em.offsetWidth; em.style.animation = '';
   }
   function nav(d) {
@@ -273,21 +277,21 @@
 
   // ---------- intro (how to play) ----------
   let launchT = null, introLeft = 0;
-  function startIntro(def) {
+  function startIntro(def, quick) {
     if (!def || (S.state !== 'home' && S.state !== 'results')) return;
     if (!humans().length) return banner('Join first! Scan the code 📱', 1600, '#ff4d6d');
     if (def.ctrl === 'talk' && humans().length < 3) return banner(`${def.name} needs 3 players with phones — it's a talking game`, 2600, '#ffd43b');
-    SFX.init(); S.state = 'intro'; S.def = def; S.ready = new Set(); introLeft = 15;
+    SFX.init(); S.state = 'intro'; S.def = def; S.ready = new Set(); introLeft = quick ? 6 : 15;
     const ia = $('#introArt'); ia.style.setProperty('--a1', def.art[0]); ia.style.setProperty('--a2', def.art[1]);
     $('#introEmoji').textContent = def.emoji; $('#introTitle').textContent = def.name;
     $('#introCat').textContent = (S.party ? `🎉 Party game ${S.party.i + 1} of ${S.party.list.length} · ` : '') + ((CATEGORIES.find(c => c.id === def.cat) || {}).name || '');
-    $('#introCtrl').textContent = CTRL_LABEL[def.ctrl];
+    $('#introCtrl').textContent = ctrlOf(def);
     $('#introHow').innerHTML = def.how.map(h => `<li>${esc(h)}</li>`).join('');
     show('intro'); renderReady(); SFX.whoosh();
     for (const p of humans()) sendIntro(p);
     clearTimeout(launchT); launchT = null;
   }
-  function sendIntro(p) { const d = S.def; p.layout = { name: 'intro', id: d.id, emoji: d.emoji, title: d.name, how: d.how, ctrl: CTRL_LABEL[d.ctrl], ready: S.ready.has(p) }; send(p, { t: 'layout', layout: p.layout }); }
+  function sendIntro(p) { const d = S.def; p.layout = { name: 'intro', id: d.id, emoji: d.emoji, title: d.name, how: d.how, ctrl: ctrlOf(d), ready: S.ready.has(p) }; send(p, { t: 'layout', layout: p.layout }); }
   function renderReady() { $('#introReady').innerHTML = humans().filter(p => !p.cam || camFits()).map(p => p.cam ? `<span class="rchip ok" style="--c:${p.color}">📷 ${p.avatar} ${esc(p.name)}</span>` : `<span class="rchip ${S.ready.has(p) ? 'ok' : ''}" style="--c:${p.color}">${S.ready.has(p) ? '✓ ' : ''}${p.avatar} ${esc(p.name)}</span>`).join(''); }
   function launchSoon(s) { if (launchT) return; launchT = setTimeout(() => { launchT = null; launch(); }, s * 1000); }
   // big diagonal colour wipe between screens
@@ -377,7 +381,8 @@
       const aw = !r.p.bot && i < 3 && results.length > 1 ? awards[i] : 0; r.aw = aw;
       r.p.trophies = (r.p.trophies || 0) + aw;
       if (S.party && !r.p.bot) S.party.pts.set(r.p, (S.party.pts.get(r.p) || 0) + aw);
-      if (!r.p.bot) send(r.p, { t: 'layout', layout: { name: 'msg', emoji: ['🏆', '🥈', '🥉'][i] || '🫠', text: `You finished #${i + 1}!`, sub: aw ? `+${aw} trophies` : results.length < 2 ? 'Play with others to win trophies' : i === 0 ? 'Winner!' : 'Next time!' } });
+      if (!r.p.bot) send(r.p, { t: 'layout', layout: { name: 'msg', emoji: ['🏆', '🥈', '🥉'][i] || '🫠', text: `You finished #${i + 1}!`, sub: aw ? `+${aw} ${aw === 1 ? 'trophy' : 'trophies'}` : results.length < 2 ? 'Play with others to win trophies' : i === 0 ? 'Winner!' : 'Next time!',
+        btns: !S.party && r.p === vip() ? [{ id: 'again', label: '🔁 Play again', main: true }, { id: 'menu', label: '🏠 Menu' }] : null } });
     });
     $('#resKicker').textContent = S.party ? `🎉 PARTY GAME ${S.party.i + 1} OF ${S.party.list.length}` : 'RESULTS';
     $('#resTitle').textContent = `${S.def.emoji} ${S.def.name}`;
@@ -385,10 +390,10 @@
     S.res = { k: $('#resKicker').textContent, title: `${S.def.emoji} ${S.def.name}`, pod: results.slice(0, 3).map(r => ({ n: r.p.name, av: r.p.avatar || '', c: r.p.color, sub: r.stat || '' })), list: results.slice(3).map(r => ({ n: r.p.name, av: r.p.avatar || '', c: r.p.color, st: r.stat || '' })) };
     $('#resList').innerHTML = results.slice(3).map((r, i) => `<li style="--c:${r.p.color}"><span class="pl">#${i + 4}</span><span>${r.p.avatar || ''} ${esc(r.p.name)}</span><span class="st">${esc(r.stat || '')}</span><span class="aw"></span></li>`).join('');
     const nxt = S.party && S.party.list[S.party.i + 1];
-    $('#resFoot').textContent = nxt ? `Next up: ${nxt.emoji} ${nxt.name}…` : S.party ? 'And the party champion is…' : 'Back to the menu in a moment · VIP: OK to skip';
+    const v = vip(); $('#resFoot').textContent = nxt ? `Next up: ${nxt.emoji} ${nxt.name}…` : S.party ? 'And the party champion is…' : v ? `🔁 Play again? ${v.name} chooses on the phone · or back to the menu in a moment` : 'Back to the menu in a moment';
     if (S.res) S.res.foot = $('#resFoot').textContent;
     show('results'); SFX.musicOff && SFX.musicOff(); SFX.win(); confettiDom();
-    clearTimeout(timer); timer = setTimeout(afterResults, 7000);
+    clearTimeout(timer); timer = setTimeout(afterResults, !S.party && vip() ? 14000 : 7000);   // time to look at the podium and to ask for a rematch
   }
   function renderPodium(top) {
     const order = [1, 0, 2].filter(i => top[i]);
@@ -428,15 +433,15 @@
     if (st === 'home') {
       o.qr = S.qr || null;
       const KW = { touch: 'TOUCH', move: 'JOYSTICK', tap: 'TAP', swing: 'SWING', type: 'TYPE', shake: 'SHAKE', tilt: 'TILT', draw: 'DRAW', vote: 'VOTE', camera: 'CAMERA' };
-      o.rows = rowsData.map(r => ({ name: r.name, short: r.short || r.name, items: r.items.map(gm => ({ id: gm.id, n: gm.name, e: gm.emoji, a1: gm.art[0], a2: gm.art[1], ctrl: CTRL_LABEL[gm.ctrl] || '', k: KW[gm.ctrl] || 'MULTIPLAYER', pl: gm.players, d: gm.desc, sp: gm.id[0] === '_', rec: !!gm._rec })) }));
+      o.rows = rowsData.map(r => ({ name: r.name, short: r.short || r.name, items: r.items.map(gm => ({ id: gm.id, n: gm.name, e: gm.emoji, a1: gm.art[0], a2: gm.art[1], ctrl: ctrlOf(gm) || '', k: KW[gm.ctrl] || 'MULTIPLAYER', pl: gm.players, d: gm.desc, sp: gm.id[0] === '_', rec: !!gm._rec })) }));
       o.music = !(SFX.musicMuted && SFX.musicMuted());
       o.f = [focus.r, focus.c];
       const d = heroDef;
-      if (d) o.hero = { id: d.id, n: d.name, e: d.emoji, d: d.desc, a1: d.art[0], a2: d.art[1], cat: d.cat === 'quick' ? 'QUICK PLAY' : ((CATEGORIES.find(c => c.id === d.cat) || {}).name || '').toUpperCase(), ctrl: CTRL_LABEL[d.ctrl] || '', pl: `👥 ${d.players} players`, mins: `⏱️ ~${d.mins} min` };
+      if (d) o.hero = { id: d.id, n: d.name, e: d.emoji, d: d.desc, a1: d.art[0], a2: d.art[1], cat: d.cat === 'quick' ? 'QUICK PLAY' : ((CATEGORIES.find(c => c.id === d.cat) || {}).name || '').toUpperCase(), ctrl: ctrlOf(d) || '', pl: `👥 ${d.players} players`, mins: `⏱️ ~${d.mins} min` };
     }
     if (st === 'intro' && S.def) {
       const d = S.def;
-      o.intro = { id: d.id, n: d.name, e: d.emoji, a1: d.art[0], a2: d.art[1], ctrl: CTRL_LABEL[d.ctrl] || '', how: d.how,
+      o.intro = { id: d.id, n: d.name, e: d.emoji, a1: d.art[0], a2: d.art[1], ctrl: ctrlOf(d) || '', how: d.how,
         cat: (S.party ? `🎉 Party game ${S.party.i + 1} of ${S.party.list.length} · ` : '') + ((CATEGORIES.find(c => c.id === d.cat) || {}).name || ''),
         ready: humans().filter(p => !p.cam || camFits()).map(p => ({ n: p.name, c: p.color, av: p.cam ? '📷' : p.avatar, ok: p.cam || S.ready.has(p) })), left: Math.max(0, Math.round(introLeft * 4) / 4) };
     }

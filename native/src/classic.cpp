@@ -668,7 +668,7 @@ struct Hockey : Classic {
     UI::Shadow({ 560, 10, 480, 86 }, 30, 20, Hex(0, 90), 6);
     UI::Box({ 560, 10, 240, 86 }, 30, Hex(0xff6b6b), Hex(0xc92a2a)); UI::Box({ 800, 10, 240, 86 }, 30, Hex(0x4dabf7), Hex(0x1864ab));
     Text(690, 54, 60, WHITE, std::to_string(score[0]), 0, TS_DISPLAY | TS_SHADOW); Text(910, 54, 60, WHITE, std::to_string(score[1]), 0, TS_DISPLAY | TS_SHADOW);
-    Text(600, 54, 18, Fade(WHITE, 0.85f), "RED", 0, TS_HEAVY | TS_PLAIN); Text(1000, 54, 18, Fade(WHITE, 0.85f), "BLUE", 0, TS_HEAVY | TS_PLAIN);
+    Text(600, 54, 20, WHITE, "RED", 0, TS_HEAVY | TS_PLAIN); Text(1000, 54, 20, WHITE, "BLUE", 0, TS_HEAVY | TS_PLAIN);
     if (sudden) { UI::Box({ 1290, 14, 290, 70 }, 30, Hex(0xffd43b), Hex(0xf08c00)); Text(1435, 50, 30, Hex(0x3b2a00), "GOLDEN GOAL", 0, TS_DISPLAY | TS_PLAIN); }
     else Clock(T, 1500);
     Text(800, 118, 20, Fade(WHITE, 0.9f), sudden ? "Next goal wins!" : "First to 7", 0, TS_HEAVY | TS_SHADOW);
