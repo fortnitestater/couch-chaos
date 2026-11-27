@@ -18,6 +18,9 @@ const SFX = (() => {
   }
   // recorded samples (ElevenLabs sound effects + music)
   const SAMPLE_FILES = { crowd: 'crowd', cheer: 'cheer', ooh: 'ooh', applause: 'applause', hit: 'hit', bounce: 'bounce', smash: 'smash', strike: 'strike', bat: 'bat', music: 'music', bowl_intro: 'bowl_intro' };
+  // bowling alley effects and the STRIKE NIGHT intro (real recordings)
+  for (const [k, f] of Object.entries({ b_release: 'bowl_release', b_strike: 'bowl_strike', b_strike2: 'bowl_strike2', b_pins: 'bowl_pins', b_bumper: 'bowl_bumper', b_return: 'bowl_return', b_pin: 'bowl_pin',
+    i_drums: 'intro_drums', i_snare: 'intro_snare', i_riser: 'intro_riser', i_boom: 'intro_boom', i_brass: 'intro_brass', i_horn: 'intro_horn', i_crowd: 'intro_crowd' })) SAMPLE_FILES[k] = f;
   // studio sound effects (ElevenLabs); each synth sound below falls back to its old beep if the file is missing
   for (const k of ['ui', 'ding', 'buzz', 'win', 'card', 'dice', 'pickup', 'whoosh', 'bonk', 'splash', 'boom', 'go', 'tick', 'join', 'snow']) SAMPLE_FILES['x_' + k] = 'sfx_' + k;
   // background music: one track per kind of game, loaded only when first needed
@@ -60,8 +63,10 @@ const SFX = (() => {
     if (ac) return;
     try {
       ac = new (window.AudioContext || window.webkitAudioContext)();
-      master = ac.createGain(); master.gain.value = 0.35; master.connect(ac.destination);
-      voiceOut = ac.createGain(); voiceOut.gain.value = 1.0; voiceOut.connect(ac.destination);
+      // everything goes through a limiter first, so a loud moment (a strike on top of the crowd and the announcer) never clips
+      const lim = ac.createDynamicsCompressor(); lim.threshold.value = -4; lim.knee.value = 3; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15; lim.connect(ac.destination);
+      master = ac.createGain(); master.gain.value = 0.35; master.connect(lim);
+      voiceOut = ac.createGain(); voiceOut.gain.value = 1.0; voiceOut.connect(lim);
       loadSamples();
       if (typeof HOST !== 'undefined') fetch(HOST.url).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(buf => { hostBuf = buf; hostClips = findClips(buf); }).catch(() => {});
       if (typeof VOICE !== 'undefined') fetch(VOICE.url).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b)).then(buf => { voiceBuf = buf; }).catch(() => {});
@@ -86,47 +91,40 @@ const SFX = (() => {
     const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     src.connect(f); f.connect(g); g.connect(master); src.start(t);
   }
-  // ===== STRIKE NIGHT, the bowling intro: an NFL-style kickoff, built from war drums, a riser, brass stabs, cymbals, an air horn and a crowd going wild =====
-  let introSrc = [], introVoice = null, bus = null; const MASTER = 0.35;
+  // ===== bowling and the STRIKE NIGHT intro: real recorded sound effects (ElevenLabs), played from the part of the file we want =====
+  let introSrc = [], introVoice = null, rollSrc = null, gutSrc = null, ambSrc = null, ambLoading = false; const MASTER = 0.35;
   const keep = s => { introSrc.push(s); return s; };
-  const whiteBuf = sec => { const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return b; };
-  // filtered noise that sweeps f0 -> f1; swells in over atk seconds, then dies away
-  function nz(t, dur, vol, type, f0, f1, q = 1, atk = 0.01) {
-    const src = ac.createBufferSource(); src.buffer = whiteBuf(dur + 0.05);
-    const f = ac.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + atk); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-    src.connect(f); f.connect(g); g.connect(bus || master); src.start(t); src.stop(t + dur + 0.05); keep(src);
+  // play part of a recording: off/dur pick the part (seconds into the file), delay schedules it, rate changes the pitch, short fades keep it click-free
+  function samp(k, o = {}) {
+    if (!ac || !S[k]) return null;
+    const rate = o.rate || 1, t = ac.currentTime + (o.delay || 0), off = o.off || 0, dur = Math.max(0.05, Math.min(o.dur || 99, S[k].duration - off)), v = o.vol == null ? 1 : o.vol;
+    const fi = o.fi == null ? 0.004 : o.fi, len = dur / rate, fo = Math.min(o.fo == null ? 0.12 : o.fo, len / 2);
+    const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = S[k]; src.playbackRate.value = rate;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + fi); g.gain.setValueAtTime(v, t + len - fo); g.gain.linearRampToValueAtTime(0.0001, t + len);
+    src.connect(g); g.connect(master); src.start(t, off, dur); src.stop(t + len + 0.05); if (o.keep) keep(src); return { src, g };
   }
-  function osc(type, f0, f1, t, dur, vol, atk = 0.01) {
-    const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + atk); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-    o.connect(g); g.connect(bus || master); o.start(t); o.stop(t + dur + 0.05); keep(o);
+  // a looped part of a recording that can be faded in and out (the ball rolling, the ball in the gutter, the alley's background noise)
+  function loopStart(k, a, b, vol, fade) {
+    if (!ac || !S[k]) return null; const t = ac.currentTime, src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = S[k]; src.loop = true; src.loopStart = a; src.loopEnd = Math.min(b, S[k].duration); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + fade);
+    src.connect(g); g.connect(master); src.start(t, a); return { src, g };
   }
-  const kick = (t, v = 1) => { osc('sine', 165, 42, t, 0.42, 0.95 * v, 0.004); nz(t, 0.035, 0.32 * v, 'highpass', 3000, 3000, 0.7, 0.002); };
-  const snare = (t, v = 1) => { nz(t, 0.18, 0.5 * v, 'bandpass', 2200, 1700, 0.6, 0.002); osc('triangle', 230, 140, t, 0.1, 0.35 * v, 0.002); };
-  const cymbal = (t, dur, v = 1) => { nz(t, dur, 0.4 * v, 'highpass', 7000, 6000, 0.5, 0.004); nz(t, dur * 0.6, 0.25 * v, 'bandpass', 9500, 8000, 1.2, 0.004); };
-  // horns: detuned saw waves through a filter that snaps open and falls back
-  function brass(t, notes, dur, v = 1) {
-    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 2.5; f.frequency.setValueAtTime(350, t); f.frequency.exponentialRampToValueAtTime(3400, t + 0.07); f.frequency.exponentialRampToValueAtTime(700, t + dur);
-    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05 * v, t + 0.03); g.gain.setValueAtTime(0.05 * v, t + dur * 0.35); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    f.connect(g); g.connect(bus || master);
-    for (const n of notes) for (const c of [-9, 0, 9]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = n; o.detune.value = c; o.connect(f); o.start(t); o.stop(t + dur + 0.05); keep(o); }
+  function loopStop(h, fade) { if (!h) return; const t = ac.currentTime; try { h.g.gain.cancelScheduledValues(t); h.g.gain.setValueAtTime(Math.max(0.0001, h.g.gain.value), t); h.g.gain.linearRampToValueAtTime(0.0001, t + fade); h.src.stop(t + fade + 0.05); } catch (e) {} }
+  // The ball rolling is mostly a low rumble that wobbles at the rate the ball turns (~13 turns a second at 9 m/s). Synthesized from filtered noise, because the
+  // generated recordings of it were almost silent between the first thud and the end. kind 'wood': deep rumble and a little grain; 'gutter': hollow and metallic.
+  let rumbleBuf = null;
+  function rumbleOn(kind, vol) {
+    if (!ac) return null; const t = ac.currentTime;
+    if (!rumbleBuf) { const n = ac.sampleRate * 3; rumbleBuf = ac.createBuffer(1, n, ac.sampleRate); const d = rumbleBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; }
+    const src = ac.createBufferSource(); src.buffer = rumbleBuf; src.loop = true; src.loopStart = Math.random() * 1.5;
+    const out = ac.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(vol, t + 0.25); out.connect(master);
+    const wob = ac.createGain(); wob.gain.value = 0.78; wob.connect(out);   // the wobble: amplitude modulated at the turning rate
+    const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = kind === 'wood' ? 13 : 10; lg.gain.value = 0.22; lfo.connect(lg); lg.connect(wob.gain); lfo.start(t);
+    const bands = kind === 'wood' ? [['lowpass', 170, 0.7, 2.6], ['bandpass', 520, 0.8, 0.55], ['bandpass', 1500, 1.2, 0.12]] : [['lowpass', 220, 0.7, 1.6], ['bandpass', 430, 5, 1.5], ['bandpass', 1100, 3, 0.5]];
+    for (const [type, f, q, g] of bands) { const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gg = ac.createGain(); gg.gain.value = g; src.connect(fl); fl.connect(gg); gg.connect(wob); }
+    src.start(t, Math.random() * 1.5); return { src, g: out, lfo };
   }
-  function airHorn(t, dur, v = 1) {   // the stadium air horn: a loud, slightly sour chord, a little sag at the end
-    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2600; f.Q.value = 1.2;
-    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07 * v, t + 0.02); g.gain.setValueAtTime(0.07 * v, t + dur * 0.8); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    f.connect(g); g.connect(bus || master);
-    for (const n of [392, 415, 494, 587]) { const o = ac.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(n, t); o.frequency.setValueAtTime(n, t + dur * 0.8); o.frequency.exponentialRampToValueAtTime(n * 0.93, t + dur); o.connect(f); o.start(t); o.stop(t + dur + 0.05); keep(o); }
-  }
-  // a riser: noise climbing through the spectrum and a saw sweeping up, both getting louder until the cut
-  function riser(t, dur, v = 1) {
-    const src = ac.createBufferSource(); src.buffer = whiteBuf(dur + 0.05); const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.4; f.frequency.setValueAtTime(260, t); f.frequency.exponentialRampToValueAtTime(7500, t + dur);
-    const g = ac.createGain(); g.gain.setValueAtTime(0.004, t); g.gain.exponentialRampToValueAtTime(0.42 * v, t + dur); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.04);
-    src.connect(f); f.connect(g); g.connect(bus || master); src.start(t); src.stop(t + dur + 0.06); keep(src);
-    const o = ac.createOscillator(), lp = ac.createBiquadFilter(), og = ac.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(950, t + dur);
-    lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t); lp.frequency.exponentialRampToValueAtTime(5200, t + dur); og.gain.setValueAtTime(0.004, t); og.gain.exponentialRampToValueAtTime(0.1 * v, t + dur); og.gain.linearRampToValueAtTime(0.0001, t + dur + 0.04);
-    o.connect(lp); lp.connect(og); og.connect(bus || master); o.start(t); o.stop(t + dur + 0.06); keep(o);
-  }
+  function rumbleOff(h, fade) { if (!h) return; const t = ac.currentTime; try { h.g.gain.cancelScheduledValues(t); h.g.gain.setValueAtTime(Math.max(0.0001, h.g.gain.value), t); h.g.gain.linearRampToValueAtTime(0.0001, t + fade); h.src.stop(t + fade + 0.05); h.lfo.stop(t + fade + 0.05); } catch (e) {} }
   function stopIntro() { const t = ac.currentTime; for (const s of introSrc) { try { s.stop(t); } catch (e) {} } introSrc = []; if (introVoice) { try { introVoice.stop(t); } catch (e) {} introVoice = null; } }
   const ok = (k, ms) => { const n = performance.now(); if (last[k] && n - last[k] < ms) return false; last[k] = n; return true; };
   return {
@@ -153,32 +151,47 @@ const SFX = (() => {
     whoosh() { ok('wh', 80) && (X('whoosh', 0.7, 0.8, 0.08) || noise(0.5, 0.35, 2500)); },
     dice() { ok('di', 150) && (X('dice', 0.9, 1.6, 0.05) || noise(0.3, 0.3, 2000)); },
     snow() { ok('sn', 50) && (X('snow', 0.9, 0.8, 0.12) || noise(0.2, 0.4, 1200)); },
-    // ---- the bowling intro (STRIKE NIGHT) ----
-    introRise() {   // the announcer and the build-up: opening hit, war drums, the title hit, a snare roll and a riser, all aimed at the moment of impact (~4.9 s)
-      if (!ac) return; stopIntro(); const t = ac.currentTime + 0.06; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(MASTER, t);
-      if (S.bowl_intro && !SFX.muteVoice) { const s = ac.createBufferSource(); s.buffer = S.bowl_intro; s.connect(voiceOut); s.start(t + 0.1); introVoice = s; }
-      bus = ac.createGain(); bus.gain.value = 0.5; bus.connect(master);   // the build-up sits under the announcer
-      brass(t, [110, 165, 220, 277], 1.2, 1); cymbal(t, 1.6, 0.8); kick(t, 1.3);
-      for (let i = 0, u = 0.55; u < 2.75; i++, u += 0.4) { kick(t + u, 0.85); if (i % 2) snare(t + u, 0.6); }
-      brass(t + 2.9, [147, 220, 294, 370], 1.0, 1.1); cymbal(t + 2.9, 1.2, 0.7); kick(t + 2.9, 1.3); kick(t + 3.02, 0.9);
-      for (let u = 3.25, g = 0.12; u < 4.86; u += g, g = Math.max(0.028, g * 0.92)) snare(t + u, 0.22 + 0.55 * (u - 3.25) / 1.6);
-      riser(t + 0.3, 4.55, 1); bus = null;
+    // ---- bowling: every sound is a real recording ----
+    bowlRelease() { samp('b_release', { vol: 1.5, off: 2.85, dur: 1.7, fo: 0.5 }); },                                      // the ball lands on the wood
+    bowlRollOn() { if (!ac) return; SFX.bowlRollOff(true); rollSrc = rumbleOn('wood', 0.5); },                                // the rumble of the ball on the boards
+    bowlRollOff(quick) { rumbleOff(rollSrc, quick ? 0.03 : 0.3); rollSrc = null; },
+    bowlGutterOn() { if (!ac) return; SFX.bowlRollOff(true); rumbleOff(gutSrc, 0.05); gutSrc = rumbleOn('gutter', 0.55); samp('b_bumper', { vol: 1.0, off: 0.25, dur: 1.0, rate: 1.15, fo: 0.3 }); },   // it dropped into the gutter
+    bowlGutterOff() { rumbleOff(gutSrc, 0.4); gutSrc = null; },
+    bowlBumper() { if (ok('bb', 110)) samp('b_bumper', { vol: 1.3, off: 0.25, dur: 1.2, rate: 0.92 + Math.random() * 0.16, fo: 0.3 }); },   // a thump off the padded rail
+    bowlCrash(vm = 1) { if (!S.b_strike) { play('strike', 2, 1, true); return; } const a = Math.random() < 0.5; samp(a ? 'b_strike' : 'b_strike2', { vol: (a ? 2.1 : 2.6) * vm, off: a ? 0.5 : 0.8, dur: 2.7, fo: 0.5 }); },   // the pins go down
+    bowlPin() { if (!ok('bp', 85) || !S.b_pin) return; if (Math.random() < 0.3 && S.b_pins) samp('b_pins', { vol: 1.1, off: 0.0, dur: 1.6, rate: 0.9 + Math.random() * 0.2, fo: 0.4 }); else samp('b_pin', { vol: 1.2, off: 0.05, dur: 0.9, rate: 0.88 + Math.random() * 0.3, fo: 0.3 }); },   // a pin knocking another
+    bowlReturn() { samp('b_return', { vol: 0.9, off: 2.7, dur: 2.6, delay: 1.2, fo: 0.9 }); },                              // the ball comes back up the return
+    bowlAmbienceOff() { SFX.bowlAmbience(false); },
+    bowlAmbience(on = true) {   // the sound of the alley behind everything: far pins, voices, a bit of music
+      if (!ac) return; if (!on) { loopStop(ambSrc, 1.0); ambSrc = null; return; }
+      if (ambSrc) return;
+      if (S.b_amb) { ambSrc = loopStart('b_amb', 1.0, 29.0, 0.75, 1.5); return; }
+      if (ambLoading) return; ambLoading = true;
+      fetch('audio/bowl_ambience.mp3').then(r => (r.ok ? r.arrayBuffer() : Promise.reject())).then(b => ac.decodeAudioData(b)).then(buf => { S.b_amb = buf; ambLoading = false; if (!ambSrc) SFX.bowlAmbience(true); }).catch(() => { ambLoading = false; });
     },
-    introWhoosh() { if (!ac) return; const t = ac.currentTime; nz(t, 0.55, 0.55, 'bandpass', 500, 4200, 1.2, 0.2); X('whoosh', 0.8, 0.9, 0.12); },
-    introThrow() { if (!ac) return; const t = ac.currentTime; nz(t, 0.7, 0.5, 'bandpass', 400, 5000, 1.0, 0.3); osc('sawtooth', 180, 760, t, 0.6, 0.12, 0.05); kick(t, 0.9); },
-    introImpact() {   // the ball hits: crash, boom, a cymbal, the crowd gasps, and a pin screams toward the lens
-      if (!ac) return; const t = ac.currentTime; play('strike', 1.6, 1, true); X('boom', 1.0, 1.8, 0.05); osc('sine', 80, 28, t, 1.1, 0.8, 0.004); cymbal(t, 1.8, 0.6); play('ooh', 0.9);
-      nz(t + 0.05, 0.62, 0.7, 'bandpass', 300, 6500, 1.8, 0.5); osc('sawtooth', 220, 1700, t + 0.05, 0.62, 0.18, 0.4);
+    // ---- the STRIKE NIGHT intro: war drums, a snare roll, a riser, brass, an air horn and a roaring crowd, all real recordings ----
+    introRise() {   // the announcer and the build-up, aimed at the moment of impact (4.9 s)
+      if (!ac) return; stopIntro(); const t0 = ac.currentTime + 0.06; master.gain.cancelScheduledValues(t0); master.gain.setValueAtTime(MASTER, t0);
+      if (S.bowl_intro && !SFX.muteVoice) { const s = ac.createBufferSource(); s.buffer = S.bowl_intro; s.connect(voiceOut); s.start(t0 + 0.1); introVoice = s; }
+      samp('i_brass', { delay: 0.06, vol: 1.5, dur: 1.6, fo: 0.5, keep: true });                                       // the opening hit
+      samp('i_drums', { delay: 0.5, vol: 1.1, off: 0.0, dur: 4.4, fo: 0.3, keep: true });                              // war drums under the announcer
+      samp('i_brass', { delay: 2.9, vol: 1.7, dur: 1.6, fo: 0.5, keep: true });                                        // "STRIKE NIGHT!"
+      samp('i_snare', { delay: 0.0, off: 0.1, dur: 6.0, vol: 1.7, fo: 0.25, keep: true });                             // a snare roll that peaks about 5 s in
+      samp('i_riser', { delay: 3.4, off: 0.6, dur: 2.6, vol: 1.5, fo: 0.05, keep: true });                             // a riser that peaks as the ball hits
+    },
+    introWhoosh() { X('whoosh', 0.9, 0.9, 0.12); },
+    introThrow() { SFX.bowlRelease(); X('whoosh', 1.0, 0.9, 0.05); },
+    introImpact() {   // the ball hits: crash, boom, the crowd gasps, a pin screams toward the lens
+      if (!ac) return; samp('i_boom', { vol: 1.0, dur: 3.0, fo: 0.8 }); SFX.bowlCrash(0.5); play('ooh', 0.5); X('whoosh', 1.3, 0.9, 0);
     },
     introBlack() {   // the pin hits the lens: everything cuts to silence
-      if (!ac) return; const t = ac.currentTime; for (const s of introSrc) { try { s.stop(t); } catch (e) {} } introSrc = [];
+      if (!ac) return; const t = ac.currentTime; for (const s of introSrc) { try { s.stop(t); } catch (e) {} } introSrc = []; SFX.bowlRollOff(true);
       master.gain.cancelScheduledValues(t); master.gain.setTargetAtTime(0.0, t, 0.01); master.gain.setTargetAtTime(MASTER, t + 1.4, 0.05);
     },
-    introSwell() {   // lights up: horns, an air horn, a huge boom and the whole stadium on its feet
+    introSwell() {   // lights up: boom, brass, an air horn and the whole stadium on its feet
       if (!ac) return; const t = ac.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(MASTER, t);
-      brass(t, [110, 165, 220, 277, 330], 1.8, 1.0); airHorn(t, 1.3, 0.8); kick(t, 1.1); osc('sine', 70, 30, t, 1.3, 0.8, 0.004); cymbal(t, 2.4, 0.7);
-      kick(t + 0.5, 0.7); kick(t + 0.75, 0.8); snare(t + 0.75, 0.6); nz(t, 2.3, 0.35, 'bandpass', 900, 1500, 0.8, 0.3);
-      play('cheer', 1.5); play('applause', 1.0);
+      samp('i_boom', { vol: 1.1, dur: 3.0, fo: 0.8 }); samp('i_brass', { vol: 1.2, dur: 1.8, fo: 0.5 }); samp('i_horn', { vol: 1.1, dur: 2.2, fo: 0.4 });
+      samp('i_crowd', { vol: 1.5, off: 0.2, dur: 7.0, fo: 1.8 }); play('applause', 0.6);
     },
     introStop() { if (!ac) return; stopIntro(); master.gain.cancelScheduledValues(ac.currentTime); master.gain.setTargetAtTime(MASTER, ac.currentTime, 0.05); },
     // ---- sports / stadium ----
@@ -213,7 +226,7 @@ const SFX = (() => {
     musicMuted() { return musicMuted; },
     toggleMusic() { musicMuted = !musicMuted; if (musicMuted) { const w = musicWanted; SFX.musicOff(); musicWanted = w; } else if (musicWanted) SFX.musicOn(); return !musicMuted; },
     cheer(k = 1) { if (play('cheer', 1.4 * Math.min(1.3, k + 0.3))) return; bandNoise(2.2 * k + 0.6, 0.55 * k, 1100, 0.7, 0.35); bandNoise(1.6 * k, 0.3 * k, 2600, 1.2, 0.2); },
-    pinsFar() { if (!ac || !ok('pf', 350)) return; if (!play('strike', 0.22, 0.85 + Math.random() * 0.35, true)) bandNoise(0.5, 0.12, 1800, 1.2, 0.01); },   // other people's pins crashing, far away
+    pinsFar() { if (!ac || !ok('pf', 350)) return; if (!samp('b_strike', { vol: 0.28, off: 0.5, dur: 1.8, rate: 0.8 + Math.random() * 0.4, fo: 0.5 })) play('strike', 0.22, 0.85 + Math.random() * 0.35, true); },   // other people's pins crashing, far away
     // shoe squeak on a hard court, Hawk-Eye stings, and the cinematic slow-motion / impact hits
     squeak() { if (!ac || !ok('sq', 160)) return; const f = 2300 + Math.random() * 900; tone(f, 0.06, 'sine', 0.05, 1.25); tone(f * 1.5, 0.05, 'triangle', 0.025, 0.8, 0.04); },
     varSting() { if (!ac) return; [988, 1319, 1760].forEach((f, i) => tone(f, 0.14, 'sine', 0.16, 1, i * 0.09)); bandNoise(0.5, 0.16, 3000, 2, 0.05); },

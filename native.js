@@ -34,8 +34,9 @@ function nativeLoad() {
           if (!b) return; const u = new Uint8Array(b), p = m._malloc(u.length); m.HEAPU8.set(u, p);
           m.ccall('cc_put_file', null, ['string', 'number', 'number'], [f, p, u.length]); m._free(p);
         }).catch(() => {}));
-      }, bad);
+      }).catch(bad);   // an error while starting the engine (no WebGL, no memory…) must not leave the game on "Loading…" forever
     s.onerror = bad; document.head.appendChild(s);
+    setTimeout(() => bad(new Error('The game engine took too long to load')), 45000);   // a hung download ends too (a no-op once it has loaded)
   });
   NATIVE.loading.catch(() => { NATIVE.loading = null; });
   return NATIVE.loading;
@@ -127,7 +128,10 @@ class NativeGame {
       const list = this.ps.map(p => `${String(p.name).replace(/[|;]/g, '')}|${p.color}|${p.bot ? 1 : 0}`).join(';');
       m.ccall('cc_start', null, ['string', 'string'], [this.id, list]);
       this.ready = true;
-    }).catch(e => { console.error(e); this.c.banner('Could not load this game', 2200, '#ff4d6d'); });
+    }).catch(e => {
+      console.error(e); this.err = String((e && e.message) || e); this.c.banner('Could not load this game', 2200, '#ff4d6d');
+      if ((this.tries = (this.tries || 0) + 1) < 3) setTimeout(() => { if (!this.dead) { this.err = null; this.start(); } }, 2500);   // try again by itself
+    });
   }
   update(dt) {
     this.t += dt;
@@ -140,9 +144,11 @@ class NativeGame {
   draw(g) {
     if (!this.ready) {
       g.fillStyle = '#0b1020'; g.fillRect(0, 0, 1600, 900);
-      txt(g, 'Loading…', 800, 450, 44, '#fff');
+      txt(g, this.err ? 'Could not load this game' : 'Loading…', 800, 450, 44, this.err ? '#ff8787' : '#fff');
       g.strokeStyle = '#4dabff'; g.lineWidth = 6; g.lineCap = 'round';
       g.beginPath(); g.arc(800, 540, 26, this.t * 5, this.t * 5 + 4); g.stroke();
+      if (this.err) txt(g, this.err.slice(0, 90) + ' — trying again…', 800, 610, 22, '#ced4da');
+      else if (this.t > 12) txt(g, 'Still loading… check the connection, or reload the page', 800, 610, 22, '#ced4da');
       return;
     }
     nativeBlit(g, this.texts);

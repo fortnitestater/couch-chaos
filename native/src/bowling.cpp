@@ -27,12 +27,12 @@ inline float Prof(float z) { float t = Clamp((z - 11.5f) / 4.0f, 0.f, 1.f); retu
 // sideways displacement from hooking, at depth z, for hook h and a ball doing vz m/s:  AMAX * h * HookI(z) / vz^2
 float HookI(float z) { float s = 0; const float st = 0.1f; for (float u = 0; u < z; u += st) s += (z - u - st * 0.5f) * Prof(u + st * 0.5f) * st; return s; }
 
-struct Ball { float x = 0, z = 0, vx = 0, vz = 0, y = BALL_R, rot = 0, ax = 0; bool on = false, bump = true, bumped = false, gut = false; };   // bump: the bumpers are up · gut: in the gutter
+struct Ball { float x = 0, z = 0, vx = 0, vz = 0, y = BALL_R, rot = 0, ax = 0; bool on = false, bump = true, bumped = false, gut = false, gutNew = false; };   // bump: the bumpers are up · gut: in the gutter
 struct PinB { float x = 0, z = 0, vx = 0, vz = 0, tilt = 0, w = 0, dx = 0, dz = 1, y = 0, vy = 0, wobA = 0, wobT = 0, pitT = 0; int st = 0; bool inPit = false; };   // st: 0 standing, 1 falling, 2 lying, 3 gone
 
 struct PinSet {
   PinB p[10]; int hits = 0; float bigHit = 0; bool thump = false;
-  static void Home(int i, float& x, float& z) { int r = 0, k = i; while (k > r) { r++; k -= r; } x = (k - r / 2.f) * 0.3048f; z = HEAD_Z + r * 0.264f; }
+  static void Home(int i, float& x, float& z) { int r = 0, k = i; while (k > r) { r++; k -= r; } x = -(k - r / 2.f) * 0.3048f; z = HEAD_Z + r * 0.264f; }   // world +x is the TV's LEFT, so this puts the 7-pin (i=6) on the left and the 10-pin on the right, exactly like the phone draws them
   void Reset(int mask = 1023) { for (int i = 0; i < 10; i++) { PinB q; Home(i, q.x, q.z); q.st = ((mask >> i) & 1) ? 0 : 3; p[i] = q; } }
   bool Up(int i) const { const PinB& q = p[i]; return q.st == 0 && !q.inPit && q.tilt < 0.14f && fabsf(q.x) < 0.56f && q.z < PIT_Z - 0.03f; }
   int Mask() const { int m = 0; for (int i = 0; i < 10; i++) if (Up(i)) m |= 1 << i; return m; }
@@ -111,7 +111,7 @@ void RollStep(Ball& b, PinSet& ps, float dt, float steer) {
     b.x += b.vx * h; b.z += b.vz * h; b.rot += b.vz * h / BALL_R;
     if (b.bump) {   // the bumper rails: the ball hits the padded face, loses most of its sideways speed and rebounds
       if (b.z < BUMP_END && fabsf(b.x) > BUMP_X) { float sg = copysignf(1.f, b.x); b.x = sg * BUMP_X; if (b.vx * sg > 0) { b.vx *= -BUMP_E; b.vz *= 0.985f; b.bumped = true; } }
-    } else if (!b.gut && b.z < PIT_Z - 0.3f && fabsf(b.x) > 0.5f) { b.gut = true; b.bumped = true; }   // no bumpers: over the edge and into the gutter
+    } else if (!b.gut && b.z < PIT_Z - 0.3f && fabsf(b.x) > 0.5f) { b.gut = true; b.gutNew = true; }   // no bumpers: over the edge and into the gutter
     if (b.gut) { float sg = copysignf(1.f, b.x); b.vx = 0; b.x += (sg * 0.65f - b.x) * fminf(1.f, 14.f * h); b.y = fmaxf(BALL_R - 0.13f, b.y - 1.2f * h); }
     ps.BallHit(b); ps.Step(h);
     if (b.z > PIT_Z) { b.y = fmaxf(BALL_R - 0.35f, b.y - 2.5f * h); b.vz *= fmaxf(0.f, 1 - 5 * h); if (b.z > BACK_Z) { b.z = BACK_Z; b.vz = 0; } }
@@ -167,7 +167,7 @@ struct Bowling : Classic {
   struct HeroPin { bool on = false; Vector3 p{}, q{}; float t = 0, ang = 0; } hero;
   bool heroDraw = false, hideHud = false;   // hideHud: the scoreboard and captions stay off while the screen fades up from black
   Lane& Mine() { return lanes[-LMIN]; }
-  ~Bowling() { for (Texture2D* t : { &carpet, &banner, &neon, &ads }) if (t->id) UnloadTexture(*t); }
+  ~Bowling() { for (Texture2D* t : { &carpet, &banner, &neon, &ads }) if (t->id) UnloadTexture(*t); Sfx("bowlRollOff"); Sfx("bowlGutterOff"); Sfx("bowlAmbienceOff"); }
 
   void Start() override {
     InitCam(58); g_cineK = 0; frames = N() > 4 ? 2 : 3; pts.assign(N(), 0); strikes.assign(N(), 0);
@@ -178,7 +178,7 @@ struct Bowling : Classic {
       lanes.push_back(L);
     }
     Layout(-1, kit::Msg("🎳", "Strike night!", "Watch the TV…"));
-    Sfx("crowdOn"); BeginIntro();
+    Sfx("musicOff"); Sfx("bowlAmbience"); BeginIntro();   // the alley's own noise, not a stadium murmur
   }
   // ---------------------------------------------------------------- the intro: the alley, a throw, a pin in your face
   void BeginIntro() {
@@ -258,7 +258,7 @@ struct Bowling : Classic {
   }
   void LetGo() {
     Lane& L = Mine(); L.ball = Ball(); L.ball.bump = bumpers; L.ball.x = wx; L.ball.z = -0.1f; L.ball.vx = wslope * wvz; L.ball.vz = wvz; L.ball.on = true; L.ball.ax = AMAX * whk;
-    wlet = true; phase = "roll"; rollT = 0; Sfx("whoosh"); Shake(3); sendT = 0; SendBowl("roll");
+    wlet = true; phase = "roll"; rollT = 0; Sfx("bowlRelease"); Sfx("bowlRollOn"); Shake(3); sendT = 0; SendBowl("roll");
   }
   void BotThrow() {
     float xn = Clamp(bxn, -0.6f, 0.6f), x = -xn * 0.42f, tgt = frand(0, 1) < 0.5f ? -0.075f : 0.075f;
@@ -284,9 +284,10 @@ struct Bowling : Classic {
     int before = roll == 0 ? 0 : firstDown, down = before + newly, gain = newly; again = false; res = "";
     if (roll == 0 && down == 10) { res = "STRIKE!"; gain = 20; Pop("STRIKE  +20", Hex(0xffd43b)); strikes[cur]++; Sfx("cheer"); conf.Spawn({ 0, 1.5f, 19 }, 120, 1.5f, 4); Shake(10); }
     else if (roll == 1 && down == 10) { res = "SPARE!"; gain = 15 - before; Pop("SPARE  +" + I(gain), Hex(0x51cf66)); Sfx("applause"); fx.Burst({ 0, 1, 19 }, 60, Hex(0x51cf66), 5, 1, 0.05f, 3); }
-    else { res = newly == 0 ? "MISS" : I(newly) + (newly == 1 ? " PIN" : " PINS"); Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } Sfx("ding"); }
+    else { res = newly == 0 ? "MISS" : I(newly) + (newly == 1 ? " PIN" : " PINS"); Pop(down == 0 && roll == 0 ? "OOPS… 0" : I(newly) + " PIN" + (newly == 1 ? "" : "S"), WHITE); if (roll == 0) { again = true; firstDown = down; } if (newly == 0) Sfx("ooh"); }
     if (g_dbg == 36) fprintf(stderr, "BOWL ball=%d newly=%d down=%d%c", roll, newly, down, 10);   // debug: print every result
     pts[cur] += gain; if (again) roll = 1;
+    Sfx("bowlRollOff"); Sfx("bowlGutterOff"); Sfx("bowlReturn");   // the rumble stops and the ball comes back up the return
     phase = "show"; wait = down == 10 ? 3 : 2.4f; SendBowl("show", res);
   }
 
@@ -311,8 +312,9 @@ struct Bowling : Classic {
     if (phase == "roll") {
       rollT += dt; windT += dt; float sdt = dt * ts; Ball& b = L.ball;
       RollStep(b, L.pins, sdt, P(cur).bot ? 0.f : P(cur).stick.x);
-      if (b.bumped) { b.bumped = false; Sfx("tink"); }
-      if (L.pins.hits > 0) { if (!crash && L.pins.bigHit > 1.2f) { crash = true; Sfx("strike"); Shake(6); } else Sfx("bonk"); if (L.pins.hits > 1 && frand(0, 1) < 0.5f) fx.Burst({ LaneX(0) + frand(-0.3f, 0.3f), 0.3f, 18.8f }, 3, WHITE, 2, 0.4f, 0.03f, 3); L.pins.hits = 0; L.pins.bigHit = 0; }
+      if (b.bumped) { b.bumped = false; Sfx("bowlBumper"); }   // a thump off the padded rail
+      if (b.gutNew) { b.gutNew = false; Sfx("bowlGutterOn"); }   // over the edge, into the gutter
+      if (L.pins.hits > 0) { Sfx("bowlRollOff"); if (!crash && L.pins.bigHit > 1.2f) { crash = true; Sfx("bowlCrash"); Shake(6); } else Sfx("bowlPin"); if (L.pins.hits > 1 && frand(0, 1) < 0.5f) fx.Burst({ LaneX(0) + frand(-0.3f, 0.3f), 0.3f, 18.8f }, 3, WHITE, 2, 0.4f, 0.03f, 3); L.pins.hits = 0; L.pins.bigHit = 0; }
       if (!shot && crash && L.pins.NotYetHit() == 0) { shot = true; StrikeShot(roll == 0); }
       sendT -= dt; if (sendT <= 0) { sendT = 0.07f; SendBowl("roll"); }
       bool near = b.z > 16.5f && b.z < 19.5f && roll == 0; ts += ((near ? 0.4f : 1.f) - ts) * fminf(1.f, dt * 8);
