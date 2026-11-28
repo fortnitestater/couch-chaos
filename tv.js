@@ -27,6 +27,10 @@
     });
     peer.on('disconnected', () => { if (peer === me) $('#netStatus').textContent = '🟠 Reconnecting…'; });
     peer.on('connection', conn => {
+      if (conn.metadata && conn.metadata.fast) {   // a phone's fast lane: only positions, numbered (an older one never overwrites a newer one)
+        conn.on('data', m => { try { const p = S.players.find(q => q.cid === conn.metadata.cid && q.connected); if (p && m && m.t === 'in') { p.fastN = (p.fastN || 0) + 1; takeInput(p, m); } } catch (err) { console.error(err); } });
+        return;
+      }
       conn.on('data', m => { try { onMsg(conn, m); } catch (err) { console.error(err); } });
       conn.on('close', () => onClose(conn)); conn.on('error', () => onClose(conn));
     });
@@ -63,6 +67,16 @@
   const CAM_OK = ['swing', 'move', 'shake', 'touch']; // body-tracked players join motion games only
   const camFits = () => !S.def || CAM_OK.includes(S.def.ctrl);
 
+  function takeInput(p, m) {
+    if (m.q) { if (m.q <= (p.inQ || 0)) return; p.inQ = m.q; }   // an older position that arrived late never overwrites a newer one
+    const prev = p.input, now = performance.now(), nx = +m.x || 0, ny = +m.y || 0;
+    // how fast the finger moves (for the drag games the TV can then draw it where it is heading, see NativeGame.update)
+    if (prev.touch && m.touch && p.inT) { const dt = (now - p.inT) / 1000; if (dt > 0.004 && dt < 0.2) { const k = 0.5, cl = v => Math.max(-8, Math.min(8, v)); p.inVx = (p.inVx || 0) * (1 - k) + cl((nx - prev.x) / dt) * k; p.inVy = (p.inVy || 0) * (1 - k) + cl((ny - prev.y) / dt) * k; } }
+    else { p.inVx = p.inVy = 0; }
+    p.inT = now;
+    p.input = { x: nx, y: ny, a: !!m.a, b: !!m.b, touch: !!m.touch };
+    if (S.state === 'game' && S.game && S.game.onButton) { if (!prev.a && p.input.a) S.game.onButton(p, 'a'); if (!prev.b && p.input.b) S.game.onButton(p, 'b'); }
+  }
   function onMsg(conn, m) {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join') return onJoin(conn, m);
@@ -70,11 +84,7 @@
     p.lastSeen = Date.now(); if (m.t === 'pong') { p.pongAt = p.lastSeen; if (m.ts) { const r = Math.min(600, Date.now() - m.ts); p.rtt = p.rtt ? p.rtt * 0.7 + r * 0.3 : r; } return; } // round-trip time → latency compensation
     const isVip = p === vip() || (p.isCam && !vip());
     switch (m.t) {
-      case 'in': {
-        const prev = p.input; p.input = { x: +m.x || 0, y: +m.y || 0, a: !!m.a, b: !!m.b, touch: !!m.touch };
-        if (S.state === 'game' && S.game && S.game.onButton) { if (!prev.a && p.input.a) S.game.onButton(p, 'a'); if (!prev.b && p.input.b) S.game.onButton(p, 'b'); }
-        break;
-      }
+      case 'in': takeInput(p, m); break;
       case 'act': if (S.state === 'game' && S.game && S.game.onAct) S.game.onAct(p, m); break;
       case 'react': reactFx(p, String(m.e || '').slice(0, 4)); break;
       case 'res': if (isVip && S.state === 'results' && !S.party) { clearTimeout(timer); if (m.a === 'again' && S.def) { const d = S.def; S.game = null; startIntro(d, true); } else afterResults(); } break;   // rematch, or straight back to the menu
@@ -107,7 +117,7 @@
       p = { cid: m.cid, name, lastSeen: Date.now(), color: COLORS[idx], avatar: AVATARS[idx], conn, connected: true, trophies: 0, input: { x: 0, y: 0, a: false, b: false }, layout: null };
       S.players.push(p); SFX.join(); toastTV(`${p.avatar} ${p.name} joined!`);
     }
-    p.lastSeen = Date.now();
+    p.lastSeen = Date.now(); p.inQ = 0;   // a phone that (re)joins counts its positions from 1 again
     send(p, { t: 'welcome', name: p.name, color: p.color, avatar: p.avatar, code: S.code });
     if (S.state === 'home') { renderPlayers(); sendLobby(); }
     else if (S.state === 'intro') { sendIntro(p); renderReady(); }

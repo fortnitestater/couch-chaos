@@ -450,7 +450,7 @@ struct Tug : Classic {
 // AIR HOCKEY — classic table, mallets and a puck. Red side vs blue side.
 // =====================================================================================
 struct Hockey : Classic {
-  struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; };
+  struct M { float x, y, vx = 0, vy = 0; int team, goals = 0; float back = 0; float x0 = 0, y0 = 0; };   // x0/y0: where it was at the start of this frame (the puck is checked along the whole path)
   std::vector<M> m; float px = 800, py = 490, pvx = 0, pvy = 0, pause = 0, T = 150, sndT = 0, stuckT = 0, endIn = 0, pspin = 0, pang = 0, flash = 0; int score[2] = { 0, 0 }, last = -1, flashSide = 1; bool over = false, sudden = false; float suddenT = 0; Color flashCol = WHITE; Texture2D tabTex{};
   ~Hockey() { if (tabTex.id) UnloadTexture(tabTex); }
   const float L = 250, R = 1350, TOP = 190, BOT = 790, CY = 490, GH = 125, MR = 46, PR = 26;
@@ -484,11 +484,12 @@ struct Hockey : Classic {
   Vector2 ToPhone(int tm, float x, float y) { float u = (x - 800) / 550, v = (y - CY) / 300; return tm == 0 ? Vector2{ (v + 1) / 2, (1 - u) / 2 } : Vector2{ (1 - v) / 2, (1 + u) / 2 }; }
   Vector2 FromPhone(int tm, Vector2 s) { float u = tm == 0 ? 1 - 2 * s.y : 2 * s.y - 1, v = tm == 0 ? 2 * s.x - 1 : 1 - 2 * s.x; return { 800 + u * 550, CY + v * 300 }; }
   void Snap(float dt) {
-    snapT -= dt; if (snapT > 0) return; snapT = 0.05f;
+    snapT -= dt; if (snapT > 0) return; snapT = 0.025f;
     for (int i = 0; i < N(); i++) {
       if (P(i).bot) continue;
       std::vector<TouchObj> o; int tm = m[i].team;
-      Vector2 p = ToPhone(tm, px, py); o.push_back({ p.x, p.y, PR / 600.f, Hex(0x212529), 0 });
+      Vector2 p = ToPhone(tm, px, py), p2 = ToPhone(tm, px + pvx * 0.1f, py + pvy * 0.1f); TouchObj po{ p.x, p.y, PR / 600.f, Hex(0x212529), 0 };
+      po.vx = (p2.x - p.x) * 10; po.vy = (p2.y - p.y) * 10; if (pause > 0) po.vx = po.vy = 0; o.push_back(po);
       for (int j = 0; j < N(); j++) { Vector2 q = ToPhone(tm, m[j].x, m[j].y); o.push_back({ q.x, q.y, MR / 600.f, P(j).color, j == i ? 1 : m[j].team == tm ? 2 : 3 }); }
       char b[64]; snprintf(b, sizeof b, "YOU %d - %d THEM%s", score[tm], score[1 - tm], sudden ? " · GOLDEN GOAL" : "");
       SendSnap(i, o, b);
@@ -558,9 +559,10 @@ struct Hockey : Classic {
         } else { float tx = gx + dir * 120, ty = Clamp(py, CY - 120, CY + 120); if (Closest(q.team) == i && !mine) {} else if (Closest(q.team) != i) { tx = gx + dir * (i % 4 < 2 ? 90.f : 260.f); ty = CY + (i % 4 < 2 ? 0.f : (py > CY ? -90.f : 90.f)); } in = Vector2Scale(Toward(q.x, q.y, tx, ty), fminf(1, hypotf(tx - q.x, ty - q.y) / 60) * 0.85f); }
       } else in = Norm(P(i).stick);
       q.back -= dt;
-      if (!P(i).bot && P(i).touch) {  // the mallet follows your finger (fast, but with real speed so hits feel right)
+      q.x0 = q.x; q.y0 = q.y;
+      if (!P(i).bot && P(i).touch) {  // the mallet stays right under your finger (about 20 ms behind it), with a real speed so hits feel right
         Vector2 t = FromPhone(q.team, TouchAt(P(i)));
-        q.vx = Clamp((t.x - q.x) * 20, -2600, 2600); q.vy = Clamp((t.y - q.y) * 20, -2600, 2600);
+        q.vx = Clamp((t.x - q.x) * 48, -4800, 4800); q.vy = Clamp((t.y - q.y) * 48, -4800, 4800);
       } else { float k = fminf(1, dt * 16); q.vx += (in.x * 950 - q.vx) * k; q.vy += (in.y * 950 - q.vy) * k; }
       q.x += q.vx * dt; q.y += q.vy * dt;
       float lo = q.team == 0 ? L + MR : 800 + MR, hi = q.team == 0 ? 800 - MR : R - MR;
@@ -579,7 +581,9 @@ struct Hockey : Classic {
       pvx += nx * j; pvy += ny * j; float slip = vt + pspin * PR * 0.5f, dvt = -copysignf(fminf(fabsf(slip) * 0.5f, 0.12f * j), slip);
       pvx += tx * dvt; pvy += ty * dvt; pspin = Clamp(pspin - dvt / (PR * 0.5f), -60.f, 60.f);
     };
+    std::vector<Vector2> mEnd(N()); for (int i = 0; i < N(); i++) { mEnd[i] = { m[i].x, m[i].y }; }
     for (int s = 0; s < SUB && !over; s++) {
+      for (int i = 0; i < N(); i++) { float u = (s + 1) / (float)SUB; m[i].x = m[i].x0 + (mEnd[i].x - m[i].x0) * u; m[i].y = m[i].y0 + (mEnd[i].y - m[i].y0) * u; }
       px += pvx * h; py += pvy * h;
       float f = expf(-0.22f * h); pvx *= f; pvy *= f;
       pspin *= expf(-0.7f * h); pang += pspin * h;
@@ -606,6 +610,7 @@ struct Hockey : Classic {
       }
       float sp = hypotf(pvx, pvy); if (sp > 1700) { pvx *= 1700 / sp; pvy *= 1700 / sp; }
     }
+    for (int i = 0; i < N(); i++) { m[i].x = mEnd[i].x; m[i].y = mEnd[i].y; }
   }
   void Draw() override {
     { // lower and closer than a top-down view (the phone shows the whole table); the camera leans with the puck

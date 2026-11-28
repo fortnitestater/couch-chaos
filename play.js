@@ -310,12 +310,23 @@
     return { x, y, a: keys.a || btn.a, b: keys.b || btn.b };
   }
   let lastSent = { x: 0, y: 0, a: false, b: false };
+  let fast = null, inSeq = 0;
+  function openFast() {   // a second, unordered channel to the TV for the stream of positions
+    if (!peer || peer.destroyed || !peer.open || (fast && (fast.open || fast._opening))) return;
+    try { const f = peer.connect(PREFIX + code, { reliable: false, serialization: 'json', metadata: { fast: 1, cid } }); f._opening = true; fast = f;
+      f.on('open', () => { f._opening = false; });
+      f.on('close', () => { if (fast === f) fast = null; }); f.on('error', () => { if (fast === f) fast = null; });
+      setTimeout(() => { if (fast === f && !f.open) { fast = null; try { f.close(); } catch (e) {} } }, 8000); } catch (e) { fast = null; }
+  }
   function flush(force) {
     if (!conn || !conn.open || !layout || !['pad', 'button', 'swing', 'touch'].includes(layout.name)) return;
     const s = readInput(), fine = layout.name === 'touch', eps = fine ? 0.004 : 0.03;
     if (!force && Math.abs(s.x - lastSent.x) < eps && Math.abs(s.y - lastSent.y) < eps && s.a === lastSent.a && s.b === lastSent.b && s.touch === lastSent.touch) return;
     s.x = +s.x.toFixed(fine ? 3 : 2); s.y = +s.y.toFixed(fine ? 3 : 2);
-    try { conn.send({ t: 'in', ...s }); } catch (e) {}
+    const msg = { t: 'in', ...s, q: ++inSeq };
+    // positions go on the fast lane (it never waits for a lost packet); a press or a release also goes on the sure one
+    if (fast && fast.open) { try { fast.send(msg); } catch (e) {} if (force || s.a !== lastSent.a || s.b !== lastSent.b || s.touch !== lastSent.touch) { try { conn.send(msg); } catch (e) {} } }
+    else { try { conn.send(msg); } catch (e) {} }
     lastSent = s;
     drawYoke(s);
     const ad = document.getElementById('aimDot'); if (ad) ad.style.left = (50 + s.x * 46) + '%';
@@ -450,7 +461,7 @@
   const TM = { on: false, L: null, objs: [], info: '', fing: null, touching: false, raf: 0, cw: 0, ch: 0 };
   function onSnap(m) {
     if (!TM.on) return;
-    const n = m.o.map(a => ({ x: a[0], y: a[1], r: a[2], c: a[3], k: a[4], r2: a[5] }));
+    const n = m.o.map(a => ({ x: a[0], y: a[1], r: a[2], c: a[3], k: a[4], r2: a[5], vx: +a[6] || 0, vy: +a[7] || 0 })); TM.snapAt = performance.now();
     if (n.length === TM.objs.length && n.every((o, i) => o.k === TM.objs[i].k)) n.forEach((o, i) => { o.dx = TM.objs[i].dx; o.dy = TM.objs[i].dy; });
     n.forEach(o => { if (o.dx === undefined) { o.dx = o.x; o.dy = o.y; } });
     TM.objs = n;
@@ -572,7 +583,14 @@
       for (let r = 0; r < P.h; r++) for (let q = 0; q < P.w; q++) { const v = P.g.charCodeAt(r * P.w + q) - 97; if (v < 0 || !P.c[v]) continue; g.fillStyle = P.c[v]; g.fillRect(q * cw - 0.5, r * chh - 0.5, cw + 1, chh + 1); }
       g.globalAlpha = 1; }
     // ---- objects (smoothed) ----
-    const objs = TM.objs; objs.forEach(o => { o.dx += (o.x - o.dx) * 0.45; o.dy += (o.y - o.dy) * 0.45; });
+    // a moving thing (the puck) is drawn where it is NOW: its last known spot plus its speed times the time since (and the trip from the TV);
+    // the rest is smoothed as before
+    const age = Math.min(0.12, (performance.now() - (TM.snapAt || 0)) / 1000 + 0.035);
+    const objs = TM.objs; objs.forEach(o => {
+      if (o.vx || o.vy) { const asp = +L.aspect || 1, rx = o.r, ry = o.r * asp; let x = o.x + o.vx * age, y = o.y + o.vy * age;
+        if (x < rx) x = 2 * rx - x; if (x > 1 - rx) x = 2 * (1 - rx) - x; if (y < ry) y = 2 * ry - y; if (y > 1 - ry) y = 2 * (1 - ry) - y;   // bounce off the rails
+        o.dx += (x - o.dx) * 0.8; o.dy += (y - o.dy) * 0.8; }
+      else { o.dx += (o.x - o.dx) * 0.45; o.dy += (o.y - o.dy) * 0.45; } });
     if (L.trail) for (const c in TM.tr) { const tr = TM.tr[c]; if (tr.length < 2) continue; g.strokeStyle = c; g.lineWidth = 4 * d; g.lineJoin = g.lineCap = 'round'; g.shadowColor = c; g.shadowBlur = 10 * d; g.beginPath(); tr.forEach((q, i) => i ? g.lineTo(q[0] * W, q[1] * H) : g.moveTo(q[0] * W, q[1] * H)); g.stroke(); g.shadowBlur = 0; }
     // 8 gate (r = half width), 9 solid thing (tree / fort / bush / chair), 10 bomb, 11 floor disc, 12 small dot (shot, snowball)
     const order = [11, 7, 6, 5, 8, 9, 13, 4, 10, 12, 3, 2, 0, 1];
@@ -1473,7 +1491,7 @@
     if (m.t === 'welcome') {
       setupReacts(); ownerAuto();
       joined = true; me = m; document.body.style.setProperty('--me', m.color || '#3b7bff'); document.body.classList.add('inGame'); tries = 0; joinTries = 0; netBanner(false); if (camMode) sendMsg({ t: 'camOn' }); setTimeout(motionGate, 50); calButton(); if (cal) sendMsg({ t: 'calib', yaw: Math.round(cal.yaw) }); sendMsg({ t: 'ctrl', mode: ctrlMode }); updateTiltUI();
-      $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden'); guardBack();
+      $('#joinScr').classList.add('hidden'); $('#ctrlScr').classList.remove('hidden'); guardBack(); setTimeout(openFast, 300);
       $('#meDot').style.background = m.color; $('#meDot').textContent = m.avatar; $('#meName').textContent = m.name;
       document.body.style.setProperty('--c', m.color); setStatus('🟢 Room ' + m.code);
       if (!layout) renderMsg({ text: 'Connected!' });

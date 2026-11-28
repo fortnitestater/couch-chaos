@@ -7,7 +7,7 @@
 // ---------- touch maps: the phone shows the play area live and your finger moves you ----------
 // phone space: x 0..1 across, y 0..1 down; r is a fraction of the map width.
 // k: 0 ball/puck, 1 me, 2 my team, 3 other player, 4 good pickup (coin), 5 danger circle, 6 danger tile (r = half width, r2 = half height), 7 broken tile
-struct TouchObj { float x, y, r; Color c; int k; float r2 = 0; };
+struct TouchObj { float x, y, r; Color c; int k; float r2 = 0; float vx = 0, vy = 0; };   // vx / vy: phone units per second (the phone draws it where it is now)
 inline std::string TouchLayout(const std::string& theme, float aspect, const std::string& mode, const std::string& btn, const std::string& hint, int team = -1, const std::string& btn2 = "", const std::string& extra = "") {
   char a[32]; snprintf(a, sizeof a, "%.4f", aspect);
   std::string q = [](const std::string& s) { std::string r = "\""; for (char c : s) { if (c == '"' || c == '\\') { r += '\\'; r += c; } else r += c; } return r + "\""; }(hint);
@@ -16,7 +16,8 @@ inline std::string TouchLayout(const std::string& theme, float aspect, const std
 inline void SendSnap(int pid, const std::vector<TouchObj>& o, const std::string& info = "") {
   std::string s = "{\"t\":\"snap\",\"o\":["; char b[96];
   for (size_t i = 0; i < o.size(); i++) {
-    snprintf(b, sizeof b, "%s[%.3f,%.3f,%.3f,\"#%02x%02x%02x\",%d,%.3f]", i ? "," : "", o[i].x, o[i].y, o[i].r, o[i].c.r, o[i].c.g, o[i].c.b, o[i].k, o[i].r2);
+    if (o[i].vx != 0 || o[i].vy != 0) snprintf(b, sizeof b, "%s[%.3f,%.3f,%.3f,\"#%02x%02x%02x\",%d,%.3f,%.3f,%.3f]", i ? "," : "", o[i].x, o[i].y, o[i].r, o[i].c.r, o[i].c.g, o[i].c.b, o[i].k, o[i].r2, o[i].vx, o[i].vy);
+    else snprintf(b, sizeof b, "%s[%.3f,%.3f,%.3f,\"#%02x%02x%02x\",%d,%.3f]", i ? "," : "", o[i].x, o[i].y, o[i].r, o[i].c.r, o[i].c.g, o[i].c.b, o[i].k, o[i].r2);
     s += b;
   }
   s += "]";

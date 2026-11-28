@@ -146,7 +146,14 @@ class NativeGame {
     this.t += dt;
     if (!this.ready || this.dead) return;
     const m = NATIVE.mod; m.game = this;
-    this.ps.forEach((p, i) => { if (!p.bot) { const n = p.input || {}; m._cc_input(i, +n.x || 0, +n.y || 0, (n.a ? 1 : 0) | (n.touch ? 2 : 0), n.b ? 1 : 0); } });
+    const now = performance.now();
+    this.ps.forEach((p, i) => { if (!p.bot) { const n = p.input || {}; let x = +n.x || 0, y = +n.y || 0;
+      // a finger dragging a mallet: put it where the finger is heading by half the trip time from the phone (at most 60 ms), so the TV keeps up with the hand.
+      // A finger that has stopped sends nothing new: then there is no lead at all.
+      if (n.touch && p.layout && p.layout.name === 'touch' && p.layout.mode === 'drag' && p.inT && now - p.inT < 70) {
+        const lead = Math.min(0.06, Math.max(0, ((p.rtt || 40) / 2) / 1000 + (now - p.inT) / 1000));
+        x = Math.max(-1, Math.min(1, x + (p.inVx || 0) * lead)); y = Math.max(-1, Math.min(1, y + (p.inVy || 0) * lead)); }
+      m._cc_input(i, x, y, (n.a ? 1 : 0) | (n.touch ? 2 : 0), n.b ? 1 : 0); } });
     this.texts.length = 0;
     m._cc_frame(dt);
   }
