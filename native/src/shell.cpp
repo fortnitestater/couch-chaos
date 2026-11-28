@@ -390,13 +390,22 @@ void DrawResults(float a, float dt) {
   for (int i = 0; i < 6; i++) { float x = 200 + i * 240 + sinf(T * 0.6f + i) * 120; DrawTriangle({ x, -20 }, { x - 220, (float)H }, { x + 220, (float)H }, Hex(i % 2 ? 0xffd43b : 0x8b5cf6, 16)); }
   EndBlendMode();
   lit.Begin(cam, { 0.15f, 0.09f, 0.3f }, 0.02f);
+  // the mood: a stage at night. Three spotlights on the winners, violet light round the edges, a polished floor
+  lit.Mood(0.2f, { 0.55f, 0.5f, 0.8f }, { 0.1f, -1.0f, 0.5f }, 0.05f); lit.Sky({ 0.5f, 0.38f, 0.85f });
+  lit.Light({ 0, 6.5f, 1.5f }, { 2.6f, 2.2f, 1.6f }, 3.6f); lit.Light({ -2.6f, 5.5f, 1.5f }, { 1.6f, 1.6f, 1.9f }, 3.0f); lit.Light({ 2.6f, 5.5f, 1.5f }, { 1.9f, 1.5f, 1.2f }, 3.0f);
+  lit.Light({ -7, 2.5f, -2 }, { 0.9f, 0.3f, 1.6f }, 5.0f); lit.Light({ 7, 2.5f, -2 }, { 0.5f, 0.35f, 1.8f }, 5.0f);
   BeginMode3D(cam);
   lit.Draw(prim.cyl, TRS({ 0, -0.3f, 0 }, { 0, 0, 0 }, { 16, 0.3f, 9 }), Hex(0x2b1d5c));
-  lit.Draw(prim.cyl, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 12, 0.04f, 7 }), Hex(0x3d2a80));
+  lit.Rough(0.1f); lit.Draw(prim.cyl, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 12, 0.04f, 7 }), Hex(0x2c1f63)); lit.Rough(0.5f);
   const J& pod = R["pod"];
   const float px[3] = { 0, -2.6f, 2.6f }, ph[3] = { 2.4f, 1.7f, 1.15f };
   const unsigned pc[3] = { 0xffd43b, 0xced4da, 0xe8a87c };
   Vector3 heads[3]; bool have[3] = { false, false, false }; float podH[3] = { 0, 0, 0 };
+  if (g_aoOn) lit.MirrorBegin(0.0f, 0.3f);   // the polished stage reflects the podiums and the winners (drawn first, faded, under the real ones)
+  for (int i = 0; g_aoOn && i < 3 && i < (int)pod.size(); i++) { float h = ph[i] * Clamp(podS[i].x, 0, 1.3f); if (h < 0.05f) continue;
+    lit.Draw(prim.cube, TRS({ px[i], h / 2, 0 }, { 0, 0, 0 }, { 2.3f, h, 2.3f }), Hex(0x4c3a9e)); lit.Draw(prim.cube, TRS({ px[i], h - 0.08f, 0 }, { 0, 0, 0 }, { 2.36f, 0.18f, 2.36f }), Hex(pc[i]));
+    if (podS[i].x > 0.5f) DrawToon({ px[i], h, 0 }, sinf(T + i) * 0.3f, C(pod[i]["c"]), T, i == 0 ? fabsf(sinf(T * 4.5f)) * 0.6f : fabsf(sinf(T * 3.2f + i)) * 0.25f, i == 0 ? 1 : 0.4f, 1.15f); }
+  if (g_aoOn) lit.MirrorEnd();
   for (int i = 0; i < 3 && i < (int)pod.size(); i++) {
     float delay = (2 - i) * 0.35f; podS[i].To(t > delay ? 1 : 0, dt, 90, 12);
     float h = ph[i] * Clamp(podS[i].x, 0, 1.3f);

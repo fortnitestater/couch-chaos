@@ -230,6 +230,50 @@ void RealProps::Init() {
   }
 }
 
+Mesh BuildPalm(unsigned seed, float height) {
+  MeshBuilder b; srand(seed);
+  std::vector<Vector3> path; float lean = 0.1f + (rand() % 10) * 0.012f;
+  for (int i = 0; i <= 14; i++) { float u = i / 14.f; path.push_back({ lean * height * u * u, height * u, 0 }); }
+  for (int i = 0; i < 14; i++) { float r = 0.3f - 0.11f * i / 14; b.Tube({ path[i], Vector3Lerp(path[i], path[i + 1], 1.08f) }, r, 10, i % 2 ? Color{ 118, 92, 64, 255 } : Color{ 140, 110, 76, 255 }); }
+  Vector3 top = path.back();
+  b.Sphere(top, 0.32f, { 96, 80, 50, 255 }, 6, 10, { 1, 0.8f, 1 });
+  for (int k = 0; k < 4; k++) { float a = k * 1.6f + 0.4f; b.Sphere({ top.x + cosf(a) * 0.22f, top.y - 0.28f, top.z + sinf(a) * 0.22f }, 0.15f, { 92, 66, 34, 255 }, 6, 8); }
+  const int M = 18;
+  for (int f = 0; f < 12; f++) {
+    float a = f * 2 * PI / 12 + (rand() % 100) * 0.005f, len = 3.4f + (rand() % 100) * 0.014f, rise = 0.35f + (rand() % 100) * 0.004f;
+    if (f >= 9) { rise += 0.45f; len *= 0.8f; }   // the young fronds stand up in the middle
+    Vector3 dir = { cosf(a), 0, sinf(a) }, side = { -sinf(a), 0, cosf(a) };
+    std::vector<Vector3> sp(M + 1), L(M + 1), Rt(M + 1);
+    for (int j = 0; j <= M; j++) {
+      float u = (float)j / M, d = len * u, h = len * (rise * u - 0.62f * u * u);
+      sp[j] = Vector3Add(top, Vector3Add(Vector3Scale(dir, d), { 0, h, 0 }));
+      float w = 0.62f * powf(sinf(PI * fminf(u * 1.15f, 1.0f)), 0.6f) * (1 - 0.45f * u) * (j % 2 ? 1.0f : 0.62f);   // saw edge: the leaflets
+      Vector3 up = { 0, w * 0.35f, 0 };   // the two halves fold up into a shallow V
+      L[j] = Vector3Add(sp[j], Vector3Add(Vector3Scale(side, w), up)); Rt[j] = Vector3Add(sp[j], Vector3Subtract(up, Vector3Scale(side, w)));
+    }
+    const Color mid = { 52, 118, 52, 255 }, edge = { 86, 158, 66, 255 };
+    for (int j = 0; j < M; j++) {
+      Vector3 n1 = Vector3Normalize(Vector3CrossProduct(Vector3Subtract(L[j], sp[j]), Vector3Subtract(sp[j + 1], sp[j])));
+      if (n1.y < 0) n1 = Vector3Negate(n1);
+      Vector3 n2 = Vector3Normalize(Vector3CrossProduct(Vector3Subtract(sp[j + 1], sp[j]), Vector3Subtract(Rt[j], sp[j])));
+      if (n2.y < 0) n2 = Vector3Negate(n2);
+      b.Tri(sp[j], L[j], L[j + 1], n1, n1, n1, edge); b.Tri(sp[j], L[j + 1], sp[j + 1], n1, n1, n1, mid);
+      b.Tri(sp[j], sp[j + 1], Rt[j + 1], n2, n2, n2, mid); b.Tri(sp[j], Rt[j + 1], Rt[j], n2, n2, n2, edge);
+    }
+  }
+  return b.Build();
+}
+// a cumulus cloud: a cluster of puffs on a flat base
+Mesh BuildCloud(unsigned seed) {
+  MeshBuilder b; srand(seed);
+  int n = 6 + rand() % 4;
+  for (int i = 0; i < n; i++) {
+    float u = (float)i / (n - 1) - 0.5f, x = u * 46 + (rand() % 100 - 50) * 0.08f, z = (rand() % 100 - 50) * 0.16f;
+    float r = 9 + (1 - fabsf(u) * 1.6f) * 9 + (rand() % 100) * 0.04f;
+    b.Sphere({ x, r * 0.45f, z }, r, { 255, 255, 255, 255 }, 10, 16, { 1, 0.8f, 0.85f });
+  }
+  return b.Build();
+}
 Mesh BuildCrowd(const std::vector<Vector4>& seats, unsigned seed) {
   // every spot gets a moulded plastic stadium seat; most are taken by a seated spectator (legs, arms, head, hair, real clothes)
   MeshBuilder b; srand(seed);
@@ -271,14 +315,14 @@ Mesh BuildCrowd(const std::vector<Vector4>& seats, unsigned seed) {
     for (int sd = -1; sd <= 1; sd += 2) {
       float lx = sd * 0.1f * k + (rand() % 10 - 5) * 0.004f;
       Vector3 hip = R(lx, hipY, hipZ), knee = R(lx * 1.1f, hipY + 0.02f, hipZ + 0.44f * k), ank = R(lx * 1.1f, 0.06f, hipZ + 0.5f * k);
-      b.Tube({ hip, knee }, 0.075f * k, 6, legs);
-      b.Tube({ knee, ank }, 0.058f * k, 6, shorts ? skin : legs);
-      b.Sphere(R(lx * 1.1f, 0.05f, hipZ + 0.58f * k), 0.07f * k, rand() % 2 ? Color{ 245, 245, 245, 255 } : Color{ 40, 40, 44, 255 }, 3, 6, { 1, 0.6f, 1.6f });
+      b.Tube({ hip, knee }, 0.08f * k, 9, legs); b.Sphere(knee, 0.072f * k, shorts ? skin : legs, 5, 8);   // a round knee, not two pipes meeting
+      b.Tube({ knee, ank }, 0.062f * k, 8, shorts ? skin : legs);
+      b.Sphere(R(lx * 1.1f, 0.05f, hipZ + 0.58f * k), 0.07f * k, rand() % 2 ? Color{ 245, 245, 245, 255 } : Color{ 40, 40, 44, 255 }, 4, 8, { 1, 0.6f, 1.6f });
     }
     // torso: a shaped lathe (narrow waist, broad shoulders), flattened front-to-back
     float th = 0.58f * k;
     Matrix xf = MatrixMultiply(MatrixMultiply(MatrixMultiply(MatrixScale(1, 1, 0.66f), MatrixRotateX(lean)), MatrixRotateY(yaw)), MatrixTranslate(R(0, hipY - 0.02f, hipZ - 0.02f).x, s.y + hipY - 0.02f, R(0, hipY, hipZ - 0.02f).z));
-    b.Lathe({ { 0.0f, 0 }, { 0.17f * k, 0.01f }, { 0.18f * k, 0.12f * th }, { 0.165f * k, 0.38f * th }, { 0.2f * k, 0.72f * th }, { 0.2f * k, 0.86f * th }, { 0.12f * k, th }, { 0, th } }, 8,
+    b.Lathe({ { 0.0f, 0 }, { 0.17f * k, 0.01f }, { 0.18f * k, 0.12f * th }, { 0.165f * k, 0.38f * th }, { 0.2f * k, 0.72f * th }, { 0.2f * k, 0.86f * th }, { 0.12f * k, th }, { 0, th } }, 14,
             [&](float, int) { return top; }, xf);
     float shY = hipY + th * 0.88f, headY = hipY + th + 0.2f * k;
     // arms: on the lap, waving, cheering with both hands, or holding a drink / phone
@@ -289,21 +333,23 @@ Mesh BuildCrowd(const std::vector<Vector4>& seats, unsigned seed) {
       if (up) { el = R(sd * 0.3f * k, shY + 0.25f * k, hipZ + 0.06f); hand = R(sd * 0.27f * k, shY + 0.52f * k, hipZ + 0.12f); }
       else if (pose == 2 && sd == 1) { el = R(sd * 0.24f * k, shY - 0.26f * k, hipZ + 0.1f); hand = R(sd * 0.1f * k, shY + 0.02f, hipZ + 0.26f * k); }
       else { el = R(sd * 0.23f * k, shY - 0.27f * k, hipZ + 0.05f); hand = R(sd * 0.11f * k, hipY + 0.06f, hipZ + 0.3f * k); }
-      b.Tube({ sh, el }, 0.05f * k, 5, (rand() % 3) ? top : skin);
-      b.Tube({ el, hand }, 0.04f * k, 5, skin);
-      b.Sphere(hand, 0.045f * k, skin, 3, 5);
+      Color sleeve = (rand() % 3) ? top : skin;
+      b.Sphere(sh, 0.07f * k, top, 5, 8); b.Tube({ sh, el }, 0.06f * k, 8, sleeve); b.Sphere(el, 0.05f * k, skin, 4, 7);   // shoulder and elbow joints
+      b.Tube({ el, hand }, 0.05f * k, 7, skin);
+      b.Sphere(hand, 0.045f * k, skin, 4, 7);
       if (pose == 2 && sd == 1) b.Tube({ Vector3Add(hand, { 0, -0.04f, 0 }), Vector3Add(hand, { 0, 0.1f, 0 }) }, 0.035f, 6, rand() % 2 ? Color{ 230, 60, 50, 255 } : Color{ 240, 240, 240, 255 });  // a drink
     }
     // neck, head, hair (short, long, bald, cap, sun hat)
-    b.Tube({ R(0, hipY + th - 0.02f, hipZ), R(0, headY - 0.08f * k, hipZ + 0.01f) }, 0.045f * k, 5, skin);
+    b.Tube({ R(0, hipY + th - 0.02f, hipZ), R(0, headY - 0.08f * k, hipZ + 0.01f) }, 0.056f * k, 8, skin);
     Vector3 hc = R(0, headY, hipZ + 0.01f);
-    b.Sphere(hc, 0.115f * k, skin, 5, 8, { 0.9f, 1.05f, 0.95f });
+    b.Sphere(hc, 0.115f * k, skin, 8, 12, { 0.9f, 1.05f, 0.95f });
+    for (int sd = -1; sd <= 1; sd += 2) b.Sphere(R(sd * 0.036f * k, headY + 0.012f * k, hipZ + 0.01f + 0.1f * k), 0.014f * k, { 30, 24, 22, 255 }, 3, 5);   // eyes
     int hs = rand() % 10;
-    if (hs < 4) b.Sphere(R(0, headY + 0.03f * k, hipZ - 0.01f), 0.122f * k, hair, 3, 8, { 0.92f, 0.85f, 0.98f });
-    else if (hs < 6) { b.Sphere(R(0, headY + 0.02f * k, hipZ - 0.02f), 0.124f * k, hair, 4, 8, { 0.95f, 0.9f, 1 }); b.Sphere(R(0, headY - 0.1f * k, hipZ - 0.07f), 0.1f * k, hair, 3, 6, { 1.1f, 1.4f, 0.6f }); }
-    else if (hs < 8) { Color cc = CAP[rand() % 4]; b.Sphere(R(0, headY + 0.04f * k, hipZ), 0.122f * k, cc, 3, 8, { 0.93f, 0.8f, 0.98f }); OBox({ 0, headY + 0.045f * k, hipZ + 0.14f * k }, { 0.16f * k, 0.018f, 0.12f * k }, cc); }
-    else if (hs == 8) { b.Sphere(R(0, headY + 0.05f * k, hipZ), 0.12f * k, { 235, 220, 180, 255 }, 3, 8, { 0.95f, 0.9f, 0.95f }); b.Lathe({ { 0.0f, 0 }, { 0.24f * k, 0 }, { 0.24f * k, 0.01f }, { 0, 0.01f } }, 10, [&](float, int) { return Color{ 235, 220, 180, 255 }; }, MatrixTranslate(hc.x, hc.y + 0.05f * k, hc.z)); }
-    else b.Sphere(R(0, headY + 0.02f * k, hipZ - 0.01f), 0.118f * k, Color{ 120, 120, 120, 255 }, 2, 8, { 0.95f, 0.8f, 0.98f });
+    if (hs < 4) b.Sphere(R(0, headY + 0.03f * k, hipZ - 0.01f), 0.122f * k, hair, 5, 12, { 0.92f, 0.85f, 0.98f });
+    else if (hs < 6) { b.Sphere(R(0, headY + 0.02f * k, hipZ - 0.02f), 0.124f * k, hair, 6, 12, { 0.95f, 0.9f, 1 }); b.Sphere(R(0, headY - 0.1f * k, hipZ - 0.07f), 0.1f * k, hair, 5, 8, { 1.1f, 1.4f, 0.6f }); }
+    else if (hs < 8) { Color cc = CAP[rand() % 4]; b.Sphere(R(0, headY + 0.04f * k, hipZ), 0.122f * k, cc, 5, 12, { 0.93f, 0.8f, 0.98f }); OBox({ 0, headY + 0.045f * k, hipZ + 0.14f * k }, { 0.16f * k, 0.018f, 0.12f * k }, cc); }
+    else if (hs == 8) { b.Sphere(R(0, headY + 0.05f * k, hipZ), 0.12f * k, { 235, 220, 180, 255 }, 5, 12, { 0.95f, 0.9f, 0.95f }); b.Lathe({ { 0.0f, 0 }, { 0.24f * k, 0 }, { 0.24f * k, 0.01f }, { 0, 0.01f } }, 10, [&](float, int) { return Color{ 235, 220, 180, 255 }; }, MatrixTranslate(hc.x, hc.y + 0.05f * k, hc.z)); }
+    else b.Sphere(R(0, headY + 0.02f * k, hipZ - 0.01f), 0.118f * k, Color{ 120, 120, 120, 255 }, 4, 12, { 0.95f, 0.8f, 0.98f });
   }
   return b.Build();
 }

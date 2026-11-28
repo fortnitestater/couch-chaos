@@ -37,9 +37,9 @@ function nativeLoad() {
     s.onload = () => CCNative({ canvas: cv, print() {}, printErr: e => console.warn('[native]', e), locateFile: f => NATIVE.base + f + '?v=' + NATIVE.v })
       .then(m => {
         m.measure = (s, size, style) => { _mctx.font = nativeFont(size, style); return _mctx.measureText(s).width + (style & 64 ? String(s).length * size * 0.14 : 0); };
-        NATIVE.mod = m; NATIVE.rs = nativeScale(); m._cc_init(NATIVE.rs); ok(m);
+        NATIVE.mod = m; NATIVE.rs = nativeScale(); m._cc_init(NATIVE.rs); if (NATIVE.lowQ && m._cc_quality) m._cc_quality(0); ok(m);
         // rigged character models: fetched in the background, handed to the engine as they arrive
-        ['p0.glb', 'p1.glb', 'p2.glb', 'p3.glb', 'sofa.glb', 'armchair.glb', 'loveseat.glb', 'fireplace.glb', 'snakeplant.glb', 'monstera.glb', 'floorlamp.glb', 'sidetable.glb', 'chair.glb', 'ads.png', 'screen.png', 'banner.png', 'carpet.png', 'neon.png', 'pizza.glb', 'pizzabox.glb', 'burger.glb', 'fries.glb', 'cake.glb'].forEach(f => fetch(NATIVE.base + 'models/' + f + '?v=' + NATIVE.v).then(r => r.ok ? r.arrayBuffer() : null).then(b => {
+        ['p0.glb', 'p1.glb', 'p2.glb', 'p3.glb', 'sofa.glb', 'armchair.glb', 'loveseat.glb', 'fireplace.glb', 'snakeplant.glb', 'monstera.glb', 'floorlamp.glb', 'sidetable.glb', 'chair.glb', 'ads.png', 'screen.png', 'banner.png', 'carpet.png', 'neon.png', 'cards.png', 'pizza.glb', 'pizzabox.glb', 'burger.glb', 'fries.glb', 'cake.glb'].forEach(f => fetch(NATIVE.base + 'models/' + f + '?v=' + NATIVE.v).then(r => r.ok ? r.arrayBuffer() : null).then(b => {
           if (!b) return; const u = new Uint8Array(b), p = m._malloc(u.length); m.HEAPU8.set(u, p);
           m.ccall('cc_put_file', null, ['string', 'number', 'number'], [f, p, u.length]); m._free(p);
         }).catch(() => {}));
@@ -155,6 +155,12 @@ class NativeGame {
         x = Math.max(-1, Math.min(1, x + (p.inVx || 0) * lead)); y = Math.max(-1, Math.min(1, y + (p.inVy || 0) * lead)); }
       m._cc_input(i, x, y, (n.a ? 1 : 0) | (n.touch ? 2 : 0), n.b ? 1 : 0); } });
     this.texts.length = 0;
+    // a TV that can't hold ~40 fps for 3 s drops the extras (ambient occlusion, floor reflections) for the rest of the evening
+    if (!window.CCFILM && m._cc_quality && !NATIVE.lowQ && !/[?&]hq\b/.test(location.search)) {   // ?hq: always full quality (screenshots)
+      const q = NATIVE.perf || (NATIVE.perf = { avg: 1 / 60, slow: 0 });
+      q.avg += (Math.min(dt, 0.1) - q.avg) * 0.05;
+      if (q.avg > 0.026) { if ((q.slow += dt) > 3) { NATIVE.lowQ = true; m._cc_quality(0); console.info('[native] slow TV: ambient occlusion and reflections off'); } } else q.slow = 0;
+    }
     m._cc_frame(dt);
   }
   draw(g) {

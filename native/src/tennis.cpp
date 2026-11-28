@@ -514,6 +514,7 @@ struct Tennis : Classic {
     if ((g_dbg == 7 || g_dbg == 22) && !on.empty()) { Pl& q = on[0]; cam.position = { q.pos.x + 2.2f, 1.6f, q.pos.z + (q.team ? -2.6f : 2.6f) }; cam.target = { q.pos.x + 0.3f, 1.0f, q.pos.z }; cam.fovy = 40; }
     UI::Sky(Hex(0x4a90e2), Hex(0xcfe8ff));
     lit.Begin(cam, { 0.75f, 0.85f, 0.95f }, 0.004f);
+    lit.Mood(0.34f, { 1.15f, 1.02f, 0.85f }, { -0.5f, -1.0f, -0.3f }, 0.05f);   // a sunny afternoon: a strong warm sun, blue sky fill
     BeginMode3D(cam);
     lit.Pattern(PAT_GRASS); lit.Draw(prim.plane, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 120, 1, 120 }), Hex(0x2f8a4a)); lit.Pattern(PAT_NONE);
     lit.Draw(prim.cube, TRS({ 0, -0.01f, 0 }, { 0, 0, 0 }, { 2 * DW + 7, 0.02f, 2 * HL + 12 }), Hex(0x2b6a52));
@@ -599,8 +600,15 @@ struct Tennis : Classic {
     // big screen above the far stand
     lit.Draw(prim.cube, TRS({ 0, 13.8f, HL + 17.5f }, { 0, 0, 0 }, { 11, 5.4f, 0.6f }), Hex(0x212529));
     for (int k = -1; k <= 1; k += 2) lit.Draw(prim.cyl, TRS({ k * 4.f, 0, HL + 17.8f }, { 0, 0, 0 }, { 0.4f, 11.2f, 0.4f }), Hex(0x868e96));
-    // distant clouds
-    for (int k = 0; k < 7; k++) { float a = k * 0.9f - 2.7f; lit.Draw(prim.sphere, TRS({ sinf(a) * 140, 38.f + (k % 3) * 6, cosf(a) * 140 + 40 }, { 0, a, 0 }, { 46, 9, 20 }), WHITE); }
+    // a resort court: palms round the stadium, fair-weather cumulus drifting over
+    { static Mesh palm[3], cloud[3]; if (!palm[0].vertexCount) for (int k = 0; k < 3; k++) { palm[k] = BuildPalm(11 + k * 7, 13.5f + k * 1.5f); cloud[k] = BuildCloud(3 + k * 5); }
+      bool nr = lit.noRec; lit.noRec = true;
+      static const float PP[][3] = { { -27, -22, 0.2f }, { -31, -6, 2.1f }, { -28, 9, 4.0f }, { -30, 24, 1.1f }, { 27, -20, 3.3f }, { 31, -3, 5.2f }, { 28, 12, 0.7f }, { 30, 27, 2.6f },
+                                     { -16, 34, 1.7f }, { -4, 37, 4.4f }, { 9, 35, 0.4f }, { 19, 33, 3.8f }, { -18, -34, 2.9f }, { -5, -37, 5.6f }, { 8, -35, 1.4f }, { 20, -33, 4.9f } };
+      for (int i = 0; i < 16; i++) DrawProp(palm[i % 3], MatrixMultiply(MatrixMultiply(MatrixScale(1, 0.9f + (i % 4) * 0.07f, 1), MatrixRotateY(PP[i][2])), MatrixTranslate(PP[i][0], 0, PP[i][1])));
+      for (int k = 0; k < 8; k++) { float a = k * 0.8f - 2.8f + time * 0.002f, r = 170 + (k % 3) * 25;
+        DrawProp(cloud[k % 3], MatrixMultiply(MatrixMultiply(MatrixScale(1 + (k % 2) * 0.3f, 0.8f + (k % 3) * 0.15f, 1), MatrixRotateY(-a)), MatrixTranslate(sinf(a) * r, 46.f + (k % 3) * 9, cosf(a) * r + 30)), Hex(0xf4f7ff)); }
+      lit.noRec = nr; }
     float ex = phase == "point" ? 1.f : 0.25f;
     if (!crowdMesh.vertexCount) { std::vector<Vector4> seats; for (auto& c : crowd) seats.push_back({ c.x, c.y - 0.05f, c.z, atan2f(-c.x, -c.z) }); crowdMesh = BuildCrowd(seats, 7); }
     DrawProp(crowdMesh, MatrixTranslate(0, fabsf(sinf(time * 7)) * 0.05f * ex, 0));

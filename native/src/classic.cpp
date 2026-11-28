@@ -618,8 +618,10 @@ struct Hockey : Classic {
       Camera3D rc = rig.Go({ pw.x * 0.1f + 1.0f * sw, 15.6f, 24.6f }, { pw.x * 0.2f, 0, 0.9f }, 42, 1.6f); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
     UI::Sky(Hex(0x0d0826), Hex(0x24124f));
     lit.Begin(cam, { 0.06f, 0.04f, 0.14f }, 0.005f);
+    lit.Mood(0.22f, { 0.7f, 0.72f, 0.9f }, { 0.1f, -1.0f, 0.3f }, 0.05f);   // an arcade at night: a lamp over the table, neon at both ends
+    lit.Light({ 0, 9.0f, 1.0f }, { 2.0f, 1.9f, 1.8f }, 9.0f); lit.Light({ -14, 3.0f, 0 }, { 1.8f, 0.4f, 0.9f }, 6.0f); lit.Light({ 14, 3.0f, 0 }, { 0.35f, 1.2f, 1.9f }, 6.0f);
     BeginMode3D(cam);
-    lit.Pattern(PAT_TILE); lit.Draw(prim.plane, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 140, 1, 140 }), Hex(0x2a1c5e)); lit.Pattern(PAT_NONE);
+    lit.Pattern(PAT_TILE); lit.Rough(0.2f); lit.Draw(prim.plane, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 140, 1, 140 }), Hex(0x2a1c5e)); lit.Rough(0.5f); lit.Pattern(PAT_NONE);
     // arcade hall: back wall with neon tubes and a row of game cabinets, glowing floor strips
     lit.Draw(prim.cube, TRS({ 0, 6, -15.5f }, { 0, 0, 0 }, { 90, 14, 0.5f }), Hex(0x1a1040));
     for (int q = -4; q <= 4; q++) {

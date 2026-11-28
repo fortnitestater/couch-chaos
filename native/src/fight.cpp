@@ -443,6 +443,8 @@ struct Fight : Classic {
     { Vector3 cf = { cam.target.x - cam.position.x, 0, cam.target.z - cam.position.z }; float l = Vector3Length(cf); if (l > 0.01f) { camF = Vector3Scale(cf, 1 / l); camR = { -camF.z, 0, camF.x }; } }
     UI::Sky(Hex(0x05060f), Hex(0x161b3a));
     lit.Begin(cam, { 0.45f, 0.48f, 0.68f }, 0.004f);
+    lit.Mood(0.2f, { 0.95f, 0.92f, 0.86f }, { 0.12f, -1.0f, 0.08f }, 0.05f); lit.Sky({ 0.4f, 0.42f, 0.6f });   // fight night: the rig over the cage, the crowd in the dark
+    lit.Light({ 0, 7.5f, 0 }, { 1.25f, 1.2f, 1.1f }, 5.0f); lit.Light({ -3.2f, 2.5f, -3.2f }, { 1.6f, 0.3f, 0.3f }, 3.0f); lit.Light({ 3.2f, 2.5f, 3.2f }, { 0.3f, 0.5f, 1.7f }, 3.0f);
     camDir = Vector3Normalize({ cam.position.x, 0, cam.position.z });
     BeginMode3D(cam);
     Cage();

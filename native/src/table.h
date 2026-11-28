@@ -95,6 +95,10 @@ struct Table : Game {
     UpdateCam();
     UI::Sky(Hex(0x2a1d16), Hex(0x4a3324));
     lit.Begin(cam, { 0.2f, 0.15f, 0.12f }, 0.01f);
+    // the mood: evening in a living room. A warm pendant over the table is the light that matters; a dim, cool moonlight
+    // from the windows keeps the shadows; the corners fall into a soft warm dark; the lamp and the fire glow where they stand
+    lit.Mood(0.2f, { 0.42f, 0.48f, 0.66f }, { 0.3f, -1.0f, 0.2f }, 0.04f); lit.Sky({ 0.5f, 0.4f, 0.34f });
+    lit.Light({ 0, 6.2f, 0.5f }, { 2.3f, 1.55f, 0.9f }, 6.4f);
     BeginMode3D(cam);
     const float F = -3.2f, wz = -11.5f;
     struct Mood { unsigned floor, rugEdge, rug, wall, stripe, sofa, sofaD, curtA, curtB; };
@@ -182,6 +186,7 @@ struct Table : Game {
     for (int s = -1; s <= 1; s += 2) for (int q = -1; q <= 1; q += 2) lit.Draw(prim.cyl, TRS({ wx + s * 3.0f, F, wz + 1.9f + q * 0.9f }, { 0, 0, 0 }, { 0.14f, 0.18f, 0.14f }), Hex(0x3a2a1a));
     }
     DrawModel("floorlamp.glb", { wx + 5.0f, F, wz + 2.0f }, 0, 5.2f);
+    lit.Light({ wx + 5.0f, F + 4.6f, wz + 2.4f }, { 1.6f, 1.0f, 0.55f }, 2.8f);   // the floor lamp warms its corner
     } else {
       // brick fireplace with a timber mantel, logs, a gilt mirror, candles and two wing chairs
       lit.Pattern(PAT_STONE);
@@ -189,6 +194,8 @@ struct Table : Game {
       lit.Draw(prim.cube, TRS({ wx, 8.6f, wz + 0.6f }, { 0, 0, 0 }, { 4.6f, 13.6f, 0.8f }), Hex(0x8a4f3c));
       lit.Pattern(PAT_NONE);
       lit.Draw(prim.cube, TRS({ wx, F + 1.7f, wz + 1.58f }, { 0, 0, 0 }, { 3.6f, 3.2f, 0.1f }), Hex(0x140d0b));
+      { float fl = 0.85f + 0.15f * sinf(time * 9.f) * sinf(time * 5.3f); lit.Light({ wx, F + 1.4f, wz + 2.6f }, { 2.0f * fl, 0.9f * fl, 0.35f * fl }, 3.4f);   // firelight, flickering
+        lit.Draw(prim.sphere, TRS({ wx + 0.3f, F + 0.9f, wz + 1.75f }, { 0, 0, 0 }, { 1.6f, 0.9f * fl, 0.5f }), Hex(0xffb347)); }
       lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ wx, F + 5.55f, wz + 1.0f }, { 0, 0, 0 }, { 7.4f, 0.32f, 1.9f }), Hex(0x5a3a22)); lit.Pattern(PAT_NONE);
       for (int q = -1; q <= 1; q++) lit.Draw(prim.cyl, TRS({ wx + q * 0.75f + 0.9f, F + 0.35f + (q == 0 ? 0.3f : 0), wz + 1.75f }, { 0, 0, PI / 2 }, { 0.32f, 1.8f, 0.32f }), Hex(0x4a2f1c));
       lit.Draw(prim.cube, TRS({ wx, F + 8.2f, wz + 1.05f }, { 0, 0, 0 }, { 3.4f, 3.0f, 0.14f }), Hex(0xc9a227));
@@ -304,12 +311,20 @@ struct Table : Game {
   // a card lying on the table. face: 1 up, 0 down; squash fakes the flip
   struct TextJob { Vector3 at; float len; std::string s; Color c; float k; };
   std::vector<TextJob> jobs;
+  // the printed cards (models/cards.png, made by native/tools/make_cards.py): row = suit, column = rank; row 4 holds the back
+  static Texture2D& CardsTex() { static Texture2D t{}; if (!t.id && HaveFile("cards.png")) { t = LoadTexture("cards.png"); if (t.id) { GenTextureMipmaps(&t); SetTextureFilter(t, TEXTURE_FILTER_TRILINEAR); } } return t; }
+  static Vector4 CardCell(int col, int row) { return { (col * 157 + 7.5f) / 2048.f, (row * 204 + 0.5f) / 1024.f, 142.f / 2048.f, 203.f / 1024.f }; }
   void CardAt(Vector3 c, float yaw, bool faceUp, Card cd, float s = 1, float flip = 1, Color back = Hex(0xc92a2a)) {
     const float KT = 1.3f; c.x *= KT; c.z *= KT; s *= KT;   // everything on the felt is 30% bigger so it reads from the couch
     float sq = fabsf(flip * 2 - 1), lift = (1 - sq) * 0.6f * s;
     Vector3 p = { c.x, c.y + lift, c.z };
     lit.Draw(prim.cube, TRS({ p.x + 0.05f, 0.01f, p.z + 0.07f }, { 0, yaw, 0 }, { 0.92f * s * sq, 0.01f, 1.3f * s }), Hex(0x000000, 50));
     lit.Draw(prim.cube, TRS(p, { 0, yaw, 0 }, { 0.9f * s * sq, 0.03f, 1.28f * s }), faceUp ? Hex(0xfdfcf7) : Hex(0xffffff));
+    if (Texture2D& tx = CardsTex(); tx.id) {   // a real printed card: pips, corner indices, court cards, a patterned back
+      if (faceUp) { lit.Tex(tx, CardCell(cd.r, cd.s)); lit.Draw(prim.plane, TRS({ p.x, p.y + 0.017f, p.z }, { 0, yaw, 0 }, { 0.9f * s * sq, 1, 1.28f * s }), WHITE); }
+      else { lit.Tex(tx, CardCell(0, 4)); lit.Draw(prim.plane, TRS({ p.x, p.y + 0.017f, p.z }, { 0, yaw, 0 }, { 0.8f * s * sq, 1, 1.18f * s }), back); }
+      lit.NoTex(); return;
+    }
     if (!faceUp) {
       lit.Draw(prim.cube, TRS({ p.x, p.y + 0.017f, p.z }, { 0, yaw, 0 }, { 0.78f * s * sq, 0.01f, 1.16f * s }), back);
       lit.Draw(prim.cube, TRS({ p.x, p.y + 0.02f, p.z }, { 0, yaw + PI / 4, 0 }, { 0.3f * s * sq, 0.01f, 0.3f * s }), Shade(back, 0.35f));

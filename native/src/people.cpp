@@ -26,7 +26,7 @@ namespace {
 Matrix FromGL(const float* a) { Matrix m; m.m0 = a[0]; m.m1 = a[1]; m.m2 = a[2]; m.m3 = a[3]; m.m4 = a[4]; m.m5 = a[5]; m.m6 = a[6]; m.m7 = a[7]; m.m8 = a[8]; m.m9 = a[9]; m.m10 = a[10]; m.m11 = a[11]; m.m12 = a[12]; m.m13 = a[13]; m.m14 = a[14]; m.m15 = a[15]; return m; }
 unsigned char ToSRGB(float v) { return (unsigned char)Clamp(255.f * powf(Clamp(v, 0, 1), 1 / 2.2f), 0, 255); }
 
-struct Prim { Mesh mesh{}; std::vector<float> pos, nrm, outP, outN; std::vector<unsigned short> jnt; std::vector<float> wgt; int mat = -1; };
+struct Prim { Mesh mesh{}; std::vector<float> pos, nrm, outP, outN; std::vector<unsigned short> jnt; std::vector<float> wgt; std::vector<unsigned> idx; int mat = -1; };
 struct Sampler { std::vector<float> in, out; int comps = 3; bool step = false; };
 struct Channel { int node, path, sampler; };   // path 0 T, 1 R, 2 S
 struct Clip { std::string name; float len = 0; std::vector<Sampler> s; std::vector<Channel> c; };
@@ -40,7 +40,7 @@ struct Person {
   std::vector<Vector3> T; std::vector<Quaternion> R; std::vector<Vector3> S; std::vector<Matrix> W, J;
   std::vector<std::string> names; std::vector<char> upper; int head = -1, neck = -1, wristR = -1, hips = -1, abd = -1, body = -1; std::map<std::string, int> clipCache;
 };
-Person P[64];   // 0..3: the shared people; 4..63: instances with their own skinned meshes (a crowd that animates at a lower rate)
+Person P[68];   // 0..3: the shared people; 4..63: instances with their own skinned meshes (a crowd that animates at a lower rate); 64..67: the shared people, far away (smooth, not subdivided)
 const int CFG[4][4] = { { 2, 3, 4, 7 }, { 1, 2, -1, 6 }, { 0, 1, -1, 3 }, { 3, 0, -1, -1 } };   // shirt / skin / skin2 / hair glTF material
 const char* FILE_[4] = { "p0.glb", "p1.glb", "p2.glb", "p3.glb" };
 
@@ -110,6 +110,71 @@ void Skin(Person& p, bool upload) {
     if (upload) { rlUpdateVertexBuffer(pr.mesh.vboId[0], pr.outP.data(), (int)(vc * 3 * sizeof(float)), 0); rlUpdateVertexBuffer(pr.mesh.vboId[2], pr.outN.data(), (int)(vc * 3 * sizeof(float)), 0); }
   }
 }
+// ---- smooth people ----
+// The models come flat-shaded: almost every triangle has its own three corners, so every polygon shows as a facet.
+// 1) weld the corners that sit on the same spot (inside each part: skin, shirt, hair…), 2) give every spot one smooth normal,
+// averaged over all the faces that touch it in every part (so the seam between skin and shirt is smooth too),
+// 3) (main cast) split each triangle in four and push the new points onto the curved surface the normals describe
+// (Phong tessellation): the outline gets rounder, not just the shading. Skin weights are blended for the new points.
+struct SKey { long long x, y, z; bool operator<(const SKey& o) const { return x != o.x ? x < o.x : y != o.y ? y < o.y : z < o.z; } };
+static SKey KeyOf(const float* a) { const float q = 1.f / 0.00002f; return { llroundf(a[0] * q), llroundf(a[1] * q), llroundf(a[2] * q) }; }
+static void MixSkin(const unsigned short* ja, const float* wa, const unsigned short* jb, const float* wb, unsigned short* jo, float* wo) {
+  unsigned short js[8]; float ws[8]; int n = 0;
+  auto add = [&](unsigned short j, float w) { if (w <= 0) return; for (int k = 0; k < n; k++) if (js[k] == j) { ws[k] += w; return; } js[n] = j; ws[n] = w; n++; };
+  for (int k = 0; k < 4; k++) { add(ja[k], wa[k] * 0.5f); add(jb[k], wb[k] * 0.5f); }
+  for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++) if (ws[b] > ws[a]) { std::swap(ws[a], ws[b]); std::swap(js[a], js[b]); }
+  float s = 0; for (int k = 0; k < 4; k++) { jo[k] = k < n ? js[k] : 0; wo[k] = k < n ? ws[k] : 0; s += wo[k]; }
+  if (s > 0) for (int k = 0; k < 4; k++) wo[k] /= s; else { wo[0] = 1; }
+}
+static void Smooth(Person& p, bool subdivide) {
+  // weld inside each part
+  for (auto& pr : p.prims) {
+    std::map<SKey, unsigned> at; std::vector<float> pos, nrm, wgt; std::vector<unsigned short> jnt; std::vector<unsigned> remap(pr.pos.size() / 3);
+    for (size_t v = 0; v < remap.size(); v++) {
+      SKey k = KeyOf(&pr.pos[v * 3]); auto it = at.find(k);
+      if (it != at.end()) { remap[v] = it->second; continue; }
+      unsigned id = (unsigned)(pos.size() / 3); at[k] = id; remap[v] = id;
+      pos.insert(pos.end(), &pr.pos[v * 3], &pr.pos[v * 3] + 3); nrm.insert(nrm.end(), { 0, 0, 0 });
+      jnt.insert(jnt.end(), &pr.jnt[v * 4], &pr.jnt[v * 4] + 4); wgt.insert(wgt.end(), &pr.wgt[v * 4], &pr.wgt[v * 4] + 4);
+    }
+    std::vector<unsigned> idx; idx.reserve(pr.idx.size());
+    for (size_t t = 0; t + 2 < pr.idx.size(); t += 3) { unsigned a = remap[pr.idx[t]], b = remap[pr.idx[t + 1]], c = remap[pr.idx[t + 2]]; if (a != b && b != c && a != c) { idx.push_back(a); idx.push_back(b); idx.push_back(c); } }
+    pr.pos.swap(pos); pr.nrm.swap(nrm); pr.jnt.swap(jnt); pr.wgt.swap(wgt); pr.idx.swap(idx);
+  }
+  // one smooth normal per spot, over every part
+  std::map<SKey, Vector3> acc;
+  for (auto& pr : p.prims) for (size_t t = 0; t + 2 < pr.idx.size(); t += 3) {
+    const float *a = &pr.pos[pr.idx[t] * 3], *b = &pr.pos[pr.idx[t + 1] * 3], *c = &pr.pos[pr.idx[t + 2] * 3];
+    Vector3 e1 = { b[0] - a[0], b[1] - a[1], b[2] - a[2] }, e2 = { c[0] - a[0], c[1] - a[1], c[2] - a[2] }, fn = Vector3CrossProduct(e1, e2);   // length = 2 x area: big faces count more
+    for (const float* q : { a, b, c }) { Vector3& s = acc[KeyOf(q)]; s = Vector3Add(s, fn); }
+  }
+  for (auto& pr : p.prims) for (size_t v = 0; v < pr.pos.size() / 3; v++) { Vector3 n = Vector3Normalize(acc[KeyOf(&pr.pos[v * 3])]); pr.nrm[v * 3] = n.x; pr.nrm[v * 3 + 1] = n.y; pr.nrm[v * 3 + 2] = n.z; }
+  if (!subdivide) return;
+  // one level of Phong tessellation
+  for (auto& pr : p.prims) {
+    std::map<unsigned long long, unsigned> mid; std::vector<unsigned> idx; idx.reserve(pr.idx.size() * 4);
+    auto Mid = [&](unsigned a, unsigned b) -> unsigned {
+      unsigned long long k = a < b ? ((unsigned long long)a << 32) | b : ((unsigned long long)b << 32) | a;
+      auto it = mid.find(k); if (it != mid.end()) return it->second;
+      Vector3 pa = { pr.pos[a * 3], pr.pos[a * 3 + 1], pr.pos[a * 3 + 2] }, pb = { pr.pos[b * 3], pr.pos[b * 3 + 1], pr.pos[b * 3 + 2] };
+      Vector3 na = { pr.nrm[a * 3], pr.nrm[a * 3 + 1], pr.nrm[a * 3 + 2] }, nb = { pr.nrm[b * 3], pr.nrm[b * 3 + 1], pr.nrm[b * 3 + 2] };
+      Vector3 m = Vector3Scale(Vector3Add(pa, pb), 0.5f);
+      Vector3 qa = Vector3Subtract(m, Vector3Scale(na, Vector3DotProduct(Vector3Subtract(m, pa), na))), qb = Vector3Subtract(m, Vector3Scale(nb, Vector3DotProduct(Vector3Subtract(m, pb), nb)));
+      Vector3 ph = Vector3Lerp(m, Vector3Scale(Vector3Add(qa, qb), 0.5f), 0.75f), nn = Vector3Normalize(Vector3Add(na, nb));
+      unsigned id = (unsigned)(pr.pos.size() / 3);
+      pr.pos.insert(pr.pos.end(), { ph.x, ph.y, ph.z }); pr.nrm.insert(pr.nrm.end(), { nn.x, nn.y, nn.z });
+      unsigned short jo[4]; float wo[4]; MixSkin(&pr.jnt[a * 4], &pr.wgt[a * 4], &pr.jnt[b * 4], &pr.wgt[b * 4], jo, wo);
+      pr.jnt.insert(pr.jnt.end(), jo, jo + 4); pr.wgt.insert(pr.wgt.end(), wo, wo + 4);
+      mid[k] = id; return id;
+    };
+    for (size_t t = 0; t + 2 < pr.idx.size(); t += 3) {
+      unsigned a = pr.idx[t], b = pr.idx[t + 1], c = pr.idx[t + 2], ab = Mid(a, b), bc = Mid(b, c), ca = Mid(c, a);
+      unsigned T[12] = { a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca }; idx.insert(idx.end(), T, T + 12);
+    }
+    if (pr.pos.size() / 3 < 65535) pr.idx.swap(idx);   // (16-bit indices: a part that would grow past that keeps its triangles)
+    else { pr.pos.resize(pr.nrm.size()); }
+  }
+}
 bool Load(int v, int var = -1) {
   if (var < 0) var = v % 4;
   Person& p = P[v];
@@ -157,17 +222,20 @@ bool Load(int v, int var = -1) {
       cgltf_uint jj[4] = { 0, 0, 0, 0 }; cgltf_accessor_read_uint(aj, k, jj, 4); for (int q = 0; q < 4; q++) pr.jnt[k * 4 + q] = (unsigned short)std::min<cgltf_uint>(jj[q], (cgltf_uint)p.joints.size() - 1);
       float ww[4] = { 0, 0, 0, 0 }; cgltf_accessor_read_float(aw, k, ww, 4); float s = ww[0] + ww[1] + ww[2] + ww[3]; for (int q = 0; q < 4; q++) pr.wgt[k * 4 + q] = s > 0 ? ww[q] / s : (q == 0 ? 1.f : 0.f);
     }
-    pr.outP = pr.pos; pr.outN = pr.nrm;
-    Mesh& m = pr.mesh; m.vertexCount = (int)vc;
+    if (cp.indices) { size_t ic = cp.indices->count; pr.idx.resize(ic); for (size_t k = 0; k < ic; k++) pr.idx[k] = (unsigned)cgltf_accessor_read_index(cp.indices, k); }
+    else { pr.idx.resize(vc); for (size_t k = 0; k < vc; k++) pr.idx[k] = (unsigned)k; }
+    p.prims.push_back(std::move(pr));
+  }
+  Smooth(p, v < 4);   // (64..67, the far-away copies, are smoothed but keep their polygon count)   // round, smooth people instead of faceted low-poly ones (the main cast is also subdivided; the crowd keeps its polygon count)
+  for (auto& pr : p.prims) {
+    size_t vc = pr.pos.size() / 3; pr.outP = pr.pos; pr.outN = pr.nrm;
+    Mesh& m = pr.mesh; m = Mesh{}; m.vertexCount = (int)vc;
     m.vertices = (float*)MemAlloc((unsigned)(vc * 3 * sizeof(float))); memcpy(m.vertices, pr.pos.data(), vc * 3 * sizeof(float));
     m.normals = (float*)MemAlloc((unsigned)(vc * 3 * sizeof(float))); memcpy(m.normals, pr.nrm.data(), vc * 3 * sizeof(float));
     m.texcoords = (float*)MemAlloc((unsigned)(vc * 2 * sizeof(float)));
-    if (cp.indices) {
-      size_t ic = cp.indices->count; m.triangleCount = (int)(ic / 3); m.indices = (unsigned short*)MemAlloc((unsigned)(ic * sizeof(unsigned short)));
-      for (size_t k = 0; k < ic; k++) m.indices[k] = (unsigned short)cgltf_accessor_read_index(cp.indices, k);
-    } else m.triangleCount = (int)(vc / 3);
+    size_t ic = pr.idx.size(); m.triangleCount = (int)(ic / 3); m.indices = (unsigned short*)MemAlloc((unsigned)(ic * sizeof(unsigned short)));
+    for (size_t k = 0; k < ic; k++) m.indices[k] = (unsigned short)pr.idx[k];
     UploadMesh(&m, true);
-    p.prims.push_back(std::move(pr));
   }
   for (size_t ai = 0; ai < d->animations_count; ai++) {
     cgltf_animation& A = d->animations[ai]; Clip c; c.name = A.name ? A.name : "";
@@ -202,9 +270,13 @@ bool Load(int v, int var = -1) {
 }  // namespace
 
 // draw one real person; false = models not loaded yet (caller falls back to the toon body)
+extern Camera3D g_finalCam;
+// someone far from the camera is drawn from the lighter copy of the same person (a quarter of the points to animate)
+static int Far(int v, Vector3 pos) { if (v > 3) return v; float d = Vector3Distance(pos, g_finalCam.position); return d > 9.5f && Load(64 + v, v) ? 64 + v : v; }
 bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc, float k, unsigned hsh) {
   int v = (int)(hsh % 4);
-  if (!Load(v)) { bool any = false; for (int q = 0; q < 4 && !any; q++) if (Load(q)) { v = q; any = true; } if (!any) return false; }
+  if (Load(v)) v = Far(v, pos);
+  else if (!Load(v)) { bool any = false; for (int q = 0; q < 4 && !any; q++) if (Load(q)) { v = q; any = true; } if (!any) return false; }
   Person& p = P[v];
   bool flash = c.r == 255 && c.g == 255 && c.b == 255, sport = k <= 1.01f, moving = hop > 0.02f;
   int epid = PidOfColor(c); if (epid >= 0 && epid < 8 && g_emoteT[epid] > 0) cheer = fmaxf(cheer, 1.f);   // an emote from their phone: they wave
@@ -222,12 +294,14 @@ bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer
   static const Color HR[6] = { Hex(0x3a2516), Hex(0x6b4423), Hex(0xd9a441), Hex(0x221a16), Hex(0x9c4a22), Hex(0x2e2e34) };
   Color skin = SK[(hsh / 5) % 5], hair = HR[(hsh / 11) % 6];
   lit.Caster(pos, 0.45f * H / 1.95f);
+  float rough0 = lit.roughV; lit.Rough(0.82f);   // matte: cloth and skin catch soft light, not a plastic shine
   for (auto& pr : p.prims) {
     int mi = pr.mat; Color col = mi >= 0 && mi < (int)p.mats.size() ? p.mats[mi] : WHITE;
     if (mi == p.shirt) col = c; else if (mi == p.skin) col = skin; else if (mi == p.skin2) col = Shade(skin, -0.15f); else if (mi == p.hair) col = hair;
     if (flash) col = WHITE;
     lit.Draw(pr.mesh, xf, col);
   }
+  lit.Rough(rough0);
   return true;
 }
 
@@ -239,6 +313,7 @@ static int ClipByName(Person& p, const char* name) {
 }
 bool DrawPersonPose(const PersonPose& q) {
   int v = q.slot >= 4 && q.slot < 64 ? q.slot : (int)(q.hsh % 4), var = (int)(q.hsh % 4);
+  if (v < 4 && Load(v, var)) v = Far(v, q.pos);
   if (!Load(v, var)) { bool any = false; for (int k = 0; k < 4 && !any; k++) if (Load(k)) { v = k; any = true; } if (!any) return false; }
   Person& p = P[v];
   int a = ClipByName(p, q.clip); if (a < 0) a = p.idle;
@@ -254,11 +329,13 @@ bool DrawPersonPose(const PersonPose& q) {
   static const Color HR[6] = { Hex(0x3a2516), Hex(0x6b4423), Hex(0xd9a441), Hex(0x221a16), Hex(0x9c4a22), Hex(0x2e2e34) };
   Color skin = SK[(q.hsh / 5) % 5], hair = HR[(q.hsh / 11) % 6];
   lit.Caster(q.pos, 0.45f * q.height / 1.95f);
+  float rough0 = lit.roughV; lit.Rough(0.82f);
   for (auto& pr : p.prims) {
     int mi = pr.mat; Color col = mi >= 0 && mi < (int)p.mats.size() ? p.mats[mi] : WHITE;
     if (mi == p.shirt) col = q.c; else if (mi == p.skin) col = skin; else if (mi == p.skin2) col = Shade(skin, -0.15f); else if (mi == p.hair) col = hair;
     lit.Draw(pr.mesh, xf, col);
   }
+  lit.Rough(rough0);
   if (q.wrist && p.wristR >= 0) *q.wrist = MatrixMultiply(p.W[p.wristR], xf);
   if (q.headM && p.head >= 0) *q.headM = MatrixMultiply(p.W[p.head], xf);
   return true;

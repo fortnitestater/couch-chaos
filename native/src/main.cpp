@@ -70,9 +70,11 @@ precision highp float;
 precision mediump float;
 #endif
 varying vec3 vN; varying vec3 vW; varying vec2 vUV; varying vec4 vC;
+uniform sampler2D texture0; uniform vec4 uvR;
 uniform vec4 colDiffuse; uniform vec3 lightDir; uniform vec3 camPos; uniform vec3 fogColor; uniform float fogDensity; uniform float ambient;
 uniform float pattern; uniform vec4 casters[24]; uniform float nCast; uniform float time; uniform vec3 sunCol; uniform vec3 skyCol;
 uniform sampler2D shadowMap; uniform mat4 lightVP; uniform float shOn; uniform float shTex; uniform vec4 flashP; uniform vec3 flashC;
+uniform vec4 plP[6]; uniform vec4 plC[6]; uniform float nPl; uniform float rough; uniform float camFillK;
 float unpackD(vec4 c) { return dot(c, vec4(1.0, 1.0 / 255.0, 1.0 / 65025.0, 1.0 / 16581375.0)); }
 float sunShadow(vec3 p, vec3 n, float nd) {
   if (shOn < 0.5) return 1.0;
@@ -95,9 +97,9 @@ float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
 float fbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 + 3.7) * 0.15; }
 void main() {
-  vec3 base = colDiffuse.rgb * vC.rgb;  // per-vertex colour (white unless a merged mesh brings its own)
+  vec3 base = colDiffuse.rgb * vC.rgb * texture2D(texture0, uvR.xy + vUV * uvR.zw).rgb;  // per-vertex colour (white unless a merged mesh brings its own) x a printed texture (white unless Tex)
   vec3 n = normalize(vN); vec3 L = normalize(-lightDir); vec3 V = normalize(camPos - vW);
-  float spec = 0.35, gloss = 40.0;
+  float gl0 = 1.0 - rough; float spec = mix(0.03, 0.8, gl0 * gl0), gloss = mix(8.0, 150.0, gl0 * gl0);   // roughness: matte people, glossy lanes
   // ---- surface patterns ----
   if (pattern > 0.5) {
     vec2 q = vW.xz;
@@ -110,7 +112,7 @@ void main() {
       float plank = floor(w.x * 0.9);
       float g = fract(w.y * 0.15 + h21(vec2(plank, 1.0)) * 4.0 + fbm(vec2(w.x * 6.0, w.y * 0.4)) * 0.8);
       base *= 0.82 + 0.16 * h21(vec2(plank, 2.0)) + 0.1 * smoothstep(0.3, 0.7, g) - 0.18 * (1.0 - smoothstep(0.0, 0.06, fract(w.x * 0.9)));
-      spec = 0.25; gloss = 60.0;
+      spec = max(spec, 0.25); gloss = max(gloss, 60.0);
     } else if (pattern < 3.5) { // felt
       base *= 0.9 + 0.12 * vn(q * 30.0) + 0.06 * fbm(q * 2.0);
       spec = 0.02;
@@ -140,8 +142,13 @@ void main() {
       base *= 0.85 + 0.25 * r; spec = 0.6; gloss = 80.0;
     } else if (pattern < 8.5) { // rug: woven rings
       float d = length(q - vec2(0.0, 0.5)); base *= 0.85 + 0.15 * step(0.5, fract(d * 0.6)) + 0.05 * vn(q * 25.0); spec = 0.02;
-    } else {                    // stone
-      base *= 0.8 + 0.3 * fbm(q * 1.5 + vW.y); spec = 0.15;
+    } else if (pattern < 9.5) { // stone
+      base *= 0.9 + 0.14 * fbm(q * 1.5 + vW.y); spec = 0.15;
+    } else {                    // a bowling lane: 39 narrow maple/pine boards running down the lane under a clear coat
+      float bd = floor(q.x * 37.0), bf = fract(q.x * 37.0);
+      float grain = fbm(vec2(q.x * 60.0, q.y * 0.9 + h21(vec2(bd, 3.0)) * 9.0));
+      base *= 0.86 + 0.12 * h21(vec2(bd, 5.0)) + 0.1 * (grain - 0.5) - 0.07 * (1.0 - smoothstep(0.0, 0.08, min(bf, 1.0 - bf)));
+      base = mix(base, base * vec3(0.78, 0.6, 0.45), smoothstep(16.5, 18.5, q.y) * 0.0 + step(0.5, h21(vec2(floor(q.y * 0.25), bd))) * 0.06);
     }
   }
   // ---- light: warm sun with a soft cel band, hemisphere sky/ground fill, fresnel rim ----
@@ -170,10 +177,30 @@ void main() {
   float s = pow(max(dot(n, Hh), 0.0), gloss) * spec * step(0.0, nd);
   float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
   // key (sun) + sky fill + a soft fill light from the camera so faces and fronts are never in the dark
-  float camFill = max(dot(n, V), 0.0) * 0.16;
+  float camFill = max(dot(n, V), 0.0) * camFillK;
   vec3 shadeTint = mix(vec3(0.62, 0.74, 1.08), vec3(1.0), sh);   // shadows go cool, never grey
   float rimW = pow(1.0 - max(dot(n, V), 0.0), 2.6) * (1.0 - abs(n.y)) * smoothstep(-0.3, 0.4, dot(normalize(vec3(L.x, 0.0, L.z) * -1.0 + V * 0.2), n) + 0.5);
   vec3 col = base * (hemi * mix(0.7, 1.0, sh) * shadeTint + sunCol * 1.35 * diff * sh + vec3(camFill)) + sunCol * s * sh * ssh + skyCol * fres * 0.22 + vec3(1.0, 0.82, 0.62) * rimW * 0.42;
+  // lamps, spotlight pools and neon: warm and cool light that falls off with distance (what gives a room its mood)
+  vec3 loc = vec3(0.0), locS = vec3(0.0);
+  float shiny = smoothstep(0.55, 0.95, gl0) * step(0.5, n.y);   // only polished floors mirror the lamps
+  float F = mix(0.12, 1.0, pow(1.0 - max(dot(n, V), 0.0), 4.0));
+  vec3 Rr = reflect(-V, n);
+  for (int i = 0; i < 6; i++) {
+    if (float(i) >= nPl) break;
+    vec3 dl = plP[i].xyz - vW; float dd = length(dl); vec3 l = dl / max(dd, 0.001); float r = plP[i].w;
+    float att = 1.0 / (1.0 + dd * dd / (r * r)); att *= 1.0 - smoothstep(r * 2.0, r * 3.2, dd);
+    float ndl = dot(n, l); float w = clamp((ndl + 0.2) / 1.2, 0.0, 1.0);
+    loc += plC[i].rgb * att * w * ao;
+    locS += plC[i].rgb * att * pow(max(dot(n, normalize(V + l)), 0.0), gloss) * spec * step(0.0, ndl);
+    if (shiny > 0.0) {   // the lamp itself, seen in the floor: a bright blob that stretches into a streak toward you
+      float al = dot(dl, Rr);
+      if (al > 0.0) { float pp = length(dl - Rr * al), sz = 0.22 + al * (0.03 + rough * 0.35);
+        locS += plC[i].rgb * (1.0 - smoothstep(0.0, sz, pp)) * (0.35 + 0.65 * F) * shiny * 0.55; }
+    }
+  }
+  col = mix(col, skyCol * 0.18, F * shiny * 0.55);   // the floor mirrors the dark room above it: deeper, richer colour
+  col += base * loc + locS;
   // an explosion / goal / strike flash lights up everything around it
   if (flashC.r + flashC.g + flashC.b > 0.001) { vec3 fl = flashP.xyz - vW; float fd = length(fl); col += base * flashC * (max(dot(n, fl / max(fd, 0.001)), 0.0) * 0.75 + 0.25) / (1.0 + fd * fd / (flashP.w * flashP.w)); }
   // ACES filmic curve: bright surfaces roll off instead of clipping to pure white
@@ -202,8 +229,10 @@ void Lit::Init() {
   locLight = GetShaderLocation(shader, "lightDir"); locCam = GetShaderLocation(shader, "camPos"); locFog = GetShaderLocation(shader, "fogColor"); locFogD = GetShaderLocation(shader, "fogDensity"); locAmb = GetShaderLocation(shader, "ambient");
   locPat = GetShaderLocation(shader, "pattern"); locCast = GetShaderLocation(shader, "casters"); locNCast = GetShaderLocation(shader, "nCast"); locTime = GetShaderLocation(shader, "time");
   locSun = GetShaderLocation(shader, "sunCol"); locSky = GetShaderLocation(shader, "skyCol");
+  locPlP = GetShaderLocation(shader, "plP"); locPlC = GetShaderLocation(shader, "plC"); locNPl = GetShaderLocation(shader, "nPl"); locRough = GetShaderLocation(shader, "rough"); locCamFill = GetShaderLocation(shader, "camFillK");
   mat = LoadMaterialDefault(); mat.shader = shader;
   locFlP = GetShaderLocation(shader, "flashP"); locFlC = GetShaderLocation(shader, "flashC");
+  locUV = GetShaderLocation(shader, "uvR"); NoTex();
   locLVP = GetShaderLocation(shader, "lightVP"); locShOn = GetShaderLocation(shader, "shOn"); locShTex = GetShaderLocation(shader, "shTex");
   shSh = LoadShaderFromMemory(SH_VS, SH_FS); shMat = LoadMaterialDefault(); shMat.shader = shSh;
   shRT = LoadRenderTexture(SHADOW_RES, SHADOW_RES);
@@ -216,7 +245,7 @@ extern int g_post;
 void Lit::ShadowPass() {
   shOn = 0;
   if (rec.empty() || !haveCam || !shRT.id || !g_post) { rec.clear(); haveCam = false; return; }
-  Vector3 L = Vector3Normalize({ -0.45f, -1.0f, -0.35f });
+  Vector3 L = Vector3Normalize(sunDir);
   // cover what the camera looks at: centre on the ground point it aims at, sized by how far away it is
   Vector3 c = lastCam.target; Vector3 fwd = Vector3Subtract(lastCam.target, lastCam.position);
   float dist = Vector3Length(fwd);
@@ -236,17 +265,19 @@ void Lit::ShadowPass() {
   rec.clear(); haveCam = false;
 }
 void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
-  Vector3 L = Vector3Normalize({ -0.45f, -1.0f, -0.35f }); float amb = 0.52f;
+  NoTex(); sunDir = { -0.45f, -1.0f, -0.35f }; sunCol = { 1.0f, 0.92f, 0.78f }; amb = 0.4f; camFill = 0.08f; roughV = 0.5f; plP.clear(); plC.clear();   // the defaults; a scene changes them with Mood / Light right after
+  Vector3 L = Vector3Normalize(sunDir);
   // sky fill tinted by the scene's fog colour; dark scenes (night, rooms) get a cooler, dimmer fill
   float lum = fogColor.x * 0.3f + fogColor.y * 0.55f + fogColor.z * 0.15f;
   Vector3 sky = Vector3Lerp({ 0.75f, 0.82f, 1.0f }, fogColor, 0.35f);
   if (lum < 0.3f) sky = Vector3Lerp({ 0.78f, 0.8f, 0.95f }, fogColor, 0.15f);  // indoor / night scenes still get a bright fill
-  Vector3 sun = { 1.0f, 0.92f, 0.78f };
+  Vector3 sun = sunCol;
   Vector3 eye = CineCam(cam).position;   // the real (cinematic) eye, for highlights and fog
   SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCam, &eye, SHADER_UNIFORM_VEC3);
   { Vector4 fp; Vector3 fc; cine::Light(fp, fc); SetShaderValue(shader, locFlP, &fp, SHADER_UNIFORM_VEC4); SetShaderValue(shader, locFlC, &fc, SHADER_UNIFORM_VEC3); }
   SetShaderValue(shader, locFog, &fogColor, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locFogD, &fogDensity, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locAmb, &amb, SHADER_UNIFORM_FLOAT);
   SetShaderValue(shader, locSun, &sun, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locSky, &sky, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locTime, &time, SHADER_UNIFORM_FLOAT);
+  { float z = 0; SetShaderValue(shader, locNPl, &z, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locRough, &roughV, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locCamFill, &camFill, SHADER_UNIFORM_FLOAT); }
   float nc = (float)castPrev.size(); SetShaderValue(shader, locNCast, &nc, SHADER_UNIFORM_FLOAT);
   if (!castPrev.empty()) SetShaderValueV(shader, locCast, castPrev.data(), SHADER_UNIFORM_VEC4, (int)castPrev.size());
   if (!haveCam) { lastCam = cam; haveCam = true; }
@@ -256,7 +287,27 @@ void Lit::Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity) {
   Pattern(PAT_NONE);
 }
 void Lit::Pattern(int p) { float f = (float)p; SetShaderValue(shader, locPat, &f, SHADER_UNIFORM_FLOAT); }
+void Lit::Mood(float ambient, Vector3 c, Vector3 dir, float cf) {
+  amb = ambient; sunCol = c; sunDir = dir; camFill = cf; Vector3 L = Vector3Normalize(dir);
+  SetShaderValue(shader, locAmb, &amb, SHADER_UNIFORM_FLOAT); SetShaderValue(shader, locSun, &sunCol, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locLight, &L, SHADER_UNIFORM_VEC3); SetShaderValue(shader, locCamFill, &camFill, SHADER_UNIFORM_FLOAT);
+}
+void Lit::Sky(Vector3 c) { SetShaderValue(shader, locSky, &c, SHADER_UNIFORM_VEC3); }
+void Lit::Light(Vector3 p, Vector3 c, float r) {
+  if (plP.size() >= 6) return; plP.push_back({ p.x, p.y, p.z, r }); plC.push_back({ c.x, c.y, c.z, 1 });
+  float n = (float)plP.size(); SetShaderValue(shader, locNPl, &n, SHADER_UNIFORM_FLOAT);
+  SetShaderValueV(shader, locPlP, plP.data(), SHADER_UNIFORM_VEC4, (int)plP.size()); SetShaderValueV(shader, locPlC, plC.data(), SHADER_UNIFORM_VEC4, (int)plC.size());
+}
+void Lit::Tex(Texture2D t, Vector4 r) { mat.maps[MATERIAL_MAP_DIFFUSE].texture = t; uvR = r; SetShaderValue(shader, locUV, &uvR, SHADER_UNIFORM_VEC4); }
+void Lit::NoTex() { mat.maps[MATERIAL_MAP_DIFFUSE].texture = Texture2D{ rlGetTextureIdDefault(), 1, 1, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 }; uvR = { 0, 0, 1, 1 }; SetShaderValue(shader, locUV, &uvR, SHADER_UNIFORM_VEC4); }
+void Lit::Rough(float r) { if (r == roughV) return; rlDrawRenderBatchActive(); roughV = r; SetShaderValue(shader, locRough, &roughV, SHADER_UNIFORM_FLOAT); }
+void Lit::MirrorBegin(float y, float a) { rlDrawRenderBatchActive(); mirror = true; mirrorY = y; mirrorA = a; rlDisableDepthTest(); rlDisableDepthMask(); rlSetCullFace(RL_CULL_FACE_FRONT); }
+void Lit::MirrorEnd() { rlDrawRenderBatchActive(); mirror = false; rlEnableDepthTest(); rlEnableDepthMask(); rlSetCullFace(RL_CULL_FACE_BACK); }
 void Lit::Draw(const Mesh& m, Matrix t, Color c) {
+  if (mirror) {   // the reflection: flipped about the floor, faded, never casting a shadow
+    t = MatrixMultiply(t, MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -mirrorY, 0), MatrixScale(1, -1, 1)), MatrixTranslate(0, mirrorY, 0)));
+    c.a = (unsigned char)(c.a * mirrorA);
+    mat.maps[MATERIAL_MAP_DIFFUSE].color = c; rlEnableBackfaceCulling(); DrawMesh(m, mat, t); rlDisableBackfaceCulling(); return;
+  }
   mat.maps[MATERIAL_MAP_DIFFUSE].color = c; rlDisableBackfaceCulling(); DrawMesh(m, mat, t);
   // opaque, not-huge things cast sun shadows (floors, walls and sky domes only receive them)
   if (!noRec && c.a == 255 && rec.size() < 6000) {
@@ -308,7 +359,7 @@ precision highp float;
 precision mediump float;
 #endif
 varying vec2 uv; uniform sampler2D texture0; uniform sampler2D bloom; uniform sampler2D dofTex; uniform sampler2D depthTex;
-uniform vec2 px; uniform float time; uniform float focus; uniform float dofOn; uniform float dofAmt;
+uniform vec2 px; uniform float time; uniform float focus; uniform float dofOn; uniform float dofAmt; uniform sampler2D aoTex; uniform float aoOn;
 uniform vec4 fxA; uniform vec4 fxB; uniform vec3 fxC;   // flash, colour split, zoom blur, speed lines | letterbox, impact frame, centre
 vec3 S(vec2 p) { return texture2D(texture0, p).rgb; }
 float linZ(float d) { float n = 0.3, f = 600.0; float z = d * 2.0 - 1.0; return 2.0 * n * f / (f + n - z * (f - n)); }
@@ -327,7 +378,8 @@ void main() {
   }
   // lens: a touch of colour fringing towards the corners
   vec2 dc = uv - 0.5; float ca = clamp(dot(dc, dc) * 3.2, 0.0, 1.0);
-  c.r = mix(c.r, S(uv - dc * 0.0065).r, ca); c.b = mix(c.b, S(uv + dc * 0.0065).b, ca);
+  c.r = mix(c.r, S(uv - dc * 0.0018).r, ca); c.b = mix(c.b, S(uv + dc * 0.0018).b, ca);   // (a strong fringe made everything look blurry)
+  if (aoOn > 0.5) c *= mix(1.0, texture2D(aoTex, uv).r, 0.85);   // ambient occlusion: dark contact creases where things meet
   // depth of field: in focus around what the camera looks at, soft in front and behind (flat UI is never blurred)
   if (dofOn > 0.5) {
     float d = texture2D(depthTex, uv).r, coc = 0.0;
@@ -364,11 +416,37 @@ void main() {
   float bh = fxB.x * 0.118; c *= smoothstep(bh, bh + 0.004, uv.y) * smoothstep(bh, bh + 0.004, 1.0 - uv.y);   // letterbox
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 })";
+// ambient occlusion: how buried each pixel is in the depth around it (under the cards, where a foot meets the floor, in the corners of a room)
+static const char* AO_FS = R"(#version 100
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 uv; uniform sampler2D texture0; uniform vec2 px; uniform float aspect;
+float linZ(float d) { float n = 0.3, f = 600.0; float z = d * 2.0 - 1.0; return 2.0 * n * f / (f + n - z * (f - n)); }
+void main() {
+  float d0 = texture2D(texture0, uv).r;
+  if (d0 < 0.00002 || d0 > 0.99999) { gl_FragColor = vec4(1.0); return; }
+  // pairs of samples on opposite sides: on a flat surface (a table, a card, a floor seen at a slant) the two average out to the
+  // centre (1/z is linear across a plane), so only real creases and contacts - where the centre sits behind its neighbours - darken
+  float z0 = linZ(d0), rad = clamp(0.3 / z0, 0.003, 0.035), occ = 0.0;
+  float jit = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453) * 6.283;
+  for (int i = 0; i < 6; i++) {
+    float a = float(i) * 1.0472 * 0.5 + float(i / 2) * 1.0 + jit, r = rad * (0.3 + 0.7 * fract(float(i) * 0.618 + 0.13));
+    vec2 o = vec2(cos(a) / aspect, sin(a)) * r;
+    float z1 = linZ(texture2D(texture0, uv + o).r), z2 = linZ(texture2D(texture0, uv - o).r);
+    float zE = 2.0 / (1.0 / z1 + 1.0 / z2), dz = z0 - zE, near = z0 - min(z1, z2);
+    occ += smoothstep(0.01 * z0, 0.04 * z0, dz) * (1.0 - smoothstep(0.35, 0.9, near));
+  }
+  gl_FragColor = vec4(vec3(clamp(1.0 - occ / 6.0 * 0.9, 0.0, 1.0)), 1.0);
+})";
+static Shader shAO; static int lAOPx = -1, lAOAsp = -1, lFinalAO = -1, lFinalAOOn = -1; static RenderTexture2D rtF, rtG;
 static int lFxA = -1, lFxB = -1, lFxC = -1;
 static RenderTexture2D rtMain, rtA, rtB, rtC, rtD, rtE; static Shader shBright, shBlur, shFinal; static int lBrightPx, lBlurDir, lFinalPx, lFinalBloom, lFinalDof, lFinalDepth, lFinalTime, lFinalFocus, lFinalDofOn; static bool postOk = false, dofOk = false;
 float g_frameDt = 1 / 60.f; int g_racketAxis = 5;   // the racket handle runs along the thumb side of the fist (picked from a debug comparison)
 float g_cineK = 1; float g_emoteT[8] = {}; int g_emoteK[8] = {}; Vector3 g_emotePos[8] = {}; bool g_emoteVis[8] = {};
-float g_cineT = 0, g_focus = 15, g_dofAmt = 0.f; bool g_cineOn = false; static int lFinalDofAmt;
+float g_cineT = 0, g_focus = 15, g_dofAmt = 0.f; bool g_cineOn = false; static int lFinalDofAmt; extern int g_aoOn;
 // the main scene target keeps its depth in a texture, so the final pass can focus by distance
 static RenderTexture2D LoadSceneTarget(int w, int h) {
   RenderTexture2D t{}; t.id = rlLoadFramebuffer(); if (!t.id) return LoadRenderTexture(w, h);
@@ -387,6 +465,8 @@ static void PostInit() {
   if (rtMain.id) { UnloadRenderTexture(rtMain); UnloadRenderTexture(rtA); UnloadRenderTexture(rtB); UnloadRenderTexture(rtC); UnloadRenderTexture(rtD); UnloadRenderTexture(rtE); }
   rtMain = LoadSceneTarget(FW, FH); rtA = LoadRenderTexture(FW / 4, FH / 4); rtB = LoadRenderTexture(FW / 4, FH / 4);
   rtC = LoadRenderTexture(FW / 4, FH / 4); rtD = LoadRenderTexture(FW / 4, FH / 4); rtE = LoadRenderTexture(FW / 4, FH / 4);
+  if (rtF.id) { UnloadRenderTexture(rtF); UnloadRenderTexture(rtG); } rtF = LoadRenderTexture(FW / 2, FH / 2); rtG = LoadRenderTexture(FW / 2, FH / 2);
+  SetTextureFilter(rtF.texture, TEXTURE_FILTER_BILINEAR); SetTextureFilter(rtG.texture, TEXTURE_FILTER_BILINEAR);
   for (auto* r : { &rtMain, &rtA, &rtB, &rtC, &rtD, &rtE }) SetTextureFilter(r->texture, TEXTURE_FILTER_BILINEAR);
   if (!shFinal.id) LoadPostShaders();
   if (!shFinal.id || shFinal.id == rlGetShaderIdDefault()) postOk = false; else postOk = rtMain.id > 0;
@@ -396,6 +476,7 @@ static void LoadPostShaders() {
   lBrightPx = GetShaderLocation(shBright, "px"); lBlurDir = GetShaderLocation(shBlur, "dir"); lFinalPx = GetShaderLocation(shFinal, "px"); lFinalBloom = GetShaderLocation(shFinal, "bloom");
   lFinalDof = GetShaderLocation(shFinal, "dofTex"); lFinalDepth = GetShaderLocation(shFinal, "depthTex"); lFinalTime = GetShaderLocation(shFinal, "time"); lFinalFocus = GetShaderLocation(shFinal, "focus"); lFinalDofOn = GetShaderLocation(shFinal, "dofOn"); lFinalDofAmt = GetShaderLocation(shFinal, "dofAmt");
   lFxA = GetShaderLocation(shFinal, "fxA"); lFxB = GetShaderLocation(shFinal, "fxB"); lFxC = GetShaderLocation(shFinal, "fxC");
+  shAO = LoadShaderFromMemory(PVS, AO_FS); lAOPx = GetShaderLocation(shAO, "px"); lAOAsp = GetShaderLocation(shAO, "aspect"); lFinalAO = GetShaderLocation(shFinal, "aoTex"); lFinalAOOn = GetShaderLocation(shFinal, "aoOn");
 }
 // draw in logical 1600x900 coordinates whatever the real framebuffer size is
 static void LogicalOrtho() { rlDrawRenderBatchActive(); rlMatrixMode(RL_PROJECTION); rlLoadIdentity(); rlOrtho(0, W, H, 0, 0.0, 1.0); rlMatrixMode(RL_MODELVIEW); rlLoadIdentity(); }
@@ -440,6 +521,13 @@ void PostEnd() {
   BeginTextureMode(rtA); BeginBlendMode(BLEND_ADDITIVE);
   DrawTexturePro(rtE.texture, { 0, 0, (float)rtE.texture.width, (float)-rtE.texture.height }, { 0, 0, (float)rtA.texture.width, (float)rtA.texture.height }, { 0, 0 }, 0, Color{ 70, 120, 255, 255 });
   EndBlendMode(); EndTextureMode();
+  // ambient occlusion at half size from the scene's depth, softened twice
+  bool ao = dofOk && g_cineOn && shAO.id && g_aoOn;
+  if (ao) {
+    BeginTextureMode(rtF); ClearBackground(WHITE); BeginShaderMode(shAO); float asp = (float)FW / FH; SetShaderValue(shAO, lAOAsp, &asp, SHADER_UNIFORM_FLOAT); SetShaderValue(shAO, lAOPx, &px, SHADER_UNIFORM_VEC2);
+    DrawTexturePro(rtMain.depth, { 0, 0, (float)FW, (float)-FH }, { 0, 0, (float)rtF.texture.width, (float)rtF.texture.height }, { 0, 0 }, 0, WHITE); EndShaderMode(); EndTextureMode();
+    Dir(1.5f, 0); Blit(rtF.texture, rtG, shBlur); Dir(0, 1.5f); Blit(rtG.texture, rtF, shBlur);
+  }
   // depth-of-field source: a soft, quarter-size copy of the scene
   bool dof = dofOk && g_cineOn && (cine::Busy() || g_dofAmt > 0.01f);
   if (dof) { Dir(3, 0); Blit(rtMain.texture, rtC, shBlur); Dir(0, 6); Blit(rtC.texture, rtD, shBlur); Dir(10, 0); Blit(rtD.texture, rtC, shBlur); Dir(0, 10); Blit(rtC.texture, rtD, shBlur); }
@@ -453,6 +541,7 @@ void PostEnd() {
     SetShaderValue(shFinal, lFxA, &a, SHADER_UNIFORM_VEC4); SetShaderValue(shFinal, lFxB, &b, SHADER_UNIFORM_VEC4); SetShaderValue(shFinal, lFxC, &c, SHADER_UNIFORM_VEC3); }
   SetShaderValueTexture(shFinal, lFinalDof, dof ? rtD.texture : rtA.texture);
   if (dof) SetShaderValueTexture(shFinal, lFinalDepth, rtMain.depth);
+  { float on = ao ? 1.f : 0.f; SetShaderValue(shFinal, lFinalAOOn, &on, SHADER_UNIFORM_FLOAT); SetShaderValueTexture(shFinal, lFinalAO, ao ? rtF.texture : rtA.texture); }
   DrawTexturePro(rtMain.texture, { 0, 0, (float)FW, (float)-FH }, { 0, 0, (float)FW, (float)FH }, { 0, 0 }, 0, WHITE);
   EndShaderMode();
   EndDrawing();
@@ -500,8 +589,9 @@ static void DrawEmotes() {
 }
 static std::unique_ptr<Game> game;
 
-int g_dbg = 0; int g_post = 1;
+int g_dbg = 0; int g_post = 1; int g_aoOn = 1;   // g_aoOn: the TV turns ambient occlusion and reflections off when it is slow (native.js)
 extern "C" {
+EMSCRIPTEN_KEEPALIVE void cc_quality(int on) { g_aoOn = on ? 1 : 0; }
 static int g_galPage = -1; static float g_galT = 0;   // debug pose gallery (see DrawGallery)
 EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) {
   if (m >= 40 && m < 50) {   // debug: play a test moment on whatever the camera looks at

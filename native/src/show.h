@@ -49,6 +49,9 @@ struct Show : Game {
     }
     if (g_dbg >= 8 && g_dbg <= 12) { int q = g_dbg >= 9 ? std::min(N() - 1, g_dbg - 9) : 0; float z = g_dbg >= 9 ? 3.1f : 4.6f; cam.position = { PodX(q) + 0.3f, 2.3f, z }; cam.target = { PodX(q), g_dbg >= 9 ? 2.5f : 2.1f, 1.55f }; }
     lit.Begin(cam, { 0.05f, 0.06f, 0.16f }, 0.006f);
+    lit.Mood(0.24f, { 0.6f, 0.62f, 0.85f }, { 0.1f, -1.0f, 0.45f }, 0.05f);   // a TV studio: dim house, bright spots on the players
+    for (int i = 0; i < N() && i < 4; i++) lit.Light({ PodX(i), 5.2f, 2.6f }, { 2.0f, 1.8f, 1.5f }, 2.6f);
+    lit.Light({ 0, 4.5f, -2.5f }, { 0.9f, 0.6f, 1.6f }, 5.0f);
     BeginMode3D(cam);
     lit.Pattern(PAT_TILE);
     lit.Draw(prim.plane, TRS({ 0, 0, 0 }, { 0, 0, 0 }, { 90, 1, 90 }), Hex(0x141c40));

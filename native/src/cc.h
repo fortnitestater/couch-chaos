@@ -76,7 +76,7 @@ Color ParseColor(const std::string& hex);
 
 // ---------- lit 3D rendering ----------
 // surface patterns for Lit::Draw (set with lit.Pattern(...); every lit.Begin resets it to PAT_NONE)
-enum { PAT_NONE = 0, PAT_GRASS, PAT_WOOD, PAT_FELT, PAT_SNOW, PAT_ICE, PAT_TILE, PAT_WATER, PAT_RUG, PAT_STONE };
+enum { PAT_NONE = 0, PAT_GRASS, PAT_WOOD, PAT_FELT, PAT_SNOW, PAT_ICE, PAT_TILE, PAT_WATER, PAT_RUG, PAT_STONE, PAT_LANE };
 struct Lit {
   Shader shader{}; Material mat{}; int locLight, locCam, locFog, locFogD, locAmb, locPat, locCast, locNCast, locTime, locSun, locSky;
   std::vector<Vector4> cast, castPrev;  // soft contact shadows (x, groundY, z, radius), drawn one frame late
@@ -91,10 +91,27 @@ struct Lit {
   void Begin(const Camera3D& cam, Vector3 fogColor, float fogDensity);
   void Draw(const Mesh& m, Matrix t, Color c);
   void Pattern(int p);
+  // mood: a scene sets these right after Begin (Begin puts the defaults back every frame)
+  float amb = 0.4f, camFill = 0.08f, roughV = 0.5f; Vector3 sunDir{ -0.45f, -1.0f, -0.35f }, sunCol{ 1.0f, 0.92f, 0.78f };
+  std::vector<Vector4> plP, plC; int locPlP = -1, locPlC = -1, locNPl = -1, locRough = -1, locCamFill = -1;
+  void Mood(float ambient, Vector3 sunColor, Vector3 sunDirection, float cameraFill = 0.06f);   // darker rooms: less fill, a coloured key light
+  void Sky(Vector3 c);                                                                        // the colour of the sky / ceiling fill
+  void Light(Vector3 pos, Vector3 color, float radius);                                       // a lamp, a spotlight's pool, a neon tube (up to 6)
+  void Rough(float r);                                                                        // 0 = glossy (a lane, a polished floor) .. 1 = matte (skin, cloth)
+  // a reflection in a polished floor: between MirrorBegin and MirrorEnd everything drawn is flipped under the floor at y and faded,
+  // drawn over the floor (call it right after the floor, before the real things)
+  bool mirror = false; float mirrorY = 0, mirrorA = 0.3f;
+  // print a texture on what is drawn next (cell = the part of the texture to use: x, y, w, h in 0..1), lit and shadowed like the rest
+  Vector4 uvR{ 0, 0, 1, 1 }; int locUV = -1;
+  void Tex(Texture2D t, Vector4 cell);
+  void NoTex();
+  void MirrorBegin(float y, float strength);
+  void MirrorEnd();
   void Caster(Vector3 ground, float radius) { if (cast.size() < 24) cast.push_back({ ground.x, ground.y, ground.z, radius }); }
   void EndFrame(float dt) { castPrev.swap(cast); cast.clear(); time += dt; }
 };
 // whole-frame post processing: bloom, grade, vignette, FXAA
+extern int g_aoOn;   // 1 = full quality (ambient occlusion, floor reflections); the TV turns it off for good when it can't keep up
 void PostBegin();
 void PostEnd();
 extern Lit lit;

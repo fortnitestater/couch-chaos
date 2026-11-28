@@ -538,11 +538,11 @@ struct Bowling : Classic {
       const float PX = LaneX(LMAX) + PITCH / 2; Color cc = Color{ 150, 150, 175, 255 };
       Floor(carpet, -24, -PX, -16, 28, -0.04f, 3.5f, cc); Floor(carpet, PX, 24, -16, 28, -0.04f, 3.5f, cc); Floor(carpet, -PX, PX, -16, 19.5f, -0.04f, 3.5f, cc); Floor(carpet, -PX, PX, 21.45f, 28, -0.04f, 3.5f, cc);
     } else lit.Draw(prim.plane, TRS({ 0, -0.04f, 6 }, { 0, 0, 0 }, { 48, 1, 44 }), Hex(0x1a1033));
-    lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ 0, -0.02f, -3.3f }, { 0, 0, 0 }, { PITCH * 11 + 0.6f, 0.04f, 6.6f }), Hex(0xd9b27c)); lit.Pattern(PAT_NONE);
+    lit.Rough(0.12f); lit.Pattern(PAT_LANE); lit.Draw(prim.cube, TRS({ 0, -0.02f, -3.3f }, { 0, 0, 0 }, { PITCH * 11 + 0.6f, 0.04f, 6.6f }), Hex(0xcf9658)); lit.Pattern(PAT_NONE); lit.Rough(0.5f);
     for (float z : { -1.5f, -2.6f }) for (int k = LMIN; k <= LMAX; k++) for (int d = -1; d <= 1; d++) lit.Draw(prim.cyl, TRS({ LaneX(k) + d * 0.16f, 0.0f, z }, { 0, 0, 0 }, { 0.05f, 0.005f, 0.05f }), Hex(0x2b2b30));   // stance dots
     for (int k = LMIN; k <= LMAX; k++) {
       float lx = LaneX(k);
-      lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS({ lx, -0.01f, 9.75f }, { 0, 0, 0 }, { 1.05f, 0.02f, 19.5f }), Hex(0xf2d29c)); lit.Pattern(PAT_NONE);
+      lit.Rough(0.08f); lit.Pattern(PAT_LANE); lit.Draw(prim.cube, TRS({ lx, -0.01f, 9.75f }, { 0, 0, 0 }, { 1.05f, 0.02f, 19.5f }), Hex(0xe0a865)); lit.Pattern(PAT_NONE); lit.Rough(0.5f);
       for (int s = -1; s <= 1; s += 2) lit.Draw(prim.cube, TRS({ lx + s * 0.65f, -0.07f, 9.75f }, { 0, 0, 0 }, { 0.25f, 0.02f, 19.5f }), Hex(0x14141c));   // gutters
       lit.Draw(prim.cube, TRS({ lx, 0.003f, 0.0f }, { 0, 0, 0 }, { 1.05f, 0.012f, 0.05f }), Hex(0xd7263d));   // foul line
       if (bumpers) for (int sd = -1; sd <= 1; sd += 2) DrawBumper(lx, sd, std::abs(k) <= 3);
@@ -662,10 +662,22 @@ struct Bowling : Classic {
     cam.up = { sinf(bank), cosf(bank), 0 };
     UI::Sky(Hex(0x0b0620), Hex(0x1a0b3a));
     lit.Begin(cam, { 0.05f, 0.04f, 0.11f }, 0.011f);
+    // the mood: a dark neon hall. Light comes from the pin decks, warm spots over the approach and pink / violet neon
+    lit.Mood(0.22f, { 0.75f, 0.7f, 0.85f }, { 0.15f, -1.0f, 0.4f }, 0.05f); lit.Sky({ 0.45f, 0.36f, 0.7f });
+    lit.Light({ 0, 3.0f, 18.6f }, { 2.4f, 2.3f, 2.1f }, 3.2f);     // the pin deck
+    lit.Light({ 0, 4.2f, 2.0f }, { 1.9f, 1.45f, 1.0f }, 4.2f);     // over the approach
+    lit.Light({ 0, 3.6f, 10.0f }, { 1.4f, 1.1f, 0.85f }, 4.0f);    // half way down the lane
+    lit.Light({ -5.5f, 3.0f, 6.0f }, { 1.5f, 0.35f, 1.1f }, 4.0f); // neon pink
+    lit.Light({ 5.5f, 3.0f, 6.0f }, { 0.55f, 0.4f, 1.7f }, 4.0f);  // neon violet
     BeginMode3D(cam);
     lit.noRec = true; DrawHall(WHITE);   // the alley around you is a backdrop: it doesn't need to cast shadows
     lit.Draw(prim.cyl, TRS({ 0, 4.95f, 8.5f }, { 0, 0, 0 }, { 0.04f, 0.8f, 0.04f }), Hex(0x555566)); lit.Draw(prim.sphere, TRS({ 0, 4.5f, 8.5f }, { 0, time * 0.4f, 0 }, { 0.9f, 0.9f, 0.9f }), Hex(0xe4e8f4));   // the mirror ball
     if (phase == "intro") DrawSeating();   // the seats behind the approach are only in view during the flyover
+    if (g_aoOn) {   // the polished lane mirrors the pins, the lit deck and the ball
+      Lane& M0 = Mine(); lit.MirrorBegin(0.0f, 0.34f); DrawLaneEnd(0, 0); DrawPins(M0.pins, 0, false, hero.on, PinsLift());
+      if (phase == "aim") { Ball b; b.x = bxw; b.z = 0.35f; b.y = BALL_R; DrawBall(b, 0, P(cur).color, false); } else if (M0.ball.on) DrawBall(M0.ball, 0, P(cur).color, false);
+      lit.MirrorEnd();
+    }
     for (auto& L : lanes) { float lx = LaneX(L.k); lit.noRec = L.k != 0; DrawPins(L.pins, lx, L.k == 0, L.k == 0 && hero.on, L.k == 0 ? PinsLift() : 0.f); if (L.k != 0 && L.ball.on) DrawBall(L.ball, lx, L.ballCol, false); }
     lit.noRec = false;
     { float lf = PinsLift(); DrawSweepBar(0, sweepU > 0 ? SweepBar(sweepU) : SweepBar(0));   // lane 0's sweep bar, and the table that holds the lifted pins

@@ -29,3 +29,6 @@ void DrawProp(const Mesh& m, Matrix xf, Color tint = WHITE);
 Matrix RacketXf(Vector3 hand, Vector3 dir, Vector3 face, float scale = 1);
 // spectators sitting on the given seats (x, y, z, facing yaw) — returns one merged mesh
 Mesh BuildCrowd(const std::vector<Vector4>& seats, unsigned seed);
+// a palm tree (base at the origin, about `height` tall) and a cumulus cloud (about 50 m across, base at y = 0)
+Mesh BuildPalm(unsigned seed, float height);
+Mesh BuildCloud(unsigned seed);
