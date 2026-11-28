@@ -392,26 +392,47 @@ void DrawResults(float a, float dt) {
   lit.Begin(cam, { 0.15f, 0.09f, 0.3f }, 0.02f);
   // the mood: a stage at night. Three spotlights on the winners, violet light round the edges, a polished floor
   lit.Mood(0.2f, { 0.55f, 0.5f, 0.8f }, { 0.1f, -1.0f, 0.5f }, 0.05f); lit.Sky({ 0.5f, 0.38f, 0.85f });
-  lit.Light({ 0, 6.5f, 1.5f }, { 2.6f, 2.2f, 1.6f }, 3.6f); lit.Light({ -2.6f, 5.5f, 1.5f }, { 1.6f, 1.6f, 1.9f }, 3.0f); lit.Light({ 2.6f, 5.5f, 1.5f }, { 1.9f, 1.5f, 1.2f }, 3.0f);
+  lit.Light({ 0, 6.5f, 2.2f }, { 1.7f, 1.45f, 1.05f }, 3.4f); lit.Light({ -2.6f, 5.5f, 1.5f }, { 1.6f, 1.6f, 1.9f }, 3.0f); lit.Light({ 2.6f, 5.5f, 1.5f }, { 1.9f, 1.5f, 1.2f }, 3.0f);
   lit.Light({ -7, 2.5f, -2 }, { 0.9f, 0.3f, 1.6f }, 5.0f); lit.Light({ 7, 2.5f, -2 }, { 0.5f, 0.35f, 1.8f }, 5.0f);
   BeginMode3D(cam);
   lit.Draw(prim.cyl, TRS({ 0, -0.3f, 0 }, { 0, 0, 0 }, { 16, 0.3f, 9 }), Hex(0x2b1d5c));
   lit.Rough(0.1f); lit.Draw(prim.cyl, TRS({ 0, -0.02f, 0 }, { 0, 0, 0 }, { 12, 0.04f, 7 }), Hex(0x2c1f63)); lit.Rough(0.5f);
+  // the set: a curved wall of LED strips behind the podium, a lighting truss overhead, a banner hanging down each side
+  { bool nr = lit.noRec; lit.noRec = true;
+    for (int k = -10; k <= 10; k++) {
+      float x = k * 1.25f, z = -6.5f + 0.035f * k * k, top = 4.2f + 1.6f * cosf(k * 0.32f) + 0.5f * sinf(T * 1.3f + k * 0.7f);
+      float u = 0.5f + 0.5f * sinf(T * 1.6f + k * 0.55f), v = 0.5f + 0.5f * sinf(T * 0.9f - k * 0.4f);
+      Color c = ColorLerp(ColorLerp(Hex(0x7048e8), Hex(0xf06595), u), Hex(0xffd43b), v * 0.35f); c.a = 230;
+      DrawCube({ x, top / 2 + 0.2f, z }, 0.22f, top, 0.08f, c);                                   // unlit: it glows (and blooms)
+      DrawCube({ x, top / 2 + 0.2f, z - 0.06f }, 0.5f, top + 0.2f, 0.04f, Hex(0x0d0826));
+    }
+    lit.Draw(prim.cyl, TRS({ -7.5f, 6.6f, 1.5f }, { 0, 0, -PI / 2 }, { 0.12f, 15, 0.12f }), Hex(0x2b2d36));   // the truss
+    lit.Draw(prim.cyl, TRS({ -7.5f, 6.9f, 1.5f }, { 0, 0, -PI / 2 }, { 0.08f, 15, 0.08f }), Hex(0x3a3d48));
+    for (int k = -3; k <= 3; k++) { float x = k * 1.3f; lit.Draw(prim.cyl, TRS({ x, 6.0f, 1.5f }, { 0, 0, 0 }, { 0.36f, 0.6f, 0.36f }), Hex(0x15161c)); }   // lamp cans
+    for (int sd = -1; sd <= 1; sd += 2) {   // banners
+      Color bc = sd < 0 ? Hex(0x6a1fb0) : Hex(0x1d52d6);
+      lit.Draw(prim.cube, TRS({ sd * 6.4f, 4.3f, -1.2f }, { 0, -sd * 0.25f, 0 }, { 1.5f, 4.4f, 0.05f }), bc);
+      lit.Draw(prim.cone, TRS({ sd * 6.4f, 2.1f, -1.2f }, { 0, -sd * 0.25f, PI }, { 1.5f, 0.7f, 0.05f }), bc);
+      lit.Draw(prim.cube, TRS({ sd * 6.4f, 5.9f, -1.17f }, { 0, -sd * 0.25f, 0 }, { 1.5f, 0.18f, 0.06f }), Hex(0xffd43b));
+      lit.Draw(prim.cyl, TRS({ sd * 6.4f, 4.0f, -1.15f }, { PI / 2, -sd * 0.25f, 0 }, { 0.8f, 0.06f, 0.8f }), Hex(0xffd43b));
+      lit.Draw(prim.cyl, TRS({ sd * 6.4f - 0.8f, 6.55f, -1.2f }, { 0, 0, -PI / 2 }, { 0.05f, 1.6f, 0.05f }), Hex(0xadb5bd));
+    }
+    lit.noRec = nr; }
   const J& pod = R["pod"];
   const float px[3] = { 0, -2.6f, 2.6f }, ph[3] = { 2.4f, 1.7f, 1.15f };
   const unsigned pc[3] = { 0xffd43b, 0xced4da, 0xe8a87c };
   Vector3 heads[3]; bool have[3] = { false, false, false }; float podH[3] = { 0, 0, 0 };
   if (g_aoOn) lit.MirrorBegin(0.0f, 0.3f);   // the polished stage reflects the podiums and the winners (drawn first, faded, under the real ones)
   for (int i = 0; g_aoOn && i < 3 && i < (int)pod.size(); i++) { float h = ph[i] * Clamp(podS[i].x, 0, 1.3f); if (h < 0.05f) continue;
-    lit.Draw(prim.cube, TRS({ px[i], h / 2, 0 }, { 0, 0, 0 }, { 2.3f, h, 2.3f }), Hex(0x4c3a9e)); lit.Draw(prim.cube, TRS({ px[i], h - 0.08f, 0 }, { 0, 0, 0 }, { 2.36f, 0.18f, 2.36f }), Hex(pc[i]));
+    lit.Draw(prim.rbox, TRS({ px[i], h / 2, 0 }, { 0, 0, 0 }, { 2.3f, h, 2.3f }), Hex(0x4c3a9e)); lit.Draw(prim.rbox, TRS({ px[i], h - 0.08f, 0 }, { 0, 0, 0 }, { 2.36f, 0.18f, 2.36f }), Hex(pc[i]));
     if (podS[i].x > 0.5f) DrawToon({ px[i], h, 0 }, sinf(T + i) * 0.3f, C(pod[i]["c"]), T, i == 0 ? fabsf(sinf(T * 4.5f)) * 0.6f : fabsf(sinf(T * 3.2f + i)) * 0.25f, i == 0 ? 1 : 0.4f, 1.15f); }
   if (g_aoOn) lit.MirrorEnd();
   for (int i = 0; i < 3 && i < (int)pod.size(); i++) {
     float delay = (2 - i) * 0.35f; podS[i].To(t > delay ? 1 : 0, dt, 90, 12);
     float h = ph[i] * Clamp(podS[i].x, 0, 1.3f);
-    lit.Draw(prim.cube, TRS({ px[i], h / 2, 0 }, { 0, 0, 0 }, { 2.3f, h, 2.3f }), Hex(0x4c3a9e));
-    lit.Draw(prim.cube, TRS({ px[i], h - 0.08f, 0 }, { 0, 0, 0 }, { 2.36f, 0.18f, 2.36f }), Hex(pc[i]));
-    lit.Draw(prim.cube, TRS({ px[i], h * 0.22f, 1.16f }, { 0, 0, 0 }, { 0.8f, 0.38f * fminf(1, h), 0.04f }), Hex(pc[i]));
+    lit.Rough(0.25f); lit.Draw(prim.rbox, TRS({ px[i], h / 2, 0 }, { 0, 0, 0 }, { 2.3f, h, 2.3f }), Hex(0x4c3a9e)); lit.Rough(0.5f);
+    lit.Draw(prim.rbox, TRS({ px[i], h - 0.08f, 0 }, { 0, 0, 0 }, { 2.36f, 0.18f, 2.36f }), Hex(pc[i]));
+    lit.Draw(prim.rbox, TRS({ px[i], h * 0.22f, 1.14f }, { 0, 0, 0 }, { 0.8f, 0.38f * fminf(1, h), 0.06f }), Hex(pc[i]));
     podH[i] = h;
     Color c = C(pod[i]["c"]);
     float hop = i == 0 ? fabsf(sinf(T * 4.5f)) * 0.6f : fabsf(sinf(T * 3.2f + i)) * 0.25f;
@@ -420,6 +441,13 @@ void DrawResults(float a, float dt) {
     if (i == 0 && t > 1.0f && fmodf(T, 1.4f) < dt) conf.Spawn({ 0, 6, 0 }, 60, 3, 4);
   }
   conf.Update(dt); conf.Draw();
+  { rlDrawRenderBatchActive(); rlDisableDepthMask(); BeginBlendMode(BLEND_ADDITIVE);
+    const unsigned bcol[3] = { 0xffe08a, 0xb4c6ff, 0xffc29a };
+    for (int i = 0; i < 3 && i < (int)pod.size(); i++) if (podS[i].x > 0.3f) {
+      float x = (i == 0 ? 0 : i == 1 ? -1.3f : 1.3f), w = 0.85f + 0.06f * sinf(T * 2 + i);
+      for (int l = 0; l < 2; l++) DrawCylinderEx({ x, 5.75f, 1.5f }, { px[i], podH[i] + 0.05f, 0 }, 0.16f + l * 0.08f, (0.8f + l * 0.45f) * w, 28, Hex(bcol[i], (unsigned char)(i == 0 ? 9 : 8)));
+    }
+    EndBlendMode(); rlDrawRenderBatchActive(); rlEnableDepthMask(); }
   EndMode3D();
   if (t < dt * 2) conf.Spawn({ 0, 7, 0 }, 170, 5, 5);
   // labels

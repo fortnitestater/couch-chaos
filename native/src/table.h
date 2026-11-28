@@ -123,14 +123,25 @@ struct Table : Game {
     // back wall: sage wallpaper with fine stripes, white painted wainscoting with raised panels, dado rail, skirting, crown moulding
     lit.Draw(prim.cube, TRS({ 0, 6, wz }, { 0, 0, 0 }, { 80, 19, 0.4f }), Hex(M.wall));
     for (int i = -24; i <= 24; i++) lit.Draw(prim.cube, TRS({ i * 1.6f, 7.2f, wz + 0.21f }, { 0, 0, 0 }, { 0.5f, 16.6f, 0.02f }), Hex(M.stripe));
-    lit.Draw(prim.cube, TRS({ 0, -1.2f, wz + 0.3f }, { 0, 0, 0 }, { 80, 4.0f, 0.2f }), Hex(0xe9e4d8));
+    lit.Pattern(PAT_WOOD); lit.Rough(0.3f);
+    lit.Draw(prim.cube, TRS({ 0, -1.2f, wz + 0.3f }, { 0, 0, 0 }, { 80, 4.0f, 0.2f }), Hex(0x6e4528));
     for (int i = -12; i <= 12; i++) {
-      lit.Draw(prim.cube, TRS({ i * 3.2f, -1.25f, wz + 0.42f }, { 0, 0, 0 }, { 2.6f, 2.9f, 0.06f }), Hex(0xf1ede3));
-      lit.Draw(prim.cube, TRS({ i * 3.2f, -1.25f, wz + 0.46f }, { 0, 0, 0 }, { 2.3f, 2.6f, 0.04f }), Hex(0xe4dfd2));
+      lit.Draw(prim.cube, TRS({ i * 3.2f, -1.25f, wz + 0.42f }, { 0, 0, 0 }, { 2.6f, 2.9f, 0.06f }), Hex(0x83563a));
+      lit.Draw(prim.cube, TRS({ i * 3.2f, -1.25f, wz + 0.46f }, { 0, 0, 0 }, { 2.3f, 2.6f, 0.04f }), Hex(0x784d30));
     }
+    lit.Pattern(PAT_NONE); lit.Rough(0.5f);
     lit.Draw(prim.cube, TRS({ 0, 0.85f, wz + 0.45f }, { 0, 0, 0 }, { 80, 0.18f, 0.25f }), Hex(0xf4f1ea));     // dado rail
     lit.Draw(prim.cube, TRS({ 0, F + 0.25f, wz + 0.45f }, { 0, 0, 0 }, { 80, 0.5f, 0.25f }), Hex(0xf4f1ea));  // skirting
     lit.Draw(prim.cube, TRS({ 0, 15.4f, wz + 0.5f }, { 0, 0, 0 }, { 80, 0.5f, 0.5f }), Hex(0xf4f1ea));        // crown
+    // a brass wall light: plate, arm, a cream shade with a glowing bulb, and a soft scallop of warm light on the wall around it
+    auto Sconce = [&](Vector3 p, float yaw, Vector3 in) {
+      lit.Draw(prim.rbox, TRS(p, { 0, yaw, 0 }, { 0.6f, 1.0f, 0.2f }), Hex(0xb08d57));
+      lit.Draw(prim.rbox, TRS(Vector3Add(p, Vector3Scale(in, 0.5f)), { 0, yaw, 0 }, { 0.14f, 0.14f, 1.0f }), Hex(0xb08d57));
+      Vector3 sh = Vector3Add(Vector3Add(p, Vector3Scale(in, 1.0f)), { 0, -0.1f, 0 });
+      lit.Draw(prim.cyl, TRS(sh, { 0, 0, 0 }, { 0.9f, 0.95f, 0.9f }), Hex(0xf6e7c8));
+      DrawSphere(Vector3Add(sh, { 0, 0.4f, 0 }), 0.3f, Fade(Hex(0xffd59a), 0.9f));
+      for (int k = 0; k < 12; k++) { float r = 0.5f + k * 0.42f; Vector3 w0 = Vector3Add(p, Vector3Scale(in, 0.03f + k * 0.0005f)); DrawCylinderEx(w0, Vector3Add(w0, Vector3Scale(in, 0.001f)), r, r, 40, Fade(Hex(0xffb86b), 0.024f)); }
+    };
     {   // the other three walls (the TV's default angle never sees them; the player's-seat camera does)
       const float FZ = 21.f, SX = 27.f;
       for (int s = 0; s < 3; s++) {
@@ -140,7 +151,7 @@ struct Table : Game {
         auto at = [&](float la, float y, float inn) { return Vector3{ c.x + al.x * la + in.x * inn, y, c.z + al.z * la + in.z * inn }; };
         lit.Draw(prim.cube, TRS(c, { 0, yaw, 0 }, { len, 19, 0.4f }), Hex(M.wall));
         for (int i = -22; i <= 22; i++) lit.Draw(prim.cube, TRS(at(i * 1.6f, 7.2f, 0.21f), { 0, yaw, 0 }, { 0.5f, 16.6f, 0.02f }), Hex(M.stripe));
-        lit.Draw(prim.cube, TRS(at(0, -1.2f, 0.3f), { 0, yaw, 0 }, { len, 4.0f, 0.2f }), Hex(0xe9e4d8));
+        lit.Pattern(PAT_WOOD); lit.Draw(prim.cube, TRS(at(0, -1.2f, 0.3f), { 0, yaw, 0 }, { len, 4.0f, 0.2f }), Hex(0x744a2d)); lit.Pattern(PAT_NONE);
         lit.Draw(prim.cube, TRS(at(0, 0.85f, 0.45f), { 0, yaw, 0 }, { len, 0.18f, 0.25f }), Hex(0xf4f1ea));
         lit.Draw(prim.cube, TRS(at(0, F + 0.25f, 0.45f), { 0, yaw, 0 }, { len, 0.5f, 0.25f }), Hex(0xf4f1ea));
         lit.Draw(prim.cube, TRS(at(0, 15.4f, 0.5f), { 0, yaw, 0 }, { len, 0.5f, 0.5f }), Hex(0xf4f1ea));
@@ -157,6 +168,10 @@ struct Table : Game {
         }
         // framed pictures between the windows, and a tall plant in the corner
         for (int f = 0; f < 3; f++) { float lx = -2.5f + f * 2.5f; lit.Draw(prim.cube, TRS(at(lx, 7.0f, 0.3f), { 0, yaw, 0 }, { 1.9f, 2.5f, 0.15f }), Hex(0xf1ede3)); lit.Draw(prim.cube, TRS(at(lx, 7.0f, 0.4f), { 0, yaw, 0 }, { 1.6f, 2.2f, 0.1f }), Hex(f % 3 == 0 ? M.sofa : f % 3 == 1 ? M.curtB : M.rug)); }
+        if (s != 0) {   // wall lights either side of the pictures: the side walls glow warm instead of sitting in cold moonlight
+          for (int q = -1; q <= 1; q += 2) Sconce(at(q * 4.6f, 3.4f, 0.2f), yaw, in);
+          lit.Light(at(0, 3.0f, 2.0f), { 1.6f, 1.0f, 0.52f }, 6.0f);
+        }
       }
     }
     float wx = -9;
@@ -257,6 +272,7 @@ struct Table : Game {
     for (int k = 0; k < 2; k++) lit.Draw(prim.cube, TRS({ 2.6f + k * 2.0f, F + 1.3f, wz + 1.82f }, { 0, 0, 0 }, { 1.85f, 2.2f, 0.05f }), Hex(0x8a5a35));
     lit.Draw(prim.cyl, TRS({ 4.6f, F + 2.6f, wz + 1.1f }, { 0, 0, 0 }, { 0.5f, 1.2f, 0.5f }), Hex(0x2a9d8f));
     lit.Draw(prim.cone, TRS({ 4.6f, F + 3.7f, wz + 1.1f }, { 0, 0, 0 }, { 1.4f, 1.0f, 1.4f }), Hex(0xf6e7c8));
+    lit.Light({ 4.6f, F + 3.9f, wz + 2.0f }, { 1.4f, 0.9f, 0.48f }, 3.6f);   // the table lamp lights its corner
     if (!DrawModel("monstera.glb", { -4.6f, F, wz + 2.0f }, 0.4f, 4.6f)) {
     lit.Draw(prim.cyl, TRS({ -4.6f, F, wz + 1.6f }, { 0, 0, 0 }, { 1.3f, 1.5f, 1.3f }), Hex(0xe9e4d8));
     for (int k = 0; k < 9; k++) { float a = k * 0.7f; lit.Draw(prim.sphere, TRS({ -4.6f + cosf(a) * 0.55f, F + 2.6f + (k % 3) * 0.8f, wz + 1.6f + sinf(a) * 0.35f }, { 0, 0, cosf(a) * 0.7f }, { 0.55f, 1.9f, 0.35f }), Hex(k % 2 ? 0x2d6a4f : 0x40916c)); }
@@ -318,8 +334,8 @@ struct Table : Game {
     const float KT = 1.3f; c.x *= KT; c.z *= KT; s *= KT;   // everything on the felt is 30% bigger so it reads from the couch
     float sq = fabsf(flip * 2 - 1), lift = (1 - sq) * 0.6f * s;
     Vector3 p = { c.x, c.y + lift, c.z };
-    lit.Draw(prim.cube, TRS({ p.x + 0.05f, 0.01f, p.z + 0.07f }, { 0, yaw, 0 }, { 0.92f * s * sq, 0.01f, 1.3f * s }), Hex(0x000000, 50));
-    lit.Draw(prim.cube, TRS(p, { 0, yaw, 0 }, { 0.9f * s * sq, 0.03f, 1.28f * s }), faceUp ? Hex(0xfdfcf7) : Hex(0xffffff));
+    lit.Draw(prim.rcard, TRS({ p.x + 0.05f, 0.01f, p.z + 0.07f }, { 0, yaw, 0 }, { 0.92f * s * sq, 0.01f, 1.3f * s }), Hex(0x000000, 50));
+    lit.Draw(prim.rcard, TRS(p, { 0, yaw, 0 }, { 0.9f * s * sq, 0.03f, 1.28f * s }), faceUp ? Hex(0xfdfcf7) : Hex(0xffffff));
     if (Texture2D& tx = CardsTex(); tx.id) {   // a real printed card: pips, corner indices, court cards, a patterned back
       if (faceUp) { lit.Tex(tx, CardCell(cd.r, cd.s)); lit.Draw(prim.plane, TRS({ p.x, p.y + 0.017f, p.z }, { 0, yaw, 0 }, { 0.9f * s * sq, 1, 1.28f * s }), WHITE); }
       else { lit.Tex(tx, CardCell(0, 4)); lit.Draw(prim.plane, TRS({ p.x, p.y + 0.017f, p.z }, { 0, yaw, 0 }, { 0.8f * s * sq, 1, 1.18f * s }), back); }
@@ -348,10 +364,23 @@ struct Table : Game {
     Vector3 p = { c.x, c.y + s / 2 + hop, c.z };
     lit.Draw(prim.cyl, TRS({ c.x + 0.06f, 0.01f, c.z + 0.06f }, { 0, 0, 0 }, { s * 1.2f, 0.01f, s * 1.2f }), Hex(0x000000, 50));
     if (ring.a) lit.Draw(prim.cyl, TRS({ c.x, 0.02f, c.z }, { 0, 0, 0 }, { s * 1.6f, 0.02f, s * 1.6f }), ring);
-    lit.Draw(prim.cube, TRS(p, r, { s, s, s }), body);
-    if (roll > 0) return;
+    // a real die: rounded edges, pips on all six faces (opposite faces add up to 7); at rest it is turned so v is on top
+    static const Vector3 UP[7] = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, PI / 2 }, { -PI / 2, 0, 0 }, { PI / 2, 0, 0 }, { 0, 0, -PI / 2 }, { PI, 0, 0 } };
+    if (roll <= 0) { r = UP[v >= 1 && v <= 6 ? v : 1]; r.y = 0.35f * sinf(c.x * 2.3f + c.z * 1.7f); }
+    Matrix M = TRS(p, r, { s, s, s });
+    lit.Draw(prim.rbox, M, body);
     static const int P[7][6][2] = { {}, { { 0, 0 } }, { { -1, -1 }, { 1, 1 } }, { { -1, -1 }, { 0, 0 }, { 1, 1 } }, { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }, { { -1, -1 }, { 1, -1 }, { 0, 0 }, { -1, 1 }, { 1, 1 } }, { { -1, -1 }, { 1, -1 }, { -1, 0 }, { 1, 0 }, { -1, 1 }, { 1, 1 } } };
-    for (int k = 0; k < v && v <= 6; k++) lit.Draw(prim.sphere, TRS({ p.x + P[v][k][0] * s * 0.27f, p.y + s / 2, p.z + P[v][k][1] * s * 0.27f }, { 0, 0, 0 }, { s * 0.17f, s * 0.06f, s * 0.17f }), v == 1 ? Hex(0xe03131) : Hex(0x1a1438));
+    // face value -> outward normal and the two directions across it
+    static const Vector3 FN[7][3] = { {}, { { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, 1 } }, { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } }, { { 0, 0, 1 }, { 1, 0, 0 }, { 0, 1, 0 } },
+                                      { { 0, 0, -1 }, { 1, 0, 0 }, { 0, 1, 0 } }, { { -1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } }, { { 0, -1, 0 }, { 1, 0, 0 }, { 0, 0, 1 } } };
+    bool nr = lit.noRec; lit.noRec = true;
+    for (int f = 1; f <= 6; f++) for (int k = 0; k < f; k++) {
+      Vector3 N = FN[f][0], U = FN[f][1], W = FN[f][2]; float ps = f == 1 ? 0.24f : 0.16f;
+      Vector3 o = Vector3Add(Vector3Scale(N, 0.497f), Vector3Add(Vector3Scale(U, P[f][k][0] * 0.26f), Vector3Scale(W, P[f][k][1] * 0.26f)));
+      Matrix L = { U.x * ps, N.x * 0.03f, W.x * ps, o.x, U.y * ps, N.y * 0.03f, W.y * ps, o.y, U.z * ps, N.z * 0.03f, W.z * ps, o.z, 0, 0, 0, 1 };   // columns: across, out, across
+      lit.Draw(prim.sphere, MatrixMultiply(L, M), f == 1 ? Hex(0xd62839) : Hex(0x1a1438));
+    }
+    lit.noRec = nr;
   }
   void Board(const std::string& title, const std::vector<int>& order, std::function<std::string(int)> val, float x = 18) {
     std::vector<hud::Row> rows; for (int p : order) rows.push_back({ P(p).color, P(p).name, val(p), p == turn });

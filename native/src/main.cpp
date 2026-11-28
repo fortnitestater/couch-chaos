@@ -97,7 +97,8 @@ float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
 float fbm(vec2 p) { return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 + 3.7) * 0.15; }
 void main() {
-  vec3 base = colDiffuse.rgb * vC.rgb * texture2D(texture0, uvR.xy + vUV * uvR.zw).rgb;  // per-vertex colour (white unless a merged mesh brings its own) x a printed texture (white unless Tex)
+  vec4 tx = texture2D(texture0, uvR.xy + vUV * uvR.zw);
+  vec3 base = colDiffuse.rgb * vC.rgb * tx.rgb;  // per-vertex colour (white unless a merged mesh brings its own) x a printed texture (white unless Tex)
   vec3 n = normalize(vN); vec3 L = normalize(-lightDir); vec3 V = normalize(camPos - vW);
   float gl0 = 1.0 - rough; float spec = mix(0.03, 0.8, gl0 * gl0), gloss = mix(8.0, 150.0, gl0 * gl0);   // roughness: matte people, glossy lanes
   // ---- surface patterns ----
@@ -208,7 +209,7 @@ void main() {
   col = clamp((col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14), 0.0, 1.0);
   float dist = length(camPos - vW); float f = 1.0 - exp(-pow(dist * fogDensity, 2.0));
   f = max(f, (1.0 - exp(-dist * 0.006)) * exp(-max(vW.y + 3.0, 0.0) * 0.12) * 0.32);   // low-lying haze adds depth
-  gl_FragColor = vec4(mix(col, fogColor, clamp(f, 0.0, 1.0)), colDiffuse.a);
+  gl_FragColor = vec4(mix(col, fogColor, clamp(f, 0.0, 1.0)), colDiffuse.a * tx.a);
 })";
 static const char* SH_VS = R"(#version 100
 attribute vec3 vertexPosition; uniform mat4 mvp; varying float vD;
@@ -315,9 +316,61 @@ void Lit::Draw(const Mesh& m, Matrix t, Color c) {
     if (fmaxf(sx, fmaxf(sy, sz)) < 30 * 30) rec.push_back({ m, t });
   }
 }
+// a unit cube (-0.5..0.5) whose edges and corners are rounded with radius r: each face is a grid that is dense in the
+// rounded band, and every grid point is pushed out from the inner box onto the rounded surface
+static Mesh GenRoundBox(float r, int m) {
+  const float k = r * 2;   // in the -1..1 cube
+  std::vector<float> g; for (int i = 0; i < m; i++) g.push_back(-1 + k * i / m); g.push_back(-1 + k); g.push_back(0); g.push_back(1 - k); for (int i = 1; i <= m; i++) g.push_back(1 - k + k * i / m);
+  const int n = (int)g.size();
+  const Vector3 FN[6][3] = { { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } }, { { -1, 0, 0 }, { 0, 0, 1 }, { 0, 1, 0 } }, { { 0, 1, 0 }, { 0, 0, 1 }, { 1, 0, 0 } },
+                             { { 0, -1, 0 }, { 1, 0, 0 }, { 0, 0, 1 } }, { { 0, 0, 1 }, { 1, 0, 0 }, { 0, 1, 0 } }, { { 0, 0, -1 }, { 0, 1, 0 }, { 1, 0, 0 } } };
+  std::vector<float> v, nn, tc; std::vector<unsigned short> id;
+  for (int f = 0; f < 6; f++) {
+    unsigned short base = (unsigned short)(v.size() / 3);
+    for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) {
+      Vector3 p = Vector3Add(FN[f][0], Vector3Add(Vector3Scale(FN[f][1], g[i]), Vector3Scale(FN[f][2], g[j])));
+      Vector3 in = { Clamp(p.x, -1 + k, 1 - k), Clamp(p.y, -1 + k, 1 - k), Clamp(p.z, -1 + k, 1 - k) }, d = Vector3Subtract(p, in);
+      Vector3 nr = Vector3Length(d) > 1e-5f ? Vector3Normalize(d) : FN[f][0], q = Vector3Scale(Vector3Add(in, Vector3Scale(nr, k)), 0.5f);
+      v.insert(v.end(), { q.x, q.y, q.z }); nn.insert(nn.end(), { nr.x, nr.y, nr.z }); tc.insert(tc.end(), { (g[i] + 1) / 2, (g[j] + 1) / 2 });
+    }
+    for (int i = 0; i + 1 < n; i++) for (int j = 0; j + 1 < n; j++) {
+      unsigned short a = base + i * n + j, b = base + (i + 1) * n + j, c = base + (i + 1) * n + j + 1, e = base + i * n + j + 1;
+      id.insert(id.end(), { a, b, c, a, c, e });
+    }
+  }
+  Mesh ms{}; ms.vertexCount = (int)v.size() / 3; ms.triangleCount = (int)id.size() / 3;
+  ms.vertices = (float*)MemAlloc((unsigned)(v.size() * sizeof(float))); memcpy(ms.vertices, v.data(), v.size() * sizeof(float));
+  ms.normals = (float*)MemAlloc((unsigned)(nn.size() * sizeof(float))); memcpy(ms.normals, nn.data(), nn.size() * sizeof(float));
+  ms.texcoords = (float*)MemAlloc((unsigned)(tc.size() * sizeof(float))); memcpy(ms.texcoords, tc.data(), tc.size() * sizeof(float));
+  ms.indices = (unsigned short*)MemAlloc((unsigned)(id.size() * sizeof(unsigned short))); memcpy(ms.indices, id.data(), id.size() * sizeof(unsigned short));
+  UploadMesh(&ms, false); return ms;
+}
+// smooth round shapes (raylib's are 24-sided and flat-shaded: every round table showed its facets).
+// Same layout as GenMeshCylinder / GenMeshCone: radius 0.5, base at y = 0, top (or tip) at y = 1.
+static Mesh GenRound(int seg, bool cone) {
+  std::vector<float> v, nn, tc; std::vector<unsigned short> id;
+  auto V = [&](float x, float y, float z, float a, float b, float c, float u, float w) { v.insert(v.end(), { x, y, z }); nn.insert(nn.end(), { a, b, c }); tc.insert(tc.end(), { u, w }); return (unsigned short)(v.size() / 3 - 1); };
+  const float sl = cone ? 0.5f : 0.f;   // a cone's side normal leans up: radius 0.5 over height 1
+  for (int i = 0; i <= seg; i++) {
+    float a = 2 * PI * i / seg, c = cosf(a), s = sinf(a); Vector3 n = Vector3Normalize({ c, sl, s });
+    V(c * 0.5f, 0, s * 0.5f, n.x, n.y, n.z, (float)i / seg, 1); V(cone ? 0 : c * 0.5f, 1, cone ? 0 : s * 0.5f, n.x, n.y, n.z, (float)i / seg, 0);
+  }
+  for (int i = 0; i < seg; i++) { unsigned short a = i * 2, b = a + 1, c = a + 2, d = a + 3; id.insert(id.end(), { a, b, c, c, b, d }); }
+  for (int cap = 0; cap < (cone ? 1 : 2); cap++) {
+    float y = (float)cap, ny = cap ? 1.f : -1.f; unsigned short ctr = V(0, y, 0, 0, ny, 0, 0.5f, 0.5f), first = (unsigned short)(v.size() / 3);
+    for (int i = 0; i <= seg; i++) { float a = 2 * PI * i / seg; V(cosf(a) * 0.5f, y, sinf(a) * 0.5f, 0, ny, 0, 0.5f + cosf(a) * 0.5f, 0.5f + sinf(a) * 0.5f); }
+    for (int i = 0; i < seg; i++) { unsigned short p = first + i, q = first + i + 1; if (cap) id.insert(id.end(), { ctr, q, p }); else id.insert(id.end(), { ctr, p, q }); }
+  }
+  Mesh ms{}; ms.vertexCount = (int)v.size() / 3; ms.triangleCount = (int)id.size() / 3;
+  ms.vertices = (float*)MemAlloc((unsigned)(v.size() * sizeof(float))); memcpy(ms.vertices, v.data(), v.size() * sizeof(float));
+  ms.normals = (float*)MemAlloc((unsigned)(nn.size() * sizeof(float))); memcpy(ms.normals, nn.data(), nn.size() * sizeof(float));
+  ms.texcoords = (float*)MemAlloc((unsigned)(tc.size() * sizeof(float))); memcpy(ms.texcoords, tc.data(), tc.size() * sizeof(float));
+  ms.indices = (unsigned short*)MemAlloc((unsigned)(id.size() * sizeof(unsigned short))); memcpy(ms.indices, id.data(), id.size() * sizeof(unsigned short));
+  UploadMesh(&ms, false); return ms;
+}
 void Prims::Init() {
-  cube = GenMeshCube(1, 1, 1); sphere = GenMeshSphere(0.5f, 22, 30); cyl = GenMeshCylinder(0.5f, 1, 24); cone = GenMeshCone(0.5f, 1, 24); plane = GenMeshPlane(1, 1, 1, 1);
-  torus = GenMeshTorus(0.25f, 1, 16, 24); hemi = GenMeshHemiSphere(0.5f, 16, 24);
+  cube = GenMeshCube(1, 1, 1); sphere = GenMeshSphere(0.5f, 22, 30); cyl = GenRound(72, false); cone = GenRound(48, true); plane = GenMeshPlane(1, 1, 1, 1);
+  torus = GenMeshTorus(0.25f, 1, 16, 24); hemi = GenMeshHemiSphere(0.5f, 16, 24); rbox = GenRoundBox(0.12f, 4); rcard = GenRoundBox(0.06f, 3);
 }
 void Limb(Vector3 a, Vector3 b, float r, Color c) {
   Vector3 d = Vector3Subtract(b, a); float len = Vector3Length(d); if (len < 1e-4f) return;
@@ -589,6 +642,44 @@ static void DrawEmotes() {
 }
 static std::unique_ptr<Game> game;
 
+// ---- player portraits: each player's own character, head and shoulders, rendered once into a small picture for the HUD ----
+EM_JS(void, js_portrait, (const char* k, const unsigned char* px, int w, int h), {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(HEAPU8.slice(px, px + w * h * 4).buffer), w, h), 0, 0);
+  (window.NPORT || (window.NPORT = {}))[UTF8ToString(k)] = c;
+});
+bool g_portrait = false;   // people.cpp: no far-away level of detail while a portrait is drawn
+static std::vector<unsigned> g_portQ; static std::vector<unsigned> g_portDone;
+static unsigned PortraitId(Color c) { return ((unsigned)c.r << 16) | ((unsigned)c.g << 8) | c.b; }
+std::string PortraitKey(Color c) { char b[16]; snprintf(b, sizeof b, "@%06x", PortraitId(c)); return b; }
+bool Portrait(Color c) {
+  unsigned k = PortraitId(c);
+  if (std::find(g_portDone.begin(), g_portDone.end(), k) != g_portDone.end()) return true;
+  if (std::find(g_portQ.begin(), g_portQ.end(), k) == g_portQ.end()) g_portQ.push_back(k);
+  return false;
+}
+static void RenderPortraits() {   // one a frame, before the scene (so nothing of it leaks into the scene's shadows or contact shadows)
+  if (g_portQ.empty() || !HaveFile("p0.glb")) return;
+  unsigned k = g_portQ.front(); Color c = { (unsigned char)(k >> 16), (unsigned char)(k >> 8), (unsigned char)k, 255 };
+  const int S = 160; static RenderTexture2D rt{}; if (!rt.id) rt = LoadRenderTexture(S, S);
+  Camera3D cam{}; cam.position = { 0.34f, 1.6f, 1.12f }; cam.target = { 0.02f, 1.5f, 0 }; cam.up = { 0, 1, 0 }; cam.fovy = 30; cam.projection = CAMERA_PERSPECTIVE;
+  auto savedPrev = lit.castPrev; lit.castPrev.clear(); size_t nCast = lit.cast.size(); bool nr = lit.noRec; lit.noRec = true; g_portrait = true;
+  BeginTextureMode(rt); rlEnableDepthMask(); ClearBackground(Color{ 0, 0, 0, 0 });
+  lit.Begin(cam, { 0.1f, 0.1f, 0.14f }, 0.0f);
+  { float z = 0; SetShaderValue(lit.shader, lit.locShOn, &z, SHADER_UNIFORM_FLOAT); }
+  lit.Mood(0.42f, { 1.15f, 1.05f, 0.95f }, { -0.35f, -0.6f, -0.7f }, 0.14f); lit.Sky({ 0.72f, 0.76f, 0.95f });
+  lit.Light({ -0.9f, 2.3f, -1.0f }, { 0.9f, 1.0f, 1.6f }, 1.6f);   // a cool rim light from behind
+  BeginMode3D(cam);
+  PersonPose q; q.pos = { 0, 0, 0 }; q.yaw = 0.22f; q.c = c; q.hsh = PersonHash(c); q.height = 1.78f; q.clip = "Idle"; q.t = 0.4f;
+  bool ok = DrawPersonPose(q);
+  EndMode3D(); EndTextureMode();
+  g_portrait = false; lit.noRec = nr; lit.cast.resize(nCast); lit.castPrev = savedPrev;
+  if (!ok) return;   // the models are still arriving: try again next frame
+  Image im = LoadImageFromTexture(rt.texture); ImageFlipVertical(&im); ImageFormat(&im, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+  js_portrait(PortraitKey(c).c_str(), (const unsigned char*)im.data, im.width, im.height); UnloadImage(im);
+  g_portDone.push_back(k); g_portQ.erase(g_portQ.begin());
+}
+
 int g_dbg = 0; int g_post = 1; int g_aoOn = 1;   // g_aoOn: the TV turns ambient occlusion and reflections off when it is slow (native.js)
 extern "C" {
 EMSCRIPTEN_KEEPALIVE void cc_quality(int on) { g_aoOn = on ? 1 : 0; }
@@ -703,6 +794,7 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   float gdt = dt * cine::TimeScale();   // hit-stop and slow motion during a big moment
   game->Update(gdt);
   for (auto& p : players) { p.pa = p.a; p.pb = p.b; p.ptouch = p.touch; }
+  RenderPortraits();
   lit.ShadowPass();
   PostBegin();
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)

@@ -90,8 +90,8 @@ def crown(d, cx, cy, w, kind, gold, dark):
 
 def face(r, s):
     w, h = CW * S, CH * S
-    im = Image.new('RGBA', (w, h), PAPER + (255,)); d = ImageDraw.Draw(im)
-    rounded(d, [1 * S, 1 * S, w - 1 - 1 * S, h - 1 - 1 * S], 11 * S, PAPER, (205, 200, 190), 2 * S)
+    im = Image.new('RGBA', (w, h), PAPER + (0,)); d = ImageDraw.Draw(im)   # outside the rounded corners: see-through (paper colour, so no dark fringe)
+    rounded(d, [1 * S, 1 * S, w - 1 - 1 * S, h - 1 - 1 * S], 11 * S, PAPER + (255,), (205, 200, 190), 2 * S)
     col = RED if s in (1, 2) else BLACK
     rank = RANKS[r]
     f = ImageFont.truetype(FONT, int((27 if rank == '10' else 31) * S))
@@ -143,11 +143,11 @@ def back():
     d.text((w / 2, h / 2), 'CC', font=f, fill=(150, 150, 150), anchor='mm')
     return im
 
-atlas = Image.new('RGBA', (W * S, H * S), (255, 255, 255, 255))
+atlas = Image.new('RGBA', (W * S, H * S), PAPER + (0,))
 for s in range(4):
     for r in range(13):
         atlas.alpha_composite(face(r, s), ((r * PITCH + 7) * S, s * CH * S))
 atlas.alpha_composite(back(), (7 * S, 4 * CH * S))
-atlas = atlas.resize((W, H), Image.LANCZOS).convert('RGB')
+atlas = atlas.resize((W, H), Image.LANCZOS)
 atlas.save(out, optimize=True)
 print('wrote', os.path.normpath(out), os.path.getsize(out), 'bytes')

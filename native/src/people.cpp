@@ -272,7 +272,8 @@ bool Load(int v, int var = -1) {
 // draw one real person; false = models not loaded yet (caller falls back to the toon body)
 extern Camera3D g_finalCam;
 // someone far from the camera is drawn from the lighter copy of the same person (a quarter of the points to animate)
-static int Far(int v, Vector3 pos) { if (v > 3) return v; float d = Vector3Distance(pos, g_finalCam.position); return d > 9.5f && Load(64 + v, v) ? 64 + v : v; }
+extern bool g_portrait;
+static int Far(int v, Vector3 pos) { if (v > 3 || g_portrait) return v; float d = Vector3Distance(pos, g_finalCam.position); return d > 9.5f && Load(64 + v, v) ? 64 + v : v; }
 bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer, float sc, float k, unsigned hsh) {
   int v = (int)(hsh % 4);
   if (Load(v)) v = Far(v, pos);

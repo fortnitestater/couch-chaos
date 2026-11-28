@@ -60,7 +60,10 @@ void Buzz(int pid, int ms);
 void Send(int pid, const std::string& json);
 // overlay drawing (website canvas, above the GL frame): cover art by key, rounded rects with gradient / gold rim
 void Img(const std::string& key, float x, float y, float w, float h, float radius, float alpha, float pan = 0, float zoom = 1);
-void RRect(float x, float y, float w, float h, float radius, Color fill, Color fill2, Color stroke, float lw, bool gradient = false, bool goldStroke = false);  // any message straight to one phone        // "pid:stat;pid:stat" best first
+void RRect(float x, float y, float w, float h, float radius, Color fill, Color fill2, Color stroke, float lw, bool gradient = false, bool goldStroke = false);
+// a player's own character, head and shoulders, for the HUD: true once it is rendered (it is queued otherwise); draw it with Img(PortraitKey(c), ...)
+bool Portrait(Color c);
+std::string PortraitKey(Color c);  // any message straight to one phone        // "pid:stat;pid:stat" best first
 
 // ---------- players ----------
 struct Player { int id; std::string name; Color color; bool bot; Vector2 stick{}; bool a = false, b = false, pa = false, pb = false, touch = false, ptouch = false; };
@@ -115,7 +118,7 @@ extern int g_aoOn;   // 1 = full quality (ambient occlusion, floor reflections);
 void PostBegin();
 void PostEnd();
 extern Lit lit;
-struct Prims { Mesh cube, sphere, cyl, cone, plane, torus, hemi; void Init(); };
+struct Prims { Mesh cube, sphere, cyl, cone, plane, torus, hemi, rbox, rcard; void Init(); };   // rbox: a unit cube with rounded edges (dice, blocks); rcard: barely rounded (card corners)
 // a rounded limb from a to b (cylinder + ball ends)
 void Limb(Vector3 a, Vector3 b, float r, Color c);
 extern Prims prim;
@@ -199,10 +202,12 @@ inline std::string ShortHint(const std::string& s) {
 inline std::vector<Rectangle>& TagRects() { static std::vector<Rectangle> v; return v; }
 inline void TagReset() { TagRects().clear(); }
 inline void Panel(float x, float y, float w, float h, float r, bool gold = true) {
-  RRect(x, y + 6, w, h, r, Color{ 0, 0, 0, 70 }, Color{ 0, 0, 0, 0 }, BLANK, 0, true);
+  RRect(x, y + 8, w, h, r, Color{ 0, 0, 0, 80 }, Color{ 0, 0, 0, 0 }, BLANK, 0, true);
   const Theme& t = TH();
-  RRect(x, y, w, h, r, t.top, t.bot, t.rim, gold ? 3.5f : 2, true, gold && t.gold);
-  RRect(x + 6, y + 4, w - 12, fminf(h * 0.42f, 34), fminf(r, 17), Color{ 255, 255, 255, 30 }, Color{ 255, 255, 255, 0 }, BLANK, 0, true);   // top sheen
+  Color top = t.top, bot = t.bot; top.a = (unsigned char)(top.a * 0.88f); bot.a = (unsigned char)(bot.a * 0.93f);   // glass: the scene shows through a little
+  RRect(x, y, w, h, r, top, bot, t.rim, gold ? 3.5f : 2, true, gold && t.gold);
+  RRect(x + 4, y + 4, w - 8, h - 8, fmaxf(0, r - 4), BLANK, BLANK, Color{ 255, 255, 255, 46 }, 1.5f);                                        // the bright inner edge of the glass
+  RRect(x + 6, y + 4, w - 12, fminf(h * 0.45f, 40), fminf(r, 17), Color{ 255, 255, 255, 46 }, Color{ 255, 255, 255, 0 }, BLANK, 0, true);   // top sheen
 }
 inline void Board(const std::string& title, const std::vector<Row>& rows, float x = 24, float bw = 400, bool bottom = false) {
   float rh = rows.size() > 5 ? 48.f : 58.f, bh = 70 + rows.size() * rh, y0 = bottom ? 786 - bh : 24;
@@ -212,8 +217,10 @@ inline void Board(const std::string& title, const std::vector<Row>& rows, float 
     float y = y0 + 88 + i * rh; const Row& r = rows[i];
     if (r.hot) RRect(x + 12, y - rh / 2 + 3, bw - 24, rh - 6, 16, Color{ 255, 255, 255, 30 }, Color{ 255, 255, 255, 30 }, BLANK, 0);
     Color d = { (unsigned char)(r.c.r * 0.72f), (unsigned char)(r.c.g * 0.72f), (unsigned char)(r.c.b * 0.72f), 255 };
-    RRect(x + 24, y - 16, 32, 32, 16, r.c, d, Color{ 255, 255, 255, 230 }, 3, true);
-    Text(x + 70, y + 1, rh > 50 ? 33 : 28, r.hot ? Color{ 0xff, 0xe0, 0x66, 255 } : WHITE, r.name, -1, TS_HEAVY | TS_SHADOW);
+    float av = rh > 50 ? 50 : 42;   // the player's avatar: their own character on a disc of their colour
+    RRect(x + 16, y - av / 2, av, av, av / 2, r.c, d, Color{ 255, 255, 255, 230 }, 3, true);
+    if (Portrait(r.c)) Img(PortraitKey(r.c), x + 19, y - av / 2 + 3, av - 6, av - 6, (av - 6) / 2, 1);
+    Text(x + 26 + av, y + 1, rh > 50 ? 33 : 28, r.hot ? Color{ 0xff, 0xe0, 0x66, 255 } : WHITE, r.name, -1, TS_HEAVY | TS_SHADOW);
     Text(x + bw - 26, y + 1, r.val.size() > 6 ? 22 : rh > 50 ? 36 : 30, TH().accent, r.val, 1, TS_DISPLAY | TS_SHADOW);
   }
 }

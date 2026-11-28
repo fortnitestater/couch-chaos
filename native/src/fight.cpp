@@ -483,17 +483,21 @@ struct Fight : Classic {
   void DrawHud() {
     if (flashA > 0.001f) { Color w = Fade(WHITE, Clamp(flashA * 2.2f, 0.f, 0.4f)); RRect(0, 0, 1600, 900, 0, w, w, BLANK, 0); }
     for (int i = 0; i < 2; i++) {
-      Fi& x = f[i]; if (x.pid < 0) continue; bool right = i == 1; float bx = right ? 1590 - 600 : 10 + 0, by = 26, bw = 600;
-      bx = right ? 940 : 60;
+      Fi& x = f[i]; if (x.pid < 0) continue; bool right = i == 1; float by = 26, bw = 530, bx = right ? 920 : 150;
       Color hc = x.hp > 55 ? Hex(0x51cf66) : x.hp > 28 ? Hex(0xffd43b) : Hex(0xff4d4d), hc2 = x.hp > 55 ? Hex(0x2b8a3e) : x.hp > 28 ? Hex(0xf08c00) : Hex(0xc92a2a);
-      RRect(bx - 10, 8, bw + 20, 124, 24, Color{ 8, 10, 26, 150 }, Color{ 8, 10, 26, 150 }, BLANK, 0);
+      RRect(right ? bx - 10 : bx - 120, 8, bw + 130, 124, 24, Color{ 8, 10, 26, 160 }, Color{ 8, 10, 26, 160 }, Color{ 255, 255, 255, 40 }, 1.5f);
+      {   // the fighter's face, on a disc of their colour, at the outer end of their bar
+        float cx = right ? 1524 : 76, cy = 70, rr = 46; Color d = { (unsigned char)(x.col.r * 0.7f), (unsigned char)(x.col.g * 0.7f), (unsigned char)(x.col.b * 0.7f), 255 };
+        RRect(cx - rr, cy - rr, rr * 2, rr * 2, rr, x.col, d, x.hp < 28 ? Hex(0xff4d4d) : Color{ 255, 255, 255, 235 }, 4, true);
+        if (Portrait(x.col)) Img(PortraitKey(x.col), cx - rr + 5, cy - rr + 5, rr * 2 - 10, rr * 2 - 10, rr - 5, 1);
+      }
       Text(right ? bx + bw : bx, by - 2, 30, x.col, x.name, right ? 1 : -1, TS_DISPLAY | TS_SHADOW);
       Bar(bx, 44, bw, 30, x.hp / 100.f, hc, hc2, right);
-      Bar(bx, 82, bw * 0.62f + 0, 14, x.sta / 100.f, Hex(0x4dabf7), Hex(0x1971c2), right);   // stamina
+      Bar(right ? bx + bw * 0.5f : bx, 82, bw * 0.5f, 14, x.sta / 100.f, Hex(0x4dabf7), Hex(0x1971c2), right);   // stamina (mirrored on the right)
       // the damage the body has taken: head, body, legs
       const char* LB[3] = { "HEAD", "BODY", "LEGS" }; float dv[3] = { x.dH, x.dB, x.dL };
-      for (int k = 0; k < 3; k++) { float px = right ? bx + bw - 76.f - k * 80.f : bx + bw * 0.62f + 14 + k * 80.f; Color dc = dv[k] > 66 ? Hex(0xff4d4d) : dv[k] > 33 ? Hex(0xff922b) : Hex(0xffd43b);
-        Text(px + 34, 89, 14, Hex(0xdfe4f2), LB[k], 0, TS_PLAIN | TS_HEAVY | TS_SPACED); RRect(px, 98, 68, 9, 4.5f, Color{ 10, 12, 28, 210 }, Color{ 10, 12, 28, 210 }, BLANK, 0); if (dv[k] > 1) RRect(px + 1, 99, fmaxf(5.f, 66 * dv[k] / 100.f), 7, 3.5f, dc, dc, BLANK, 0); }
+      for (int k = 0; k < 3; k++) { float px = right ? bx + bw * 0.5f - 74.f - k * 70.f : bx + bw * 0.5f + 14 + k * 70.f; Color dc = dv[k] > 66 ? Hex(0xff4d4d) : dv[k] > 33 ? Hex(0xff922b) : Hex(0xffd43b);
+        Text(px + 30, 89, 14, Hex(0xdfe4f2), LB[k], 0, TS_PLAIN | TS_HEAVY | TS_SPACED); RRect(px, 98, 60, 9, 4.5f, Color{ 10, 12, 28, 210 }, Color{ 10, 12, 28, 210 }, BLANK, 0); if (dv[k] > 1) RRect(px + 1, 99, fmaxf(5.f, 58 * dv[k] / 100.f), 7, 3.5f, dc, dc, BLANK, 0); }
       if (x.bleed > 0.1f) Text(right ? bx + bw - 120 : bx + 120, by + 4, 22, Hex(0xff4d4d), "🩸", 0, TS_PLAIN);
       for (int k = 0; k < x.knockdowns; k++) Text(right ? bx + 22 + k * 26 : bx + bw - 22 - k * 26, 114, 18, Hex(0xff8787), "↓", 0, TS_HEAVY | TS_PLAIN);
     }

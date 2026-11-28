@@ -52,6 +52,7 @@ function nativeLoad() {
 }
 const NIMG = {};
 function nativeImg(k) {
+  if (k[0] === '@') return (window.NPORT || {})[k] || null;   // a player portrait the engine rendered (a canvas)
   let im = NIMG[k];
   if (!im) { im = NIMG[k] = new Image(); im.decoding = 'async'; im.src = NATIVE.base + 'covers/' + k.replace(/^_/, 'q-') + '.jpg?v=' + NATIVE.v; im.onerror = () => { im.bad = true; }; }
   return im.complete && im.naturalWidth && !im.bad ? im : null;
@@ -71,7 +72,7 @@ function nativeBlit(g, texts) {
     if (t[0] === 'img') {
       const [, k, x, y, w, h, r, a, pan, zoom] = t, im = nativeImg(k); if (!im) continue;
       g.save(); g.globalAlpha = Math.min(1, a); g.beginPath(); g.roundRect(x, y, w, h, r); g.clip();
-      const sc = Math.max(w / im.naturalWidth, h / im.naturalHeight) * (zoom || 1), dw = im.naturalWidth * sc, dh = im.naturalHeight * sc;
+      const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height, sc = Math.max(w / iw, h / ih) * (zoom || 1), dw = iw * sc, dh = ih * sc;
       g.drawImage(im, x - (dw - w) * (0.5 + (pan || 0) * 0.5), y - (dh - h) * 0.42, dw, dh);
       g.restore(); continue;
     }
