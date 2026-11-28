@@ -116,7 +116,7 @@ struct Particles3D {
 
 // ---------- cinematic moments (cine.cpp): big plays cut to a movie shot with slow motion and effects ----------
 namespace cine {
-enum Kind { BOOM, STRIKE, SMASH, GOAL, WIN, REVEAL, SNOW };
+enum Kind { BOOM, STRIKE, SMASH, GOAL, WIN, REVEAL, SNOW, KO };   // KO: a fighter goes down (a low, close shot that stays inside the ring)
 struct Shot {
   int kind = BOOM; Vector3 at{}; float size = 1;   // what the shot looks at, and how big it is (world units)
   Color c = WHITE; std::string caption, sub;       // the moment's colour, a big title and a line under it
@@ -124,6 +124,7 @@ struct Shot {
   Vector3 face{};                                  // which way the camera should look from (default: the game camera's side)
   float yaw = 0, elev = -10, side = 0, dur = 0;    // extra orbit angle, camera height angle (rad), orbit direction, length
   bool hero = false;                               // WIN: the player in colour c celebrates
+  float maxR = 0;                                  // > 0: the camera stays within this distance of the middle of the floor (inside a cage)
 };
 void Play(const Shot& s);
 inline void Moment(int kind, Vector3 at, float size, Color c, const std::string& caption = "", const std::string& sub = "", float floorY = -1e9f) {
@@ -249,7 +250,7 @@ struct PersonPose {
   float headYaw = 0, headPitch = 0;
   Matrix* wrist = nullptr;                                                             // out: the right wrist (world)
   Matrix* headM = nullptr;                                                             // out: the head (world), for hats
-  int slot = -1; bool lowRate = false;                                                 // slot >= 4: this person has their own mesh; lowRate: re-pose ~14 times a second (a crowd)
+  int slot = -1; bool lowRate = false; bool inPlace = false;                          // inPlace: drop the clip's own forward/sideways travel (a roll)                                                 // slot >= 4: this person has their own mesh; lowRate: re-pose ~14 times a second (a crowd)
 };
 bool DrawPersonPose(const PersonPose& q);
 inline unsigned PersonHash(Color c) { return (unsigned)c.r * 7 + (unsigned)c.g * 13 + (unsigned)c.b * 29; }

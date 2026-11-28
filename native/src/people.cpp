@@ -38,7 +38,7 @@ struct Person {
   int shirt = -1, skin = -1, skin2 = -1, hair = -1; int cKey = -1, cTq = -1;
   float unit = 1, footY = 0;
   std::vector<Vector3> T; std::vector<Quaternion> R; std::vector<Vector3> S; std::vector<Matrix> W, J;
-  std::vector<std::string> names; std::vector<char> upper; int head = -1, neck = -1, wristR = -1; std::map<std::string, int> clipCache;
+  std::vector<std::string> names; std::vector<char> upper; int head = -1, neck = -1, wristR = -1, hips = -1, abd = -1, body = -1; std::map<std::string, int> clipCache;
 };
 Person P[64];   // 0..3: the shared people; 4..63: instances with their own skinned meshes (a crowd that animates at a lower rate)
 const int CFG[4][4] = { { 2, 3, 4, 7 }, { 1, 2, -1, 6 }, { 0, 1, -1, 3 }, { 3, 0, -1, -1 } };   // shirt / skin / skin2 / hair glTF material
@@ -63,12 +63,21 @@ void SampleInto(Person& p, int clip, float t, std::vector<Vector3>& T, std::vect
 void Finish(Person& p);
 void Pose(Person& p, int clip, float t) { p.T = p.T0; p.R = p.R0; p.S = p.S0; SampleInto(p, clip, t, p.T, p.R, p.S); Finish(p); }
 // legs from one clip, upper body blended toward another (a swing while running), and an extra head turn
-void PoseEx(Person& p, int a, float ta, int b, float tb, float mix, float hy, float hp) {
+void PoseEx(Person& p, int a, float ta, int b, float tb, float mix, float hy, float hp, bool inPlace = false) {
   p.T = p.T0; p.R = p.R0; p.S = p.S0; SampleInto(p, a, ta, p.T, p.R, p.S);
   if (b >= 0 && mix > 0.001f) {
     static std::vector<Vector3> T2, S2; static std::vector<Quaternion> R2; T2 = p.T0; R2 = p.R0; S2 = p.S0; SampleInto(p, b, tb, T2, R2, S2);
-    for (size_t i = 0; i < p.R.size() && i < p.upper.size(); i++) if (p.upper[i]) p.R[i] = QuaternionSlerp(p.R[i], R2[i], Clamp(mix, 0, 1));
+    // The second clip's upper body keeps the direction it has in that clip. A swing or a punch turns the whole body (the "Body"
+    // bone, above the hips); taking only the chest from it, on top of the running body, twisted the waist the wrong way.
+    // So the waist joint makes up the difference between the two bodies.
+    Quaternion abd2 = p.abd >= 0 ? R2[p.abd] : Quaternion{ 0, 0, 0, 1 };
+    if (p.body >= 0 && p.hips >= 0 && p.abd >= 0) {
+      Quaternion q1 = QuaternionMultiply(p.R[p.body], p.R[p.hips]), q2 = QuaternionMultiply(R2[p.body], R2[p.hips]);
+      abd2 = QuaternionNormalize(QuaternionMultiply(QuaternionInvert(q1), QuaternionMultiply(q2, R2[p.abd])));
+    }
+    for (size_t i = 0; i < p.R.size() && i < p.upper.size(); i++) if (p.upper[i]) p.R[i] = QuaternionSlerp(p.R[i], (int)i == p.abd ? abd2 : R2[i], Clamp(mix, 0, 1));
   }
+  if (inPlace && p.hips >= 0) { p.T[p.hips].x = p.T0[p.hips].x; p.T[p.hips].z = p.T0[p.hips].z; }   // a roll stays on the spot: the game moves the person itself
   if (p.head >= 0 && (hy != 0 || hp != 0)) {
     p.R[p.head] = QuaternionMultiply(p.R[p.head], QuaternionMultiply(QuaternionFromAxisAngle({ 0, 1, 0 }, hy * 0.6f), QuaternionFromAxisAngle({ 1, 0, 0 }, hp * 0.6f)));
     if (p.neck >= 0) p.R[p.neck] = QuaternionMultiply(p.R[p.neck], QuaternionMultiply(QuaternionFromAxisAngle({ 0, 1, 0 }, hy * 0.4f), QuaternionFromAxisAngle({ 1, 0, 0 }, hp * 0.4f)));
@@ -129,6 +138,7 @@ bool Load(int v, int var = -1) {
     for (size_t i = 0; i < N; i++) {
       for (auto u : UP) if (p.names[i].rfind(u, 0) == 0) p.upper[i] = 1;
       if (p.names[i] == "Head") p.head = (int)i; else if (p.names[i] == "Neck") p.neck = (int)i; else if (p.names[i] == "Wrist.R") p.wristR = (int)i;
+      else if (p.names[i] == "Hips") p.hips = (int)i; else if (p.names[i] == "Abdomen") p.abd = (int)i; else if (p.names[i] == "Body") p.body = (int)i;
     }
   }
   cgltf_skin* sk = &d->skins[0];
@@ -199,7 +209,7 @@ bool DrawPerson(Vector3 pos, float yaw, Color c, float t, float hop, float cheer
   bool flash = c.r == 255 && c.g == 255 && c.b == 255, sport = k <= 1.01f, moving = hop > 0.02f;
   int epid = PidOfColor(c); if (epid >= 0 && epid < 8 && g_emoteT[epid] > 0) cheer = fmaxf(cheer, 1.f);   // an emote from their phone: they wave
   int a = p.idle; float tt = t + (float)(hsh % 97) * 0.13f;
-  if (cheer > 0.3f && !sport && p.wave >= 0) a = p.wave;
+  if ((cheer > 0.3f && !sport || cine::Hero(c)) && p.wave >= 0) a = p.wave;   // the winner's replay: a real wave, in every game
   else if (sport && cheer > 0.04f && p.interact >= 0) { a = p.interact; tt = Clamp(cheer, 0, 1) * p.clips[a].len * 0.999f; }
   else if (moving) { a = hop > 0.12f && p.run >= 0 ? p.run : (p.walk >= 0 ? p.walk : p.idle); tt *= 1.1f; }
   else if (p.idle2 >= 0 && ((hsh >> 3) & 1)) a = p.idle2;
@@ -237,7 +247,7 @@ bool DrawPersonPose(const PersonPose& q) {
   // a crowd member with its own mesh only re-poses ~14 times a second (and only when its pose really changed)
   int key = a * 131 + b * 17 + (int)(q.mix * 8) + (q.scrub ? 1000 : 0) + (q.scrub2 ? 2000 : 0) + (int)((q.headYaw + 3) * 5) * 7 + (int)((q.headPitch + 3) * 5) * 3, tq = (int)((ta + tb * 3.7f) * 14);
   bool reuse = q.lowRate && v >= 4 && p.cKey == key && p.cTq == tq;
-  if (!reuse) { PoseEx(p, a, ta, b, tb, q.mix, q.headYaw, q.headPitch); Skin(p, true); p.cKey = key; p.cTq = tq; }
+  if (!reuse) { PoseEx(p, a, ta, b, tb, q.mix, q.headYaw, q.headPitch, q.inPlace); Skin(p, true); p.cKey = key; p.cTq = tq; }
   float s = q.height * p.unit;
   Matrix xf = MatrixMultiply(MatrixMultiply(MatrixTranslate(0, -p.footY, 0), MatrixScale(s, s, s)), MatrixMultiply(MatrixRotateY(q.yaw), MatrixTranslate(q.pos.x, q.pos.y, q.pos.z)));
   static const Color SK[5] = { Hex(0xf1c7a3), Hex(0xd9a47a), Hex(0xb57a52), Hex(0x7d4e33), Hex(0xf5d5bd) };

@@ -502,6 +502,7 @@ static std::unique_ptr<Game> game;
 
 int g_dbg = 0; int g_post = 1;
 extern "C" {
+static int g_galPage = -1; static float g_galT = 0;   // debug pose gallery (see DrawGallery)
 EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) {
   if (m >= 40 && m < 50) {   // debug: play a test moment on whatever the camera looks at
     Camera3D c = g_finalCam; cine::Shot s; s.kind = m - 40; s.at = c.target; s.size = Vector3Distance(c.position, c.target) * 0.1f;
@@ -509,6 +510,8 @@ EMSCRIPTEN_KEEPALIVE void cc_dbg(int m) {
   }
   if (m >= 50 && m < 60) { if (game) game->DebugShot(m - 50); return; }
   if (m >= 60 && m < 90) { g_racketAxis = m - 60; return; }
+  if (m == 999) { g_galPage = -1; return; }
+  if (m >= 1000 && m < 1500) { g_galPage = (m - 1000) / 100; g_galT = ((m - 1000) % 100) / 100.f; return; }
   if (m >= 100) g_post = m - 100; else g_dbg = m; }
 static float ClampRS(float rs) { return rs < 1 ? 1 : rs > 2 ? 2 : rs; }
 // change the render resolution on the fly (the website lowers it on slow TVs)
@@ -573,6 +576,34 @@ EMSCRIPTEN_KEEPALIVE void cc_input(int pid, float x, float y, int a, int b) {
 }
 EMSCRIPTEN_KEEPALIVE void cc_emote(int pid, int k) { if (pid >= 0 && pid < 8) { g_emoteT[pid] = 3.2f; g_emoteK[pid] = k & 7; } }
 EMSCRIPTEN_KEEPALIVE void cc_act(int pid, const char* kind, int i, float pw) { if (!game) return; if (strncmp(kind, "cheat:", 6) == 0) game->Cheat(pid, kind + 6); else game->Act(pid, kind, i, pw); }
+// ---- debug only: a pose gallery (cc_dbg 1000 + page*100 + time%): every animation clip large, from the front and the side ----
+static void DrawGallery() {
+  static const char* PAGES[5][8] = {
+    { "Idle_Sword", "Punch_Left", "Punch_Right", "Kick_Left", "Kick_Right", "HitRecieve", "HitRecieve_2", "Death" },
+    { "Idle", "Idle_Neutral", "Walk", "Run", "Run_Back", "Run_Left", "Run_Right", "Roll" },
+    { "Sword_Slash", "Interact", "Wave", "Gun_Shoot", "Idle_Gun", "Idle_Gun_Pointing", "Idle_Gun_Shoot", "Run_Shoot" },
+    { "Run", "Run", "Run_Left", "Idle_Sword", "Idle_Sword", "Walk", "Idle", "Idle" },   // blends as the games use them (clip2 below)
+    { "Idle_Sword", "Idle_Sword", "Idle_Sword", "Idle_Sword", "Idle_Sword", "Idle_Sword", "Idle_Sword", "Idle_Sword" } };
+  static const char* BL[8] = { "Sword_Slash", "Interact", "Sword_Slash", "HitRecieve", "Punch_Right", "Wave", "Interact", "Sword_Slash" };
+  int pg = Clamp(g_galPage, 0, 4);
+  Camera3D cam{}; cam.position = { 0, 1.9f, 9.0f }; cam.target = { 0, 0.85f, -1.6f }; cam.up = { 0, 1, 0 }; cam.fovy = 33; cam.projection = CAMERA_PERSPECTIVE;
+  ClearBackground(Hex(0x8e9bb8));
+  lit.Begin(cam, { 0.55f, 0.6f, 0.72f }, 0.0f);
+  BeginMode3D(cam);
+  lit.Draw(prim.plane, TRS({ 0, 0, -1.5f }, { 0, 0, 0 }, { 30, 1, 14 }), Hex(0xd5dae4));
+  for (int row = 0; row < 2; row++) for (int i = 0; i < 8; i++) {
+    PersonPose q; q.pos = { (i - 3.5f) * (row ? 1.55f : 1.3f), 0, row ? -3.2f : 0 }; q.yaw = row ? PI / 2 : 0; q.c = Hex(0xe03131); q.hsh = 1; q.height = 1.8f;
+    q.clip = PAGES[pg][i]; q.t = g_galT; q.scrub = true;
+    if (pg == 3) { q.clip2 = BL[i]; q.t2 = g_galT; q.scrub2 = true; q.mix = 1; q.t = g_galT * 0.7f; q.scrub = true; }
+    if (pg == 4) { q.clip2 = i < 4 ? "HitRecieve" : "Punch_Right"; q.t2 = 0.06f + 0.06f * i; q.scrub2 = true; q.mix = i < 4 ? 0.65f : 1.f; }
+    DrawPersonPose(q);
+    Vector3 f = { sinf(q.yaw), 0, cosf(q.yaw) };   // the way the code thinks this person faces: a green bar on the floor
+    lit.Draw(prim.cube, TRS(Vector3Add(q.pos, Vector3Add(Vector3Scale(f, 0.55f), { 0, 0.03f, 0 })), { 0, q.yaw, 0 }, { 0.08f, 0.06f, 0.5f }), Hex(0x2b8a3e));
+  }
+  EndMode3D();
+  for (int i = 0; i < 8; i++) { Vector2 s = GetWorldToScreen({ (i - 3.5f) * 1.3f, 2.15f, 0 }, cam); Text(s.x, s.y, 15, WHITE, pg == 3 ? std::string(PAGES[pg][i]) + "+" + BL[i] : std::string(PAGES[pg][i]), 0, TS_HEAVY); }
+  Text(800, 40, 26, WHITE, "pose gallery  page " + std::to_string(pg) + "  t=" + std::to_string((int)(g_galT * 100)) + "%", 0, TS_HEAVY);
+}
 EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   if (!game) return;
   dt = fminf(dt, 0.05f);
@@ -587,7 +618,7 @@ EMSCRIPTEN_KEEPALIVE void cc_frame(float dt) {
   rlEnableDepthMask(); ClearBackground(BLACK); // every frame starts clean (color + depth)
   hud::TagReset(); g_fxDrawn = false;
   for (int i = 0; i < 8; i++) { g_emoteVis[i] = false; g_emoteT[i] -= dt; }
-  game->Draw();
+  if (g_galPage >= 0) DrawGallery(); else game->Draw();
   DrawEmotes();
   cine::Draw2D();
   PostEnd();

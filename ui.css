@@ -525,7 +525,7 @@ body.dockOn #stage { padding-bottom: 150px; box-sizing: border-box; }
   .fiMsg { min-height: 18px; font-size: 15px; }
   .fiCtl { align-items: stretch; }
   .fiStick { width: auto; height: 100%; max-height: 200px; align-self: flex-end; }
-  .fiBtns { grid-template-rows: repeat(3, minmax(0, 1fr)); height: 100%; align-content: stretch; }
+  .fiBtns { grid-template-rows: repeat(2, minmax(0, 1fr)); height: 100%; align-content: stretch; }
   .fiBtns button { min-height: 0; height: 100%; }
   .fiUp { min-height: 0; }
 }
@@ -578,3 +578,24 @@ body.dockOn #stage { padding-bottom: 150px; box-sizing: border-box; }
   .padBody .gpanel .pbtn2 span { font-size: 18px !important; }
   .padBody .gpanel > .gpBtns { align-content: center !important; align-items: center !important; }
 }
+
+/* ---- Cage Fight: four big buttons in a 2x2 block under the right thumb (punch / kick on top, block / dodge below) ---- */
+.fiBtns { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+.fiBtns button { position: relative; min-height: min(19vh, 104px); border-radius: 20px; font-size: 13px; }
+.fiBtns button .fiIc { font-size: 26px; line-height: 1; }
+.fiBtns button b { font-size: 17px !important; letter-spacing: .02em; }
+.fiBtns button small { font-size: 12px !important; opacity: .85; }
+.fiBtns button.blk { grid-column: auto; flex-direction: column; min-height: min(19vh, 104px); }
+.fiBtns button.a1 { --bc: #e03131; } .fiBtns button.k1 { --bc: #f08c00; } .fiBtns button.blk { --bc: #4c6ef5; } .fiBtns button.dg { --bc: #1c7ed6; }
+.fiBtns button.tapped { animation: fiTap .16s ease-out; }
+@keyframes fiTap { 50% { filter: brightness(1.45); } }
+.fiBtns button .chg { position: absolute; left: 14%; right: 14%; bottom: 7px; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, .35); overflow: hidden; text-decoration: none; }
+.fiBtns button .chg i { display: block; height: 100%; width: 0; background: #ffe066; border-radius: 3px; }
+.fiBtns button.charging .chg i { width: 100%; transition: width .33s linear; }
+.fiBtns button.charged { filter: brightness(1.3); box-shadow: 0 0 0 3px #ffe066, 0 0 22px rgba(255, 224, 102, .7); }
+@media (orientation: landscape) and (max-height: 520px) {
+  .fiBtns button .fiIc { font-size: 22px; } .fiBtns button b { font-size: 16px !important; }
+  .fiBtns button small { font-size: 12px !important; }
+}
+.fiSide { flex: none; font: 900 13px system-ui, sans-serif; font-style: normal; padding: 4px 10px; border-radius: 10px; background: var(--me, #3b7bff); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+.fiSide:empty { display: none; }

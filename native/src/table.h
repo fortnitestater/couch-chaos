@@ -283,10 +283,10 @@ struct Table : Game {
       if (HaveFile("p0.glb")) {
         Vector3 c = Seat(i, 9.4f);
         DrawModel("chair.glb", { c.x, -3.2f, c.z }, yaw, 3.4f);   // their chair, pushed back from the table
-        if (i != povHide) DrawToon({ s.x, -3.2f, s.z }, yaw, P(i).color, time + i, h ? 0.01f : 0, cheer ? cheer(i) : 0, 2.05f);
+        if (i != povHide || cine::Busy()) DrawToon({ s.x, -3.2f, s.z }, yaw, P(i).color, time + i, h ? 0.01f : 0, cheer ? cheer(i) : 0, 2.05f);   // a replay shows everyone, even the player whose eyes the camera was
       } else {
         lit.Draw(prim.cube, TRS({ s.x * 1.08f, -1.3f, s.z * 1.08f }, { 0, yaw, 0 }, { 1.7f, 2.6f, 0.35f }), Hex(0x5c2f1a));  // chair back
-        if (i != povHide) DrawToon({ s.x, -0.55f, s.z }, yaw, P(i).color, time + i, h ? fabsf(sinf(time * 5)) * 0.18f : 0, cheer ? cheer(i) : 0, 1.3f);
+        if (i != povHide || cine::Busy()) DrawToon({ s.x, -0.55f, s.z }, yaw, P(i).color, time + i, h ? fabsf(sinf(time * 5)) * 0.18f : 0, cheer ? cheer(i) : 0, 1.3f);
       }
     }
   }
@@ -349,7 +349,7 @@ struct Table : Game {
   void Celebrate(int pid) { conf.Spawn({ 0, 4, 0 }, 140, 6, 6); Sfx("win"); if (pid >= 0) Banner(P(pid).name + " WINS!", 2600, Hx(P(pid).color).c_str()); WinShot(pid); }
   void WinShot(int pid) {
     if (pid < 0) return; Vector3 s = Seat(pid); bool real = HaveFile("p0.glb");
-    cine::Shot sh; sh.kind = cine::WIN; sh.at = { s.x, real ? 0.9f : 0.5f, s.z }; sh.size = real ? 2.3f : 1.6f; sh.c = P(pid).color;
+    cine::Shot sh; sh.kind = cine::WIN; sh.at = { s.x, real ? 0.0f : 0.2f, s.z }; sh.size = real ? 3.0f : 1.6f; sh.c = P(pid).color;   // the winner's chest, not the air over their head
     sh.face = { -s.x, 0, -s.z }; sh.elev = 0.3f; sh.floorY = real ? -3.2f : -1.6f; sh.hero = true; cine::Play(sh);
   }
   void DebugShot(int k) override { if (k >= 7) { turn = (k - 7) % N(); LendCamera(turn, 5); } else if (k == cine::WIN) WinShot(0); }   // 7, 8, 9: hand the turn (and the camera) to player 0, 1, 2

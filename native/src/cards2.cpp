@@ -100,7 +100,7 @@ struct Storm : GameNight {
     if (hand[p].size() == 1) { lcP = p; lcSafe = false; lcT = 4.5f; lcTried = false; }
     if (hand[p].empty()) { Win(p); return; }
     if (c.v == "+2") pending += 2;
-    if (c.v == "BLIZZARD") { pending += 4; Shake(10); cine::Shot s; s.kind = cine::SMASH; s.at = { 1.0f, 0.3f, 0.4f }; s.size = 1.2f; s.c = Hex(0x74c0fc); s.caption = "BLIZZARD +4"; s.sub = P(p).name; s.elev = 0.6f; s.floorY = 0.02f; cine::Play(s); }
+    if (c.v == "BLIZZARD") { pending += 4; Shake(10); cine::Shot s; s.kind = cine::SNOW; s.at = { 1.0f, 0.3f, 0.4f }; s.size = 1.2f; s.c = Hex(0x74c0fc); s.caption = "BLIZZARD +4"; s.sub = P(p).name; s.elev = 0.6f; s.floorY = 0.02f; cine::Play(s); }
     if (c.v == "REV") { dir = -dir; if (N() == 2) turn = Idx(1); }
     if (c.v == "SWAP") { int ld = -1; for (int q = 0; q < N(); q++) if (q != p && (ld < 0 || hand[q].size() < hand[ld].size())) ld = q; if (ld >= 0) { std::swap(hand[p], hand[ld]); log = P(p).name + " SWAPPED hands with " + P(ld).name + "! ⇄"; Shake(8); if (hand[p].empty()) { Win(p); return; } } }
     if (c.c < 0) { needColor = true; Sync(); return; }

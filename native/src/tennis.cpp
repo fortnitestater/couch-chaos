@@ -662,6 +662,7 @@ struct Tennis : Classic {
       if (p.sw > 0) { q.clip2 = "Sword_Slash"; q.scrub2 = true; q.t2 = 0.28f + (1 - p.sw) * 0.72f; q.mix = Clamp(p.sw * 3, 0, 1); }
       else if (serving) { q.clip2 = "Sword_Slash"; q.scrub2 = true; q.t2 = 0.05f + Clamp(tossT / 0.55f, 0, 1) * 0.22f; q.mix = 1; }
       if (phase == "point" && p.team == ptTeam) { q.clip = "Interact"; q.scrub = true; q.t = 0.5f + 0.5f * Clamp((2.6f - t) / 0.6f, 0, 1); q.clip2 = nullptr; q.mix = 0; }
+      if (cine::Hero(c)) { q.clip = "Wave"; q.scrub = false; q.t = time * 1.2f; q.clip2 = nullptr; q.mix = 0; }   // the winner's replay: they celebrate
       Matrix wm = MatrixIdentity(); q.wrist = &wm;
       if (DrawPersonPose(q)) RacketInHand(wm, c);
       else {

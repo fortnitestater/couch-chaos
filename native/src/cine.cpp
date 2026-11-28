@@ -24,8 +24,9 @@ const Preset PRE[] = {
   /* WIN    */ { 3.6f, 0.0f, 0.0f, 1.0f, 1.5f, 38, 30, 0.05f, -0.5f, 0.85f, 0.04f, 0.0f, 0.75f, 0.9f, false, 0.0f, 0.25f, 0.0f, 0.0f, 0.25f, 1.0f, 0.0f, 0.6f },
   /* REVEAL */ { 2.1f, 0.0f, 0.0f, 1.0f, 1.8f, 36, 32, 0.08f, 0.25f, 0.18f, 0.0f, 0.0f, 0.45f, 0.7f, false, 0.0f, 0.3f, 0.0f, 0.0f, 0.15f, 0.5f, 1.0f, 0.5f },
   /* SNOW   */ { 3.0f, 0.14f, 1.5f, 0.18f, 1.6f, 30, 44, 0.16f, 0.35f, -0.5f, 0.09f, 1.0f, 0.0f, 0.4f, true, 0.9f, 0.7f, 0.0f, 1.0f, 0.9f, 1.0f, 0.0f, 0.8f },
+  /* KO     */ { 2.6f, 0.12f, 1.3f, 0.22f, 1.05f, 34, 40, 0.24f, 0.35f, -0.45f, 0.07f, 0.8f, 0.0f, 0.45f, true, 0.8f, 0.7f, 0.5f, 1.0f, 0.6f, 1.0f, 0.0f, 0.8f },
 };
-const int PRIO[] = { 4, 3, 2, 3, 5, 1, 4 };
+const int PRIO[] = { 4, 3, 2, 3, 5, 1, 4, 3 };
 
 struct State { bool on = false; float t = 0, side = 1; Shot s; Preset p{}; bool follow = false; float impT = -1; Vector3 impAt{}, lastF{}; } S;
 
@@ -119,6 +120,10 @@ void Spawn(const Shot& s, int kind) {
   } else if (kind == WIN) {
     Ring(gp, 2.6f * z, 1.0f, Hex(0xffd43b), false); Ring(gp, 1.6f * z, 0.7f, hot, false);
     for (int i = 0; i < 40; i++) { Vector3 d = RandDir(); d.y = fabsf(d.y) * 2 + 0.6f; Spark(at, Vector3Scale(Vector3Normalize(d), z * frand(2, 6)), z * frand(0.2f, 0.45f), frand(0.8f, 1.6f), i % 2 ? Hex(0xffd43b) : WHITE, z * 2.5f); }
+  } else if (kind == KO) {   // the blow that drops him: a white-hot flash, sparks, a ring on the canvas
+    Glow(at, {}, 0.3f * z, 1.5f * z, 0.18f, hot, 0);
+    for (int i = 0; i < 60; i++) { Vector3 d = RandDir(); d.y = fabsf(d.y) * 0.9f + 0.2f; Spark(at, Vector3Scale(Vector3Normalize(d), z * frand(3, 9)), z * frand(0.25f, 0.55f), frand(0.4f, 1.0f), i % 3 ? Hex(0xffe08a) : WHITE, z * 5); }
+    Ring(gp, 4.0f * z, 0.55f, c, false); Ring(at, 2.0f * z, 0.35f, hot, true);
   } else if (kind == REVEAL) {
     for (int i = 0; i < 30; i++) Spark(at, Vector3Scale(RandDir(), z * frand(2, 5)), z * frand(0.15f, 0.35f), frand(0.4f, 0.9f), i % 2 ? c : WHITE, z * 2);
     Ring(at, 2.2f * z, 0.5f, c, true);
@@ -255,6 +260,7 @@ Camera3D Apply(Camera3D c) {
   c.fovy = Lerp(c.fovy, fov, w);
   c.position = Vector3Add(tgt, { sinf(yaw) * cosf(pitch) * L, sinf(pitch) * L, cosf(yaw) * cosf(pitch) * L });
   if (S.s.floorY > -1e8f) c.position.y = fmaxf(c.position.y, S.s.floorY + 0.22f);   // never under the floor
+  if (S.s.maxR > 0) { float r = hypotf(c.position.x, c.position.z); if (r > S.s.maxR) { c.position.x *= S.s.maxR / r; c.position.z *= S.s.maxR / r; } }   // never through the cage wall
   c.target = tgt;
   // handheld impact shake that settles, and a dutch tilt
   float sh = shakeA * w * L * 0.02f;
@@ -277,6 +283,7 @@ void Light(Vector4& pos, Vector3& col) {
     case GOAL: e = 3.0f * expf(-t * 2.0f); base = { S.s.c.r / 255.f, S.s.c.g / 255.f, S.s.c.b / 255.f }; break;
     case WIN: e = 1.1f * Sm(t / 0.6f) * (1 - Sm((t - S.p.dur + 0.9f) / 0.9f)); base = { 1, 0.82f, 0.45f }; break;
     case REVEAL: e = 0.9f * expf(-t * 2.2f); base = { S.s.c.r / 255.f, S.s.c.g / 255.f, S.s.c.b / 255.f }; break;
+    case KO: e = 2.4f * expf(-t * 2.6f); base = { 1, 0.82f, 0.55f }; break;
   }
   e *= S.p.light;
   pos = { S.s.at.x, S.s.at.y + 0.3f * z, S.s.at.z, z * 5.5f }; col = Vector3Scale(base, e);

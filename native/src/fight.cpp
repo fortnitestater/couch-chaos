@@ -13,11 +13,11 @@ constexpr float APO = 4.0f, RC = APO / 0.92388f;   // the cage: distance to a si
 // the strikes: windup / contact / recovery (seconds), damage, stamina cost, reach (m), stun on the victim, push, where it lands (0 head, 1 body, 2 legs)
 struct Atk { const char* name; const char* clip; float wind, act, rec, dmg, sta, reach, stun, push; int zone; bool heavy; };
 const Atk ATK[5] = {
-  { "JAB",       "Punch_Left",  0.10f, 0.07f, 0.17f,  5.f,  4.f, 1.60f, 0.22f, 0.12f, 0, false },
-  { "CROSS",     "Punch_Right", 0.19f, 0.08f, 0.30f, 11.f,  9.f, 1.70f, 0.45f, 0.42f, 0, true  },
-  { "BODY SHOT", "Punch_Right", 0.18f, 0.08f, 0.28f,  9.f,  8.f, 1.60f, 0.38f, 0.30f, 1, false },
-  { "LOW KICK",  "Kick_Left",   0.20f, 0.08f, 0.30f,  7.f,  7.f, 1.90f, 0.32f, 0.20f, 2, false },
-  { "HEAD KICK", "Kick_Right",  0.32f, 0.10f, 0.48f, 17.f, 15.f, 2.00f, 0.70f, 0.80f, 0, true  },
+  { "JAB",       "Punch_Left",  0.09f, 0.07f, 0.15f,  6.f,  3.f, 1.65f, 0.24f, 0.18f, 0, false },
+  { "CROSS",     "Punch_Right", 0.15f, 0.08f, 0.24f, 12.f,  7.f, 1.75f, 0.45f, 0.55f, 0, true  },
+  { "BODY SHOT", "Punch_Right", 0.15f, 0.08f, 0.24f, 10.f,  6.f, 1.65f, 0.40f, 0.40f, 1, false },
+  { "LOW KICK",  "Kick_Left",   0.17f, 0.08f, 0.26f,  8.f,  6.f, 1.95f, 0.34f, 0.30f, 2, false },
+  { "HEAD KICK", "Kick_Right",  0.30f, 0.10f, 0.42f, 19.f, 12.f, 2.05f, 0.75f, 1.00f, 0, true  },
 };
 
 struct Fi {
@@ -31,6 +31,11 @@ struct Fi {
   float downT = 0, tap = 0, tapNeed = 8; int knockdowns = 0;
   float bleed = 0, dripT = 0, flash = 0, blkFlash = 0, stride = 0, gassedT = 0;
   float dealt = 0, dealtRound = 0; int kds = 0;
+  float snap = 0, snapDir = 1, snapUp = 0;   // the head snaps away from a hit and comes back
+  int chain = -1; float chainT = 0;          // the PUNCH button chains jab -> cross -> body shot while you keep tapping
+  Vector3 rollDir{ 1, 0, 0 }; float scrX = 800;   // where this fighter is on the TV (the phone says LEFT / RIGHT)                 // a dodge is a roll in the direction of the stick
+  int plan[4] = { -1, -1, -1, -1 }; int planN = 0, planI = 0; float tauntT = 3;   // the bot's next combo
+  float quietT = 0;   // how long this fighter has done nothing at all (a newcomer still finding the buttons)
   int thrown = 0, land = 0, thrownR = 0, landR = 0, kdsR = 0;   // strikes thrown and landed (whole fight / this round), knockdowns scored this round
   std::string call; float callT = 0; Color callC = WHITE;
   // the bot's head
@@ -41,10 +46,11 @@ struct Fi {
 struct Fight : Classic {
   Fi f[2]; std::vector<int> q; int bout = 0, BOUTS = 2, rd = 1, ROUNDS = 2; std::vector<int> pts, wins, kos;
   std::string phase = "intro", method, verdict; float t = 2.8f, clock = 0, bellT = 0, restT = 0, hitstop = 0, sendT = 0, flashA = 0; int winner = -1;
-  const float RT = 55.f; Vector3 camDir{ 0, 0, 1 }; float roar = 0;   // roar: the crowd jumps when something big happens
+  const float RT = 40.f; Vector3 camDir{ 0, 0, 1 }; float roar = 0;   // roar: the crowd jumps when something big happens
   struct Pop { Vector3 p; std::string s; Color c; float t; float big; }; std::vector<Pop> pops;
   struct Blood { Vector3 p; float r, a; }; std::vector<Blood> pools;
   Mesh octa{}; Mesh crowdMesh{}; std::vector<Vector4> crowd;
+  Vector3 camF{ 0, 0, -1 }, camR{ 1, 0, 0 }; float zoomK = 0;   // the camera's forward / right on the floor (the stick moves you on the screen), a punch-in on big hits
   int card[3][2] = {}; std::string decKind;   // three judges, each with a scorecard: the decision is exactly what the cards say
   struct RS { int land[2], thrown[2], kd[2]; float dmg[2]; } lastRound{};   // the round that has just ended, for the stat card
   ~Fight() { if (octa.vertexCount) UnloadMesh(octa); if (crowdMesh.vertexCount) UnloadMesh(crowdMesh); }
@@ -77,7 +83,7 @@ struct Fight : Classic {
   void BZ(int pid, int ms) { if (pid >= 0 && pid < N() && !P(pid).bot) Buzz(pid, ms); }
   void Say(const std::string& s) { Sfx(("say:" + s).c_str()); }
   void BeginRound(bool first) {
-    phase = "bell"; bellT = 3.0f; clock = RT;
+    phase = "bell"; bellT = 2.4f; clock = RT;
     for (auto& x : f) { x.st = Fi::IDLE; x.stun = 0; x.inv = 0; x.dealtRound = 0; x.thrownR = x.landR = x.kdsR = 0; x.mv = {}; x.blk = false; x.want = -1; x.atk = -1; x.vel = {};
       x.pos = { (&x == &f[0] ? -1.5f : 1.5f), 0.12f, 0 }; x.callT = 0; }
     Banner(std::string("ROUND ") + I(rd), 1600, "#ffd43b"); Sfx(first ? "crowdOn" : "ding");
@@ -95,7 +101,7 @@ struct Fight : Classic {
     if (dist > A.reach + 0.15f) { Sfx("fSwing"); return; }                                 // a miss
     if (d.inv > 0) { Call(d, "DODGED!", Hex(0x74c0fc), 0.8f); Call(a, "MISSED!", Hex(0xced4da), 0.7f); d.counterT = 0.9f; a.t += 0.22f; PopText({ d.pos.x, 1.9f, d.pos.z }, "DODGE!", Hex(0x74c0fc)); Sfx("fSwing"); return; }
     if (d.st == Fi::DOWN || d.st == Fi::KO || d.st == Fi::GETUP) return;
-    float dmg = 0.72f * A.dmg * (0.6f + 0.4f * a.sta / 100.f);                          // a tired fighter hits softer
+    float dmg = 0.85f * A.dmg * (0.65f + 0.35f * a.sta / 100.f) * (a.bot && !d.bot ? 0.8f : 1.f);   // bots hit people a little softer                          // a tired fighter hits softer
     if (a.comboT > 0) { a.combo++; dmg *= 1 + 0.1f * fminf(4, (float)a.combo); } else a.combo = 1; a.comboT = 0.75f;
     bool counter = (d.st == Fi::ATTACK && d.t < ATK[d.atk].wind) || a.counterT > 0; if (counter) { dmg *= 1.5f; a.counterT = 0; }
     bool blocked = d.blk && d.st == Fi::IDLE && A.zone != 2;                               // a raised guard stops punches and high kicks, never a low kick
@@ -108,8 +114,9 @@ struct Fight : Classic {
     if (A.zone == 0) d.dH = fminf(100.f, d.dH + dmg * (A.heavy ? 1.7f : 1.15f));
     else if (A.zone == 1) { d.dB = fminf(100.f, d.dB + dmg * 1.4f); d.sta = fmaxf(0.f, d.sta - dmg * 1.1f); }
     else d.dL = fminf(100.f, d.dL + dmg * 1.5f);
-    d.flash = 0.12f; d.vel = Vector3Add(d.vel, Vector3Scale(fw, A.push * 5)); d.pos = Vector3Add(d.pos, Vector3Scale(fw, A.push * 0.5f));
-    hitstop = A.heavy || counter ? 0.10f : 0.05f; Shake(A.heavy ? 8.f : 3.f); roar = fmaxf(roar, A.heavy ? 0.7f : 0.3f);
+    d.flash = 0.12f; d.vel = Vector3Add(d.vel, Vector3Scale(fw, A.push * (A.heavy || counter ? 4.5f : 3.2f))); d.pos = Vector3Add(d.pos, Vector3Scale(fw, A.push * 0.3f));
+    d.snap = A.heavy || counter ? 1.f : 0.6f; d.snapDir = (&A - ATK) % 2 ? 1.f : -1.f; d.snapUp = A.zone == 0 ? -1.f : 0.6f;   // the head whips round, or the body folds
+    hitstop = A.heavy || counter ? 0.14f : 0.065f; Shake(A.heavy || counter ? 12.f : 4.f); if (A.heavy || counter) { zoomK = 1; flashA = 0.18f; } roar = fmaxf(roar, A.heavy ? 0.7f : 0.3f);
     static const char* HS[5] = { "fJab", "fCross", "fBody", "fLow", "fHead" }; Sfx(HS[&A - ATK]); BZ(d.pid, A.heavy ? 90 : 40); BZ(a.pid, 25);
     fx.Burst(hit, 10 + (int)dmg, Hex(0xfff3bf), 4, 0.25f, 0.04f);                          // sparks of the impact
     PopText({ d.pos.x, 2.0f, d.pos.z }, I((int)ceilf(dmg)), counter ? Hex(0xff6b6b) : Hex(0xffffff), counter || A.heavy ? 1.4f : 1.f);
@@ -127,19 +134,35 @@ struct Fight : Classic {
     if (A.heavy && A.zone == 0 && d.dH >= 50 && !rocked) { d.st = Fi::ROCKED; d.t = 0; d.stun = d.stunMax = 1.7f; d.atk = -1; Call(d, "ROCKED!", Hex(0xff922b), 1.5f); PopText({ d.pos.x, 2.3f, d.pos.z }, "ROCKED!", Hex(0xff922b), 1.6f); Sfx("ooh"); BZ(d.pid, 250); return; }
     if (!rocked) { d.st = Fi::HIT; d.t = 0; d.stun = d.stunMax = A.stun * (counter ? 1.4f : 1.f); d.hitHeavy = A.heavy; d.atk = -1; }
   }
+  // the replay of a fighter going down: low and close on him, from the side the TV camera already looks from, never through the cage
+  void KoShot(Fi& a, Fi& d, Color c, const std::string& cap, const std::string& sub) {
+    cine::Shot s; s.kind = cine::KO; s.at = { d.pos.x, 0.85f, d.pos.z }; s.size = 0.95f; s.c = c; s.caption = cap; s.sub = sub; s.floorY = 0.12f; s.elev = 0.26f;
+    // pick where the lens stands: fully inside the cage at the shot's distance, not looking through the winner, and as close to the TV's view as possible
+    const float dist = 3.2f; Vector3 toA = { a.pos.x - d.pos.x, 0, a.pos.z - d.pos.z }, tc = { cam.position.x - d.pos.x, 0, cam.position.z - d.pos.z };
+    float la = Vector3Length(toA), lt = Vector3Length(tc); toA = la > 0.01f ? Vector3Scale(toA, 1 / la) : Vector3{ 1, 0, 0 }; tc = lt > 0.01f ? Vector3Scale(tc, 1 / lt) : Vector3{ 0, 0, 1 };
+    float best = -1e9f; Vector3 bf = tc;
+    for (int k = 0; k < 16; k++) {
+      float an = k * PI / 8; Vector3 dv = { sinf(an), 0, cosf(an) }; Vector3 p = Vector3Add(d.pos, Vector3Scale(dv, dist));
+      float room = (APO - 0.45f) - hypotf(p.x, p.z), through = Vector3DotProduct(dv, toA);
+      float sc = (room < 0 ? -20.f + room * 5 : 0.f) - (through > 0.55f ? 6.f : 0.f) - through * 1.5f + Vector3DotProduct(dv, tc) * 1.2f;
+      if (sc > best) { best = sc; bf = dv; }
+    }
+    s.face = bf;
+    s.maxR = APO - 0.35f; cine::Play(s);
+  }
   void Knockdown(Fi& a, Fi& d) {
     d.st = Fi::DOWN; d.downT = 0; d.tap = 0; d.tapNeed = 7 + 2.f * d.knockdowns + d.dH / 28.f; d.knockdowns++; a.kds++; a.kdsR++; d.atk = -1; d.blk = false; d.vel = {};
     hitstop = 0.14f; Shake(14); roar = 1.f; Sfx("fKO"); Sfx("ooh"); Sfx("cheer"); BZ(d.pid, 400);
     fx.Burst(HeadPos(d), 30, Hex(0x9e1019), 4.5f, 1.0f, 0.034f, 8);
     Banner("KNOCKDOWN!", 1500, kit::Hx(a.col).c_str());
-    cine::Moment(cine::SMASH, { d.pos.x, 1.0f, d.pos.z }, 1.2f, a.col, "KNOCKDOWN!", d.name, 0.12f);
+    KoShot(a, d, a.col, "KNOCKDOWN!", d.name);
     Say("Down! " + d.name + " is down!");
   }
   void Ko(Fi& a, Fi& d, const char* how) {
     d.st = Fi::KO; d.downT = 0; d.vel = {}; d.blk = false; d.atk = -1; hitstop = 0.18f; Shake(18); roar = 1.5f; Sfx("fKO"); Sfx("cheer");
     fx.Burst(HeadPos(d), 40, Hex(0x9e1019), 4.5f, 1.1f, 0.034f, 8); pools.push_back({ { d.pos.x, 0.123f, d.pos.z }, 0.35f, 0.9f });
     method = how; winner = &a == &f[0] ? 0 : 1; kos[a.pid]++;
-    cine::Moment(cine::SMASH, { d.pos.x, 1.0f, d.pos.z }, 1.4f, a.col, std::string(how) + "!", a.name + " wins", 0.12f);
+    KoShot(a, d, a.col, std::string(how) + "!", a.name + " wins");
     EndBout(winner, how);
   }
   void EndBout(int w, const std::string& how) {
@@ -168,7 +191,7 @@ struct Fight : Classic {
       decKind = w < 0 ? "DRAW" : std::max(n0, n1) == 3 ? "UNANIMOUS DECISION" : std::min(n0, n1) == 1 ? "SPLIT DECISION" : "MAJORITY DECISION";
       EndBout(w, "DECISION"); return;
     }
-    phase = "rest"; restT = 6.5f; Sfx("ding"); Banner(std::string("END OF ROUND ") + I(rd), 1600, "#ffd43b");
+    phase = "rest"; restT = 5.5f; Sfx("ding"); Banner(std::string("END OF ROUND ") + I(rd), 1600, "#ffd43b");
     for (auto& x : f) { x.sta = fminf(100.f, x.sta + 45); x.hp = fminf(100.f, x.hp + (100 - x.hp) * 0.2f); x.dH *= 0.8f; x.bleed *= 0.5f; x.blk = false; x.mv = {}; x.st = Fi::IDLE; x.atk = -1; x.stun = 0; }   // the corner patches him up
   }
   // ----------------------------------------------------------------------------------------------- phones and bots
@@ -176,39 +199,60 @@ struct Fight : Classic {
   void Act(int pid, const std::string& k, int, float) override {
     Fi* x = Mine(pid); if (!x || x->bot) return;
     if (k.rfind("mv", 0) == 0) { float a = 0, b = 0; if (sscanf(k.c_str() + 3, "%f|%f", &a, &b) == 2) x->mv = { Clamp(a, -1.f, 1.f), Clamp(b, -1.f, 1.f) }; }
-    else if (k.rfind("atk", 0) == 0 && k.size() > 4) { char c = k[4]; int i = c == 'j' ? 0 : c == 'c' ? 1 : c == 'b' ? 2 : c == 'l' ? 3 : c == 'h' ? 4 : -1; if (i >= 0) { x->want = i; x->wantT = 0.3f; } }
+    else if (k.rfind("atk", 0) == 0 && k.size() > 4) {
+      char c = k[4]; int i = c == 'j' ? 0 : c == 'c' ? 1 : c == 'b' ? 2 : c == 'l' || c == 'k' ? 3 : c == 'h' || c == 'K' ? 4 : -1;
+      if (c == 'p') { i = x->chainT > 0 ? (x->chain + 1) % 3 : 0; x->chain = i; x->chainT = 0.95f; }   // tap PUNCH again and again: jab, cross, body shot
+      if (i >= 0) { x->want = i; x->wantT = 0.45f; } }
     else if (k.rfind("blk", 0) == 0) x->blk = k.size() > 4 && k[4] == '1';
     else if (k == "dg") x->dodgeReq = true;
     else if (k == "up") { if (x->st == Fi::DOWN) x->tap += 1; }
   }
   void Think(Fi& a, Fi& b, float dt) {
-    a.think -= dt; if (a.think > 0) return; a.think = frand(0.07f, 0.18f);
+    a.think -= dt; a.tauntT -= dt; if (a.think > 0) return; a.think = frand(0.1f, 0.2f);
     float D = Dist(); a.mv = { 0, 0 };
-    if (a.blkHold > 0) { a.blkHold -= 0.12f; if (a.blkHold <= 0) a.blk = false; }
-    bool threat = b.st == Fi::ATTACK && b.t < ATK[b.atk].wind + 0.06f && D < ATK[b.atk].reach + 0.45f;
+    if (a.blkHold > 0) { a.blkHold -= 0.1f; if (a.blkHold <= 0) a.blk = false; }
+    // see it coming: block a punch or a high kick, roll away from the rest
+    bool threat = b.st == Fi::ATTACK && b.t < ATK[b.atk].wind + 0.05f && D < ATK[b.atk].reach + 0.5f;
     if (threat && a.st == Fi::IDLE && frand(0, 1) < a.react) {
-      if (frand(0, 1) < 0.6f && ATK[b.atk].zone != 2) { a.blk = true; a.blkHold = 0.5f; } else if (a.sta > 15 && a.dodgeCd <= 0) a.dodgeReq = true;
-      return;
+      if (ATK[b.atk].zone != 2 && frand(0, 1) < 0.65f) { a.blk = true; a.blkHold = 0.45f; }
+      else if (a.sta > 14 && a.dodgeCd <= 0) { a.dodgeReq = true; a.rollDir = Vector3Normalize(Vector3Add(Vector3Scale(Fwd(a, b), -0.5f), Vector3Scale({ -Fwd(a, b).z, 0, Fwd(a, b).x }, a.circ))); }
+      a.planN = 0; return;
     }
     if (a.st != Fi::IDLE) return;
-    a.circT -= 0.12f; if (a.circT <= 0) { a.circ = frand(0, 1) < 0.5f ? 1.f : -1.f; a.circT = frand(0.8f, 2.2f); }
-    bool tired = a.sta < 22 || a.hp < 22 && frand(0, 1) < 0.5f;
-    if (D > 2.2f) { a.mv = { a.circ * 0.4f, 1 }; a.blk = false; }
-    else if (D < 1.05f) a.mv = { a.circ * 0.5f, -0.7f };
-    else a.mv = { a.circ * 0.6f, D > 1.7f ? 0.4f : 0.f };
-    if (tired && D < 2.4f) { a.mv = { a.circ * 0.5f, -0.6f }; if (a.blkHold <= 0 && frand(0, 1) < 0.4f) { a.blk = true; a.blkHold = 0.6f; } return; }
-    if (D < 2.05f && a.blkHold <= 0 && frand(0, 1) < 0.3f + 0.5f * a.aggro) {
-      float r = frand(0, 1); int pick;
-      if (b.st == Fi::ROCKED || b.st == Fi::HIT) pick = r < 0.45f ? 1 : r < 0.75f ? 4 : 0;           // finish a hurt fighter
-      else pick = r < 0.34f ? 0 : r < 0.5f ? 1 : r < 0.62f ? 2 : r < 0.84f ? 3 : 4;
-      if (D > ATK[pick].reach) pick = D > 1.7f && D <= ATK[3].reach ? 3 : 0;
-      if (a.sta < ATK[pick].sta) pick = 0;
-      a.want = pick; a.wantT = 0.3f; a.blk = false;
+    a.circT -= 0.1f; if (a.circT <= 0) { a.circ = frand(0, 1) < 0.5f ? 1.f : -1.f; a.circT = frand(0.7f, 1.8f); }
+    bool hurt = a.hp < 25 || a.sta < 18, smell = b.st == Fi::ROCKED || b.st == Fi::HIT || b.hp < 25;
+    // a combo in progress: keep throwing while in range
+    if (a.planN > a.planI && !(!b.bot && b.quietT > 2.5f && a.planI > 0)) {
+      int k = a.plan[a.planI]; if (D <= ATK[k].reach + 0.25f && a.sta >= ATK[k].sta) { a.want = k; a.wantT = 0.4f; a.planI++; a.blk = false; a.mv = { 0, 0.5f }; return; }
+      if (D > ATK[k].reach + 0.25f) { a.mv = { 0, 1 }; return; } a.planN = 0;
+    }
+    if (hurt && !smell) {   // hurt: cover up, back off, roll out of the corner
+      a.mv = { a.circ * 0.8f, D < 2.2f ? -0.9f : 0.f };
+      if (D < 2.0f && a.blkHold <= 0 && frand(0, 1) < 0.5f) { a.blk = true; a.blkHold = 0.7f; }
+      if (D < 1.4f && a.sta > 14 && a.dodgeCd <= 0 && frand(0, 1) < 0.3f) { a.dodgeReq = true; a.rollDir = Vector3Normalize({ -Fwd(a, b).z * a.circ, 0, Fwd(a, b).x * a.circ }); }
+      return;
+    }
+    // close the distance, circle, feint in and out
+    if (D > 2.0f) a.mv = { a.circ * 0.35f, 1 };
+    else if (D < 1.1f) a.mv = { a.circ * 0.5f, -0.6f };
+    else a.mv = { a.circ * 0.7f, sinf(time * 3.1f + a.pid) * 0.6f };
+    float go = smell ? 0.55f : 0.16f + 0.3f * a.aggro;
+    if (RT - clock < 4.f) go *= 0.35f;   // the first seconds of a round: they feel each other out
+    bool spar = !b.bot && b.quietT > 2.5f; if (spar) go = 0.07f;   // sparring: a person who isn't doing anything yet gets single light shots and time to find the buttons; fight back and the bot fights back
+    if (D < 2.15f && a.blkHold <= 0 && frand(0, 1) < go) {   // pick a combo
+      static const int C[8][4] = { { 0, 1, -1, -1 }, { 0, 0, 1, -1 }, { 0, 1, 2, -1 }, { 1, 4, -1, -1 }, { 3, -1, -1, -1 }, { 0, 3, -1, -1 }, { 2, 1, 4, -1 }, { 4, -1, -1, -1 } };
+      int c = smell ? (frand(0, 1) < 0.5f ? 3 : 6) : rand() % 8;
+      a.planN = 0; a.planI = 0; for (int q = 0; q < 4 && C[c][q] >= 0; q++) a.plan[a.planN++] = C[c][q];
+      if (spar) { a.planN = 1; a.plan[0] = rand() % 2 ? 0 : 2; }
+      a.blk = false;
+      if (a.tauntT <= 0 && a.hp > b.hp + 20 && frand(0, 1) < 0.25f) { Call(a, frand(0, 1) < 0.5f ? "COME ON!" : "IS THAT ALL?", Hex(0xffd43b), 1.0f); a.tauntT = 6; }
     }
   }
   // ----------------------------------------------------------------------------------------------- the update
   void UpdateFighter(int i, float dt, bool live) {
     Fi& a = f[i]; Fi& b = f[1 - i];
+    a.snap = fmaxf(0.f, a.snap - dt * 5.f); a.chainT -= dt;
+    if (a.st == Fi::ATTACK || a.st == Fi::DODGE || a.blk || Vector2Length(a.mv) > 0.2f || a.want >= 0) a.quietT = 0; else a.quietT += dt;
     a.callT -= dt; a.inv -= dt; a.dodgeCd -= dt; a.comboT -= dt; a.counterT -= dt; a.flash -= dt; a.blkFlash -= dt; a.wantT -= dt; if (a.wantT <= 0) a.want = -1;
     if (a.bot && live && a.st != Fi::DOWN && a.st != Fi::KO && b.st != Fi::KO) Think(a, b, dt); else if (a.bot && !live) { a.mv = {}; a.blk = false; }
     Vector3 fw = Fwd(a, b), rt = { -fw.z, 0, fw.x };
@@ -226,9 +270,19 @@ struct Fight : Classic {
       case Fi::IDLE: {
         if (live) {
           bool blocking = a.blk; float sp = (blocking ? 0.45f : 1.f) * legK * staK;
-          target = Vector3Add(Vector3Scale(fw, a.mv.y * (a.mv.y > 0 ? 2.3f : 1.7f) * sp), Vector3Scale(rt, a.mv.x * 2.0f * sp));
+          if (a.bot) target = Vector3Add(Vector3Scale(fw, a.mv.y * (a.mv.y > 0 ? 2.4f : 1.9f) * sp), Vector3Scale(rt, a.mv.x * 2.1f * sp));
+          else {   // the stick is the screen: up moves up the picture, right moves right, wherever the camera stands
+            Vector3 d = Vector3Add(Vector3Scale(camR, a.mv.x), Vector3Scale(camF, a.mv.y)); float m = fminf(1.f, Vector3Length(d));
+            if (m > 0.01f) { d = Vector3Scale(d, 1.f / Vector3Length(d)); target = Vector3Scale(d, m * (Vector3DotProduct(d, fw) > -0.3f ? 2.4f : 1.9f) * sp); }
+          }
           if (a.want >= 0) { int k = a.want; a.want = -1; a.blk = false; a.st = Fi::ATTACK; a.atk = k; a.t = 0; a.landed = false; a.thrown++; a.thrownR++; float cost = ATK[k].sta; if (a.sta < cost) { a.sta = 0; Call(a, "GASSED!", Hex(0xadb5bd), 0.9f); } else a.sta -= cost; Sfx("fSwing"); }
-          else if (a.dodgeReq && a.dodgeCd <= 0 && a.sta >= 10) { a.st = Fi::DODGE; a.t = 0; a.inv = 0.3f; a.dodgeCd = 0.7f; a.sta -= 12; a.dodgeDir = a.mv.x > 0.2f ? 1 : a.mv.x < -0.2f ? -1 : 0; Sfx("whoosh"); }
+          else if (a.dodgeReq && a.dodgeCd <= 0 && a.sta >= 10) {
+            a.st = Fi::DODGE; a.t = 0; a.inv = 0.32f; a.dodgeCd = 0.75f; a.sta -= 10; Sfx("whoosh");
+            if (!a.bot) {   // roll where the stick points; no stick: roll back, away from the strike
+              Vector3 d = Vector3Add(Vector3Scale(camR, a.mv.x), Vector3Scale(camF, a.mv.y));
+              a.rollDir = Vector3Length(d) > 0.3f ? Vector3Normalize(d) : Vector3Scale(fw, -1);
+            }
+          }
         }
         a.dodgeReq = false; break; }
       case Fi::ATTACK: {
@@ -236,11 +290,13 @@ struct Fight : Classic {
         target = Vector3Scale(fw, (u < A.wind + A.act ? 1.4f : 0.f) * legK);   // a step into the strike
         if (!a.landed && u >= A.wind) { a.landed = true; Resolve(a, b, A); }
         if (u >= A.wind + A.act + A.rec) { a.st = Fi::IDLE; a.atk = -1; }
+        else if (a.landed && u >= A.wind + A.act * 0.6f && a.want >= 0 && a.st == Fi::ATTACK) {   // the next strike of a combo cuts the recovery short: 1-2-3 flows
+          int k = a.want; a.want = -1; a.atk = k; a.t = 0; a.landed = false; a.thrown++; a.thrownR++; float cost = ATK[k].sta; if (a.sta < cost) { a.sta = 0; Call(a, "GASSED!", Hex(0xadb5bd), 0.9f); } else a.sta -= cost; Sfx("fSwing");
+        }
         a.dodgeReq = false; break; }
       case Fi::HIT: a.t += dt; accel = 6; if (a.t >= a.stun) a.st = Fi::IDLE; break;
-      case Fi::DODGE: {
-        a.t += dt; Vector3 dir = a.dodgeDir == 0 ? Vector3Scale(fw, -1) : Vector3Scale(rt, (float)a.dodgeDir);
-        target = Vector3Scale(dir, a.t < 0.25f ? 5.5f : 0.f); accel = 40; if (a.t >= 0.42f) a.st = Fi::IDLE; break; }
+      case Fi::DODGE: {   // a combat roll
+        a.t += dt; target = Vector3Scale(a.rollDir, a.t < 0.42f ? 4.6f : 0.f); accel = 45; if (a.t >= 0.6f) a.st = Fi::IDLE; break; }
       case Fi::ROCKED: {
         a.t += dt; target = Vector3Add(Vector3Scale(rt, sinf(a.t * 7) * 0.9f), Vector3Scale(fw, -0.3f)); accel = 8; if (a.t >= a.stun) a.st = Fi::IDLE; break; }
       case Fi::DOWN: {
@@ -288,9 +344,9 @@ struct Fight : Classic {
   void SendFi() {
     for (int i = 0; i < 2; i++) { Fi& x = f[i]; if (x.pid < 0 || x.bot || (phase != "bell" && phase != "fight" && phase != "rest" && phase != "result")) continue;
       const char* st = x.st == Fi::DOWN ? "down" : x.st == Fi::KO ? "ko" : x.st == Fi::ROCKED ? "rocked" : x.st == Fi::GETUP ? "getup" : x.st == Fi::HIT ? "hit" : "ok";
-      char b[420]; snprintf(b, sizeof b, "{\"t\":\"fi\",\"hp\":%.1f,\"sta\":%.1f,\"h\":%.1f,\"b\":%.1f,\"l\":%.1f,\"st\":\"%s\",\"tap\":%.2f,\"rd\":%d,\"rds\":%d,\"tm\":%d,\"ph\":\"%s\",\"bl\":%d,\"ms\":%s,\"op\":%s,\"oh\":%.1f}",
+      char b[420]; snprintf(b, sizeof b, "{\"t\":\"fi\",\"hp\":%.1f,\"sta\":%.1f,\"h\":%.1f,\"b\":%.1f,\"l\":%.1f,\"st\":\"%s\",\"tap\":%.2f,\"rd\":%d,\"rds\":%d,\"tm\":%d,\"ph\":\"%s\",\"bl\":%d,\"ms\":%s,\"op\":%s,\"oh\":%.1f,\"sd\":\"%s\"}",
         x.hp, x.sta, x.dH, x.dB, x.dL, st, x.st == Fi::DOWN ? Clamp(x.tap / x.tapNeed, 0.f, 1.f) : 0.f, rd, ROUNDS, (int)ceilf(fmaxf(0.f, clock)), phase.c_str(), x.bleed > 0.1f ? 1 : 0,
-        kit::Q(x.callT > 0 ? x.call : std::string()).c_str(), kit::Q(f[1 - i].name).c_str(), f[1 - i].hp);
+        kit::Q(x.callT > 0 ? x.call : std::string()).c_str(), kit::Q(f[1 - i].name).c_str(), f[1 - i].hp, x.scrX < f[1 - i].scrX ? "L" : "R");
       Send(x.pid, b);
     }
   }
@@ -327,26 +383,45 @@ struct Fight : Classic {
   const char* ClipFor(Fi& x, float& t, bool& scrub, const char*& c2, float& t2, bool& scrub2, float& mix) {
     scrub = false; scrub2 = false; c2 = nullptr; mix = 0; t2 = 0;
     switch (x.st) {
-      case Fi::ATTACK: { const Atk& A = ATK[x.atk]; float ds = 1.f + (1.f - x.sta / 100.f) * 0.35f, u = x.t / ds, tot = A.wind + A.act + A.rec; scrub = true; t = u < A.wind ? 0.42f * (u / A.wind) : 0.42f + 0.5f * ((u - A.wind) / (tot - A.wind)); (void)tot; return A.clip; }
+      case Fi::ATTACK: { const Atk& A = ATK[x.atk]; float ds = 1.f + (1.f - x.sta / 100.f) * 0.35f, u = x.t / ds, tot = A.wind + A.act + A.rec, hit = x.atk >= 3 ? 0.58f : 0.42f; scrub = true; t = u < A.wind ? hit * (u / A.wind) : hit + (0.95f - hit) * ((u - A.wind) / (tot - A.wind)); return A.clip; }
       case Fi::HIT: scrub = true; t = Clamp(x.t / x.stunMax, 0.f, 1.f) * 0.95f; return x.hitHeavy ? "HitRecieve_2" : "HitRecieve";
       case Fi::ROCKED: scrub = true; t = 0.45f + 0.2f * sinf(x.t * 8); return "HitRecieve_2";
       case Fi::DOWN: scrub = true; t = Clamp(x.downT / 0.9f, 0.f, 1.f); return "Death";
       case Fi::KO: x.downT += 0; scrub = true; t = 1.f; return "Death";
       case Fi::GETUP: scrub = true; t = 1.f - Clamp(x.t / 1.1f, 0.f, 1.f); return "Death";
-      case Fi::DODGE: t = x.stride; return x.dodgeDir > 0 ? "Run_Right" : x.dodgeDir < 0 ? "Run_Left" : "Run_Back";
+      case Fi::DODGE: scrub = true; t = Clamp(x.t / 0.6f, 0.f, 1.f); return "Roll";
       default: break;
     }
     if (phase == "result" && winner >= 0 && &x == &f[winner] && x.st == Fi::IDLE) { t = time * 1.2f; return "Wave"; }   // the winner celebrates
     Vector3 fw = { sinf(x.yaw), 0, cosf(x.yaw) }, rt = { -fw.z, 0, fw.x }; float vf = Vector3DotProduct(x.vel, fw), vr = Vector3DotProduct(x.vel, rt), sp = Vector3Length(x.vel);
-    if (x.blk) { c2 = "HitRecieve"; t2 = 0.12f; scrub2 = true; mix = 0.65f; }   // a raised guard: the arms come up and the body tucks in
+    // the guard: the first frames of the jab are a boxing stance (fists up at the chin), with a little bounce; the block holds it tight
+    float g = x.blk ? 0.02f : 0.035f + 0.02f * sinf(time * 4.3f + x.pid);
+    c2 = "Punch_Left"; t2 = g; scrub2 = true; mix = 1;
     if (sp > 0.5f) { t = x.stride; return fabsf(vr) > fabsf(vf) * 0.9f ? (vr > 0 ? "Run_Right" : "Run_Left") : vf < 0 ? "Run_Back" : "Run"; }
-    t = time + x.pid * 0.4f; return "Idle_Sword";
+    c2 = nullptr; mix = 0; scrub = true; t = g; return "Punch_Left";
   }
+  static float Sm01(float v) { v = Clamp(v, 0.f, 1.f); return v * v * (3 - 2 * v); }
   void DrawFighter(Fi& x) {
     PersonPose q; q.pos = x.pos; q.yaw = x.yaw; q.c = x.flash > 0 ? Hex(0xffffff) : x.col; q.hsh = PersonHash(x.col); q.height = 1.8f; q.headM = &x.headM;
     bool scrub, scrub2; const char* c2; float t, t2, mix; q.clip = ClipFor(x, t, scrub, c2, t2, scrub2, mix); q.t = t; q.scrub = scrub; q.clip2 = c2; q.t2 = t2; q.scrub2 = scrub2; q.mix = mix;
+    if (x.st == Fi::ATTACK && x.atk >= 3) {   // the kicks are side kicks: the hips turn side-on so the leg goes into the target, then turn back
+      const Atk& A = ATK[x.atk]; float ds = 1.f + (1.f - x.sta / 100.f) * 0.35f, u = x.t / ds;
+      float k = u < A.wind ? Sm01(u / A.wind) : u < A.wind + A.act ? 1.f : 1.f - Sm01((u - A.wind - A.act) / A.rec);
+      q.yaw += (x.atk == 3 ? -PI / 2 : PI / 2) * k;
+    }
+    if (x.st == Fi::DODGE) { q.yaw = atan2f(x.rollDir.x, x.rollDir.z); q.inPlace = true; }
+    if (x.snap > 0.01f) { float s = x.snap * x.snap; q.headYaw = x.snapDir * 1.0f * s; q.headPitch = x.snapUp * 0.7f * s; }
+    if (x.blk && x.st == Fi::IDLE) q.headPitch += 0.45f;   // chin tucked behind the gloves
     if (x.st == Fi::DOWN || x.st == Fi::KO) q.pos.y = 0.12f;
     if (!DrawPersonPose(q)) DrawToon(x.pos, x.yaw, x.col, time, 0, 0, 1.2f);
+    if (x.blk && x.st == Fi::IDLE) {
+      Vector3 fw = { sinf(x.yaw), 0, cosf(x.yaw) }; Vector3 c = Vector3Add(x.pos, Vector3Add(Vector3Scale(fw, 0.42f), { 0, 1.35f, 0 }));
+      float a = 0.22f + 0.5f * Clamp(x.blkFlash / 0.2f, 0.f, 1.f);
+      BeginBlendMode(BLEND_ADDITIVE); rlDisableDepthMask();
+      DrawCylinderEx(Vector3Add(c, Vector3Scale(fw, -0.02f)), Vector3Add(c, Vector3Scale(fw, 0.02f)), 0.48f, 0.48f, 24, Fade(Hex(0x74c0fc), a * 0.5f));
+      DrawCylinderWiresEx(Vector3Add(c, Vector3Scale(fw, -0.02f)), Vector3Add(c, Vector3Scale(fw, 0.02f)), 0.5f, 0.5f, 24, Fade(Hex(0xd0ebff), a));
+      rlEnableDepthMask(); EndBlendMode();
+    }
     // cuts and swelling on the face: they grow with the damage the head has taken
     float cut = Clamp((x.dH - 25.f) / 55.f, 0.f, 1.f);
     if (cut > 0.02f) { Vector3 h = { x.headM.m12, x.headM.m13, x.headM.m14 }; Vector3 fwd = { sinf(x.yaw), 0, cosf(x.yaw) }; Vector3 rt = { -fwd.z, 0, fwd.x };
@@ -363,7 +438,9 @@ struct Fight : Classic {
     Vector3 side = Vector3Normalize(Vector3Add(Vector3Scale(perp, cosf(swing)), Vector3Scale(dir, sinf(swing))));
     float dist = 4.9f + sep * 0.6f; bool kd = f[0].st == Fi::DOWN || f[1].st == Fi::DOWN || phase == "result";
     Vector3 wp = Vector3Add(mid, Vector3Add(Vector3Scale(side, kd ? dist * 0.8f : dist), { 0, kd ? 1.6f : 2.0f + sep * 0.15f, 0 })); Vector3 wt = { mid.x, kd ? 0.7f : 1.3f, mid.z };
-    { Camera3D rc = rig.Go(wp, wt, kd ? 38 : 42, 2.4f); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy; }
+    { Camera3D rc = rig.Go(wp, wt, kd ? 38 : 42, 2.4f); cam.position = rc.position; cam.target = rc.target; cam.fovy = rc.fovy - 6.f * zoomK * zoomK; }
+    zoomK = fmaxf(0.f, zoomK - g_frameDt * 3.5f);
+    { Vector3 cf = { cam.target.x - cam.position.x, 0, cam.target.z - cam.position.z }; float l = Vector3Length(cf); if (l > 0.01f) { camF = Vector3Scale(cf, 1 / l); camR = { -camF.z, 0, camF.x }; } }
     UI::Sky(Hex(0x05060f), Hex(0x161b3a));
     lit.Begin(cam, { 0.45f, 0.48f, 0.68f }, 0.004f);
     camDir = Vector3Normalize({ cam.position.x, 0, cam.position.z });
@@ -371,7 +448,10 @@ struct Fight : Classic {
     Cage();
     for (auto& x : f) if (x.pid >= 0) DrawFighter(x);
     {   // the referee keeps clear of the camera, side-on to the fight, and steps in over a fallen fighter
-      Fi* dn = f[0].st == Fi::DOWN ? &f[0] : f[1].st == Fi::DOWN ? &f[1] : nullptr; Vector3 rp = Vector3Add(mid, Vector3Scale(side, -2.1f)); if (dn) rp = Vector3Add({ dn->pos.x, 0, dn->pos.z }, Vector3Scale(side, -1.3f)); rp.y = 0.12f;
+      Fi* dn = f[0].st == Fi::DOWN ? &f[0] : f[1].st == Fi::DOWN ? &f[1] : nullptr;
+      float endS = hypotf(mid.x + dir.x * 2.4f, mid.z + dir.z * 2.4f) < hypotf(mid.x - dir.x * 2.4f, mid.z - dir.z * 2.4f) ? 1.f : -1.f;   // the end with more room
+      static float refEnd = 1; refEnd += (endS - refEnd) * 0.02f;
+      Vector3 rp = Vector3Add(mid, Vector3Add(Vector3Scale(dir, refEnd * (sep * 0.5f + 1.6f)), Vector3Scale(side, -1.4f))); if (dn) rp = Vector3Add({ dn->pos.x, 0, dn->pos.z }, Vector3Scale(side, -1.3f)); rp.y = 0.12f;
       float rl = hypotf(rp.x, rp.z), lim = APO - 0.5f; if (rl > lim) { rp.x *= lim / rl; rp.z *= lim / rl; }
       static Vector3 rs = { 0, 0.12f, -2 }; rs = Vector3Lerp(rs, rp, 0.06f); Vector3 lk = dn ? Vector3{ dn->pos.x, 0, dn->pos.z } : Vector3{ mid.x, 0, mid.z };
       PersonPose q; q.pos = rs; q.yaw = atan2f(lk.x - rs.x, lk.z - rs.z); q.c = Hex(0x15161d); q.hsh = 29; q.height = 1.8f; q.clip = Vector3Distance(rs, rp) > 0.15f ? "Walk" : "Idle"; q.t = time * 1.1f;
@@ -399,6 +479,7 @@ struct Fight : Classic {
     float fw = fmaxf(0.f, (w - 6) * Clamp(v, 0.f, 1.f)); if (fw > 2) RRect(flip ? x + 3 + (w - 6) - fw : x + 3, y + 3, fw, h - 6, (h - 6) / 2, c1, c2, BLANK, 0);
   }
   void DrawHud() {
+    if (flashA > 0.001f) { Color w = Fade(WHITE, Clamp(flashA * 2.2f, 0.f, 0.4f)); RRect(0, 0, 1600, 900, 0, w, w, BLANK, 0); }
     for (int i = 0; i < 2; i++) {
       Fi& x = f[i]; if (x.pid < 0) continue; bool right = i == 1; float bx = right ? 1590 - 600 : 10 + 0, by = 26, bw = 600;
       bx = right ? 940 : 60;
@@ -419,6 +500,9 @@ struct Fight : Classic {
     Text(800, 34, 20, Hex(0xffd43b), std::string("ROUND ") + I(rd) + " / " + I(ROUNDS), 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
     int cs = phase == "fight" ? (int)ceilf(fmaxf(0.f, clock)) : phase == "bell" ? (int)RT : 0; char tb[16]; snprintf(tb, sizeof tb, "%d:%02d", cs / 60, cs % 60);
     Text(800, 78, 50, clock < 10 && phase == "fight" ? Hex(0xff6b6b) : WHITE, tb, 0, TS_DISPLAY | TS_SHADOW);
+    // whose fighter is whose: a name tag over each head (and where on the screen, for the phone)
+    for (auto& x : f) if (x.pid >= 0) { Vector2 s = GetWorldToScreen({ x.pos.x, x.st == Fi::DOWN || x.st == Fi::KO ? 0.9f : 2.05f, x.pos.z }, cam); x.scrX = s.x;
+      if (phase != "intro" && x.callT <= 0 && g_hudA > 0.5f) hud::Tag(s.x, s.y - 10, x.col, x.name, 24); }
     // calls over the fighters' heads
     for (auto& p : pops) { Vector2 s = GetWorldToScreen({ p.p.x, p.p.y + (1 - p.t) * 0.6f, p.p.z }, cam); Text(s.x, s.y, 34 * p.big, Fade(p.c, Clamp(p.t * 2, 0.f, 1.f)), p.s, 0, TS_DISPLAY | TS_SHADOW); }
     for (auto& x : f) if (x.pid >= 0 && x.callT > 0) { Vector2 s = GetWorldToScreen({ x.pos.x, 2.25f, x.pos.z }, cam); Text(s.x, s.y, 26, Fade(x.callC, Clamp(x.callT * 3, 0.f, 1.f)), x.call, 0, TS_DISPLAY | TS_SHADOW); }
@@ -437,7 +521,7 @@ struct Fight : Classic {
           RRect(cx - 92, 346, 184, 56, 18, Color{ 255, 255, 255, 18 }, Color{ 255, 255, 255, 18 }, cc, 2.5f); Text(cx, 375, 32, cc, sb, 0, TS_DISPLAY | TS_SHADOW); }
       }
       StatCard(628, "THE FIGHT IN NUMBERS", true); }
-    if (phase == "fight" && time < 12) Text(800, 876, 21, Fade(WHITE, 0.92f), "BLOCK stops punches and high kicks  ·  DODGE slips a strike, then counter  ·  low kicks cannot be blocked", 0, TS_HEAVY | TS_PLAIN);
+    if (phase == "fight" && time < 12) Text(800, 876, 21, Fade(WHITE, 0.92f), "Tap PUNCH fast for a 1-2-3 combo  ·  hold KICK for a head kick  ·  BLOCK stops punches  ·  DODGE rolls away", 0, TS_HEAVY | TS_PLAIN);
     Text(800, 142, 20, Hex(0xdfe4f2), std::string("FIGHT ") + I(bout) + " OF " + I(BOUTS), 0, TS_HEAVY | TS_PLAIN | TS_SPACED);
   }
 };

@@ -503,7 +503,10 @@ struct Hockey : Classic {
   void WinShotH() {
     int w = score[0] == score[1] ? -1 : score[0] > score[1] ? 0 : 1, bi = -1;
     for (int i = 0; i < N(); i++) if (m[i].team == w && (bi < 0 || m[i].goals > m[bi].goals)) bi = i;
-    if (bi >= 0) { cine::Shot s; s.kind = cine::WIN; s.at = W3(m[bi].x, m[bi].y, 0.4f); s.size = 2.2f; s.c = P(bi).color; s.floorY = 0; s.hero = true; cine::Play(s); Sfx("win"); }
+    if (bi >= 0) {   // the winner standing at their end of the table (it used to frame the mallet), who celebrates
+      int tm = m[bi].team, jj = 0; for (int i = 0; i < bi; i++) if (m[i].team == tm) jj++;
+      Vector3 pp = W3(tm == 0 ? L - 95 : R + 95, CY + (jj - 0.5f) * 170 * (N() > 2 ? 1 : 0), 2.0f);
+      cine::Shot s; s.kind = cine::WIN; s.at = pp; s.size = 2.3f; s.c = P(bi).color; s.floorY = 0; s.hero = true; s.face = { tm == 0 ? 1.f : -1.f, 0, 0.7f }; cine::Play(s); Sfx("win"); }
   }
   void DebugShot(int k) override { if (k == cine::GOAL) GoalShot(0); else if (k == cine::WIN) { score[0]++; WinShotH(); score[0]--; } }
   void Goal(int tm) {

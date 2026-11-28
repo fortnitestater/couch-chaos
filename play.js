@@ -957,7 +957,7 @@
   function renderFight(L) {
     FI.st = null; cancelAnimationFrame(FI.raf);
     stage.innerHTML = `<div class="fiPad">
-      <div class="fiTop"><b id="fiOp">vs …</b><span id="fiRd"></span><span id="fiClk"></span></div>
+      <div class="fiTop"><em id="fiSide" class="fiSide"></em><b id="fiOp">vs …</b><span id="fiRd"></span><span id="fiClk"></span></div>
       <div class="fiBar opp"><i id="fiOh"></i><span id="fiOhT"></span></div>
       <div class="fiBar"><i id="fiHp"></i><span id="fiHpT">HEALTH</span></div>
       <div class="fiBar sta"><i id="fiSta"></i><span>STAMINA</span></div>
@@ -966,9 +966,10 @@
       <div class="fiCtl" id="fiCtl">
         <div class="fiStick" id="fiStick"><i id="fiKnob"></i><em>MOVE</em></div>
         <div class="fiBtns" id="fiBtns">
-          <button data-a="j" class="a1">👊<b>JAB</b></button><button data-a="c" class="a2">💥<b>CROSS</b></button><button data-a="b" class="a3">🥊<b>BODY</b></button>
-          <button data-a="l" class="k1">🦵<b>LOW KICK</b></button><button data-a="h" class="k2">🦶<b>HEAD KICK</b></button><button data-d="1" class="dg">💨<b>DODGE</b></button>
-          <button data-blk="1" class="blk">🛡<b>BLOCK</b><small>hold</small></button>
+          <button data-a="p" class="a1"><span class="fiIc">👊</span><b>PUNCH</b><small>tap fast = combo</small></button>
+          <button data-k="1" class="k1"><span class="fiIc">🦵</span><b>KICK</b><small>hold = head kick</small><u class="chg"><i></i></u></button>
+          <button data-blk="1" class="blk"><span class="fiIc">🛡</span><b>BLOCK</b><small>hold</small></button>
+          <button data-d="1" class="dg"><span class="fiIc">💨</span><b>DODGE</b><small>roll · stick aims</small></button>
         </div>
         <button class="fiUp" id="fiUp" style="display:none"><span>GET UP!</span><small>tap, tap, tap!</small><u><i id="fiUpBar"></i></u></button>
       </div></div>`;
@@ -982,7 +983,12 @@
     stage.querySelectorAll('.fiBtns button').forEach(b => {
       if (b.dataset.blk) { b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (_) {} sendMsg({ t: 'act', a: 'blk', id: '1' }); b.classList.add('held'); navigator.vibrate?.(10); });
         const up = () => { sendMsg({ t: 'act', a: 'blk', id: '0' }); b.classList.remove('held'); }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); }
-      else b.addEventListener('pointerdown', e => { e.preventDefault(); if (b.dataset.d) sendMsg({ t: 'act', a: 'dg' }); else sendMsg({ t: 'act', a: 'atk', id: b.dataset.a }); navigator.vibrate?.(12); });
+      else if (b.dataset.k) {   // KICK: a tap is a quick low kick; hold until the bar is full and let go for a head kick
+        let t0 = 0, pid = null; const go = e => { if (pid === null || (e && e.pointerId !== pid)) return; pid = null; const held = performance.now() - t0 >= 330; b.classList.remove('charging', 'charged'); sendMsg({ t: 'act', a: 'atk', id: held ? 'K' : 'k' }); navigator.vibrate?.(held ? [10, 20, 30] : 12); };
+        b.addEventListener('pointerdown', e => { e.preventDefault(); pid = e.pointerId; t0 = performance.now(); try { b.setPointerCapture(pid); } catch (_) {} b.classList.add('charging'); setTimeout(() => { if (pid !== null) { b.classList.add('charged'); navigator.vibrate?.(8); } }, 330); });
+        b.addEventListener('pointerup', go); b.addEventListener('pointercancel', go);
+      }
+      else b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.remove('tapped'); void b.offsetWidth; b.classList.add('tapped'); if (b.dataset.d) sendMsg({ t: 'act', a: 'dg' }); else sendMsg({ t: 'act', a: 'atk', id: b.dataset.a }); navigator.vibrate?.(12); });
     });
     $('#fiUp').addEventListener('pointerdown', e => { e.preventDefault(); sendMsg({ t: 'act', a: 'up' }); navigator.vibrate?.(15); });
     const draw = () => {
@@ -990,6 +996,7 @@
       if (st) {
         const hp = Math.max(0, Math.min(100, st.hp)); $('#fiHp').style.width = hp + '%'; $('#fiHp').style.background = hp > 55 ? '#51cf66' : hp > 28 ? '#ffd43b' : '#ff4d4d'; $('#fiHpT').textContent = '❤️ ' + Math.round(hp);
         $('#fiSta').style.width = Math.max(0, st.sta) + '%'; $('#fiH').style.width = st.h + '%'; $('#fiB').style.width = st.b + '%'; $('#fiL').style.width = st.l + '%';
+        if (st.sd) { const sd = $('#fiSide'); sd.textContent = st.sd === 'L' ? '◀ YOU: LEFT' : 'YOU: RIGHT ▶'; sd.dataset.sd = st.sd; }
         $('#fiOp').textContent = 'vs ' + (st.op || ''); const oh = Math.max(0, Math.min(100, st.oh == null ? 100 : st.oh)); $('#fiOh').style.width = oh + '%'; $('#fiOhT').textContent = (st.op || 'Opponent') + '  ' + Math.round(oh); $('#fiRd').textContent = 'ROUND ' + st.rd + '/' + st.rds; const t = st.tm | 0; $('#fiClk').textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
         const down = st.st === 'down', ko = st.st === 'ko'; $('#fiUp').style.display = down ? '' : 'none'; $('#fiStick').style.display = down ? 'none' : ''; $('#fiBtns').style.display = down ? 'none' : '';
         $('#fiUpBar').style.width = Math.round((st.tap || 0) * 100) + '%';
